@@ -2,7 +2,7 @@
 AutoSource Extraction Pipeline
 PDF → Markdown → parameters.json
 
-Usage: uv run extract.py --pdf source_library/YARA_report.pdf
+Usage: uv run extract.py --pdf source_library/your_report.pdf
 """
 
 import os

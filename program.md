@@ -32,7 +32,7 @@ Each experiment generates synthetic data and evaluates fidelity. The generation 
 
 **What you CANNOT do:**
 - Modify `extract.py` or `validate.py`. They are read-only.
-- Install new packages or add dependencies. You can only use what's already in `requirements.txt`.
+- Install new packages or add dependencies. You can only use what's already in `pyproject.toml`.
 - Modify the evaluation harness. The `compute_overall_fidelity` function is the ground truth metric.
 
 **The goal is simple: get the highest fidelity_score.** Since the time budget is fixed, you don't need to worry about generation time — it's always ~5-10 minutes. Everything is fair game: change the distribution families, correlation methods, noise levels, etc. The only constraint is that the code runs without crashing and finishes within the time budget.

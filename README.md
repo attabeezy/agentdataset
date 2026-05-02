@@ -16,15 +16,14 @@ AutoSource solves the "data desert" problem in Africa by autonomously generating
 
 ```
 autosource/
-├── source_library/     # PDF inputs (YARA reports, Afrobarometer, etc.)
+├── source_library/     # PDF inputs
 ├── results/            # Experiments, metrics, DATACARDs
-├── extract.py          # PDF → Markdown → parameters.json (fixed)
+├── fetch_reports.py    # World Bank API → PDF downloader
+├── extract.py          # PDF → parameters.json (fixed)
 ├── synthesize.py       # parameters.json → data.csv (agent-modifiable)
 ├── validate.py         # fidelity_score + DATACARD.md (fixed)
-├── program.md          # Agent instructions (human-modifiable)
-├── results/results.tsv # Experiment tracking (git-ignored)
-├── analysis.ipynb      # Results analysis (val_bpb analog)
-├── requirements.txt
+├── program.md          # Agent instructions
+├── pyproject.toml       # uv project config
 └── README.md
 ```
 
@@ -58,10 +57,13 @@ autosource/
 
 ```bash
 # 1. Install dependencies
-pip install -r requirements.txt
+uv sync
 
-# 2. Extract parameters from a PDF report
-uv run extract.py --pdf source_library/YARA_credit_report.pdf
+# 2. Fetch reports from World Bank API
+uv run fetch_reports.py --region Africa --topic credit --limit 5
+
+# 3. Extract parameters from a PDF report
+uv run extract.py --pdf source_library/your_report.pdf
 
 # 3. Run baseline synthesis (agent-modifiable)
 uv run synthesize.py
@@ -130,7 +132,3 @@ With this skeleton, you can:
 ---
 
 *AutoSource borrows the "Ratchet" philosophy from Karpathy's AutoResearch, but swaps neural net training for synthetic data generation — turning PDFs into verifiable, train-ready datasets.*
-
----
-
-**YARA Fellowship Project** | *Building the data infrastructure Africa needs*
