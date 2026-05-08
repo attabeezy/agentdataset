@@ -37,7 +37,7 @@ ENV/
 # Git (optional - uncomment if you want a fresh start)
 # .git/
 
-# AutoSource - downloaded/generated files
+# AgentDataset - downloaded/generated files
 source_library/*.pdf
 source_library/*.html
 source_library/catalog.json
