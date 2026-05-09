@@ -19,11 +19,28 @@ logger = logging.getLogger(__name__)
 
 MAX_NOISE = 2.0
 MIN_NOISE = 0.01
-PATIENCE = 2  # non-improvement streak length that triggers a pivot
+PATIENCE = 2       # non-improvement streak length that triggers a pivot
+MAX_SESSIONS = 3   # oldest session dirs beyond this limit are deleted on startup
+
+def _prune_old_sessions(base_dir: str, keep: int = MAX_SESSIONS) -> None:
+    """Delete oldest session directories beyond the keep limit."""
+    base = Path(base_dir)
+    if not base.exists():
+        return
+    sessions = sorted(p for p in base.iterdir() if p.is_dir())
+    for old in sessions[:-keep] if len(sessions) > keep else []:
+        try:
+            import shutil
+            shutil.rmtree(old)
+            logger.info("Pruned old session: %s", old)
+        except OSError as e:
+            logger.warning("Could not prune session %s: %s", old, e)
+
 
 class Orchestrator:
     def __init__(self, session_id: str, base_dir: str = "sessions", model: str = "gpt-4o",
                  api_key: str = "", env_var: str = "OPENAI_API_KEY"):
+        _prune_old_sessions(base_dir)
         self.context = SessionContext(
             session_id=session_id,
             path=str(Path(base_dir) / session_id)

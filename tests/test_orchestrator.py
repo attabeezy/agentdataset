@@ -18,6 +18,24 @@ def test_orchestrator_init(mock_orchestrator):
     assert mock_orchestrator.context.session_id == "test_session"
 
 
+def test_prune_old_sessions(tmp_path):
+    from agentdataset.core.orchestrator import _prune_old_sessions
+    # Create 5 fake session dirs (names sort lexicographically)
+    for i in range(5):
+        (tmp_path / f"run_00{i}").mkdir()
+    _prune_old_sessions(str(tmp_path), keep=3)
+    remaining = sorted(p.name for p in tmp_path.iterdir())
+    assert remaining == ["run_002", "run_003", "run_004"]
+
+
+def test_prune_does_nothing_when_under_limit(tmp_path):
+    from agentdataset.core.orchestrator import _prune_old_sessions
+    for i in range(2):
+        (tmp_path / f"run_00{i}").mkdir()
+    _prune_old_sessions(str(tmp_path), keep=3)
+    assert len(list(tmp_path.iterdir())) == 2
+
+
 def _make_params(source, variables, correlations=None):
     return Parameters(
         variables=variables,
