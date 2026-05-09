@@ -12,7 +12,7 @@ class Synthesizer:
     def __init__(self, n_rows: int = 10000, seed: int = 42):
         self.n_rows = n_rows
         self.seed = seed
-        np.random.seed(seed)
+        self.rng = np.random.default_rng(seed)
 
     def generate_variable(self, params: VariableParams, noise_level: float) -> np.ndarray:
         """Generate single variable data."""
@@ -21,17 +21,17 @@ class Synthesizer:
         noise_std = std * noise_level
 
         if params.distribution == "normal":
-            data = np.random.normal(mean, std * (1 + noise_level), self.n_rows)
+            data = self.rng.normal(mean, std * (1 + noise_level), self.n_rows)
         elif params.distribution == "uniform":
             low = params.min if params.min is not None else mean - 2*std
             high = params.max if params.max is not None else mean + 2*std
-            data = np.random.uniform(low, high, self.n_rows)
+            data = self.rng.uniform(low, high, self.n_rows)
         elif params.distribution == "gamma":
             shape = (mean / std) ** 2
             scale = std**2 / mean
-            data = np.random.gamma(shape, scale, self.n_rows)
+            data = self.rng.gamma(shape, scale, self.n_rows)
         else:
-            data = np.random.normal(mean, std, self.n_rows)
+            data = self.rng.normal(mean, std, self.n_rows)
         
         return data
 
@@ -44,7 +44,7 @@ class Synthesizer:
             return pd.DataFrame()
 
         # Generate base correlation structure
-        base_data = np.random.randn(self.n_rows, n_vars)
+        base_data = self.rng.standard_normal((self.n_rows, n_vars))
         
         if parameters.correlations:
             corr_matrix = np.eye(n_vars)
