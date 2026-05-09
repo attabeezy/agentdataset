@@ -26,7 +26,7 @@ with st.sidebar:
 # --- Session State ---
 if "orchestrator" not in st.session_state:
     session_id = f"run_{int(time.time())}"
-    st.session_state.orchestrator = Orchestrator(session_id, model=model_choice)
+    st.session_state.orchestrator = Orchestrator(session_id, model=model_choice, api_key=api_key)
     st.session_state.discovery_results = []
     st.session_state.best_data = None
 
