@@ -36,3 +36,15 @@ def test_validate():
     report = val.validate(df, params)
     assert report.overall_score > 0
     assert report.approved in [True, False]
+    assert "avg_min_dist" in report.privacy_details
+    assert "privacy_score" in report.privacy_details
+
+
+def test_privacy_score_spread_vs_clustered():
+    """Spread-out data should score higher than tightly clustered data."""
+    val = Validator()
+    spread = pd.DataFrame({"x": np.linspace(0, 100, 200), "y": np.linspace(0, 100, 200)})
+    clustered = pd.DataFrame({"x": np.ones(200) * 50, "y": np.ones(200) * 50})
+    spread_score = val.compute_privacy_score(spread)["privacy_score"]
+    clustered_score = val.compute_privacy_score(clustered)["privacy_score"]
+    assert spread_score > clustered_score
