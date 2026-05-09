@@ -86,11 +86,21 @@ if st.session_state.discovery_results:
         progress_bar = st.progress(0)
         status_text = st.empty()
 
-        status_text.text("Extracting statistical DNA...")
         selected_sources = [st.session_state.discovery_results[i] for i in selected_indices]
 
         if selected_sources:
-            params = st.session_state.orchestrator.process_source(selected_sources[0])
+            # Extract parameters from every selected source
+            all_params = []
+            for idx, source in enumerate(selected_sources):
+                status_text.text(f"Extracting statistical DNA from source {idx + 1}/{len(selected_sources)}...")
+                all_params.append(st.session_state.orchestrator.process_source(source))
+                progress_bar.progress(int(20 * (idx + 1) / len(selected_sources)))
+
+            # Merge if multiple sources were selected
+            params = st.session_state.orchestrator.merge_parameters(all_params)
+            if len(selected_sources) > 1:
+                status_text.text(f"Merged parameters from {len(selected_sources)} sources.")
+
             progress_bar.progress(20)
 
             status_text.text("Running Synthesis-Validation Loop...")

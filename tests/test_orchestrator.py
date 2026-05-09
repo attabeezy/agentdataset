@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 from agentdataset.core.orchestrator import Orchestrator
 from agentdataset.core.discovery import PDF_PATH_PREFIX
-from agentdataset.models.schemas import Parameters, VariableParams, MetaParams, DiscoveryResult
+from agentdataset.models.schemas import Parameters, VariableParams, CorrelationParams, MetaParams, DiscoveryResult
 
 @pytest.fixture
 def mock_orchestrator(tmp_path):
@@ -16,6 +16,45 @@ def mock_orchestrator(tmp_path):
 
 def test_orchestrator_init(mock_orchestrator):
     assert mock_orchestrator.context.session_id == "test_session"
+
+
+def _make_params(source, variables, correlations=None):
+    return Parameters(
+        variables=variables,
+        correlations=correlations or {},
+        meta=MetaParams(source=source, extracted_at="2026-01-01 00:00:00"),
+    )
+
+
+def test_merge_parameters_single(mock_orchestrator):
+    p = _make_params("s1", {"age": VariableParams(name="age", mean=30.0, std=5.0)})
+    assert mock_orchestrator.merge_parameters([p]) is p
+
+
+def test_merge_parameters_averages_same_variable(mock_orchestrator):
+    p1 = _make_params("s1", {"age": VariableParams(name="age", mean=30.0, std=5.0)})
+    p2 = _make_params("s2", {"age": VariableParams(name="age", mean=40.0, std=7.0)})
+    merged = mock_orchestrator.merge_parameters([p1, p2])
+    assert merged.variables["age"].mean == pytest.approx(35.0)
+    assert merged.variables["age"].std == pytest.approx(6.0)
+    assert "s1" in merged.meta.source and "s2" in merged.meta.source
+
+
+def test_merge_parameters_unions_different_variables(mock_orchestrator):
+    p1 = _make_params("s1", {"age": VariableParams(name="age", mean=30.0, std=5.0)})
+    p2 = _make_params("s2", {"income": VariableParams(name="income", mean=5000.0, std=1000.0)})
+    merged = mock_orchestrator.merge_parameters([p1, p2])
+    assert "age" in merged.variables
+    assert "income" in merged.variables
+
+
+def test_merge_parameters_averages_correlations(mock_orchestrator):
+    corr1 = {"c1": CorrelationParams(var1="a", var2="b", correlation=0.6)}
+    corr2 = {"c1": CorrelationParams(var1="a", var2="b", correlation=0.8)}
+    p1 = _make_params("s1", {"a": VariableParams(name="a"), "b": VariableParams(name="b")}, corr1)
+    p2 = _make_params("s2", {"a": VariableParams(name="a"), "b": VariableParams(name="b")}, corr2)
+    merged = mock_orchestrator.merge_parameters([p1, p2])
+    assert merged.correlations["c1"].correlation == pytest.approx(0.7)
 
 def test_run_discovery(mock_orchestrator):
     mock_orchestrator.discovery.search.return_value = [DiscoveryResult(title="T", url="U", source_type="pdf", relevance_score=1.0)]

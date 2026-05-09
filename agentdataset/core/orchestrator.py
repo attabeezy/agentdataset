@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Optional, List
 import pandas as pd
-from agentdataset.models.schemas import SessionContext, Parameters, FidelityReport, DiscoveryResult
+from agentdataset.models.schemas import SessionContext, Parameters, FidelityReport, DiscoveryResult, VariableParams, CorrelationParams, MetaParams
 from agentdataset.core.discovery import DiscoveryAgent, PDF_PATH_PREFIX
 from agentdataset.core.extractor import Extractor
 from agentdataset.core.synthesizer import Synthesizer
@@ -38,6 +38,68 @@ class Orchestrator:
         self.best_score = 0.0
         self.best_params: Optional[Parameters] = None
         self.best_data: Optional[pd.DataFrame] = None
+
+    def merge_parameters(self, params_list: List[Parameters]) -> Parameters:
+        """Merge parameters extracted from multiple sources.
+
+        Same variable name across sources → average mean and std.
+        Unique variable names → include all.
+        Same correlation pair → average correlation value.
+        """
+        if not params_list:
+            raise ValueError("params_list must not be empty")
+        if len(params_list) == 1:
+            return params_list[0]
+
+        # Accumulate mean/std per variable name across sources
+        var_accum: dict = {}  # name -> {"mean": [], "std": [], "distribution": str}
+        for params in params_list:
+            for name, vp in params.variables.items():
+                if name not in var_accum:
+                    var_accum[name] = {"mean": [], "std": [], "distribution": vp.distribution}
+                var_accum[name]["mean"].append(vp.mean)
+                var_accum[name]["std"].append(vp.std)
+
+        merged_variables: dict = {}
+        for name, acc in var_accum.items():
+            mean = sum(acc["mean"]) / len(acc["mean"])
+            std = sum(acc["std"]) / len(acc["std"])
+            merged_variables[name] = VariableParams(
+                name=name,
+                distribution=acc["distribution"],
+                mean=mean,
+                std=std,
+                min=mean - 3 * std,
+                max=mean + 3 * std,
+            )
+
+        # Merge correlations: same pair key → average correlation
+        corr_accum: dict = {}  # key -> {"values": [], "var1": str, "var2": str, "direction": str}
+        for params in params_list:
+            for key, cp in params.correlations.items():
+                if key not in corr_accum:
+                    corr_accum[key] = {"values": [], "var1": cp.var1, "var2": cp.var2, "direction": cp.direction}
+                corr_accum[key]["values"].append(cp.correlation)
+
+        merged_correlations: dict = {}
+        for key, acc in corr_accum.items():
+            merged_correlations[key] = CorrelationParams(
+                var1=acc["var1"],
+                var2=acc["var2"],
+                correlation=sum(acc["values"]) / len(acc["values"]),
+                direction=acc["direction"],
+            )
+
+        sources = ", ".join(p.meta.source for p in params_list)
+        return Parameters(
+            variables=merged_variables,
+            correlations=merged_correlations,
+            meta=MetaParams(
+                source=f"merged({sources})",
+                extracted_at=params_list[0].meta.extracted_at,
+                extraction_method=params_list[0].meta.extraction_method,
+            ),
+        )
 
     def run_discovery(self, query: str) -> List[DiscoveryResult]:
         """Phase 0: Discovery."""
