@@ -37,6 +37,7 @@ def test_discovery_agent_fetch_html(mock_traf):
 
 def test_discovery_agent_fetch_pdf():
     agent = DiscoveryAgent()
-    res = DiscoveryResult(title="T", url="http://test.com/a.pdf", source_type="pdf", relevance_score=1.0)
+    # PDF fetch returns the search snippet (not the raw URL) until full PDF download is implemented
+    res = DiscoveryResult(title="T", url="http://test.com/a.pdf", source_type="pdf", relevance_score=1.0, snippet="pdf snippet text")
     content = agent.fetch_content(res)
-    assert content == "http://test.com/a.pdf"
+    assert content == "pdf snippet text"
