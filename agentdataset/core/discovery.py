@@ -4,12 +4,19 @@ Search & Fetch Research Documents
 """
 
 import logging
+import os
+import tempfile
 from typing import List
+import requests
 from duckduckgo_search import DDGS
 import trafilatura
 from agentdataset.models.schemas import DiscoveryResult
 
 logger = logging.getLogger(__name__)
+
+# Prefix used to signal that fetch_content returned a local file path, not inline text
+PDF_PATH_PREFIX = "pdf://"
+
 
 class DiscoveryAgent:
     def __init__(self, max_results: int = 5):
@@ -47,16 +54,33 @@ class DiscoveryAgent:
         return results
 
     def fetch_content(self, result: DiscoveryResult) -> str:
-        """Fetch and convert content to Markdown."""
+        """Fetch and convert content to text.
+
+        For HTML sources returns extracted text directly.
+        For PDF sources downloads the file to a temp path and returns
+        ``pdf://<path>`` so the caller can pass it to Extractor.pdf_to_markdown().
+        Falls back to the search snippet on any network error.
+        """
         if result.source_type == "html":
             try:
                 downloaded = trafilatura.fetch_url(result.url)
                 if downloaded:
                     return trafilatura.extract(downloaded) or ""
             except Exception as e:
-                logger.error("Failed to fetch %s: %s", result.url, e)
+                logger.error("Failed to fetch HTML %s: %s", result.url, e)
+
         elif result.source_type == "pdf":
-            # TODO: download and parse PDF with extractor.pdf_to_markdown()
-            # For now, return the search snippet so the extractor has some text to work with
-            return result.snippet or ""
+            try:
+                response = requests.get(result.url, timeout=15, stream=True)
+                response.raise_for_status()
+                tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+                for chunk in response.iter_content(chunk_size=8192):
+                    tmp.write(chunk)
+                tmp.close()
+                logger.info("Downloaded PDF to %s", tmp.name)
+                return PDF_PATH_PREFIX + tmp.name
+            except Exception as e:
+                logger.warning("PDF download failed for %s: %s — falling back to snippet", result.url, e)
+                return result.snippet or ""
+
         return ""
