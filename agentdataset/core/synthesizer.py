@@ -26,7 +26,8 @@ class Synthesizer:
         elif params.distribution == "uniform":
             low = params.min if params.min is not None else mean - 2*std
             high = params.max if params.max is not None else mean + 2*std
-            data = self.rng.uniform(low, high, self.n_rows)
+            spread = (high - low) * noise_level * 0.5
+            data = self.rng.uniform(low - spread, high + spread, self.n_rows)
         elif params.distribution == "gamma":
             shape = (mean / std) ** 2
             scale = std**2 / mean
