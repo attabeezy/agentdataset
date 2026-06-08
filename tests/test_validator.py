@@ -10,7 +10,8 @@ def test_validator_init():
 
 def test_compute_ks_test():
     val = Validator()
-    df = pd.DataFrame({"v1": np.random.normal(0, 1, 1000)})
+    rng = np.random.default_rng(42)
+    df = pd.DataFrame({"v1": rng.normal(0, 1, 1000)})
     params = Parameters(
         variables={"v1": VariableParams(name="v1", mean=0, std=1)},
         correlations={},
@@ -21,9 +22,10 @@ def test_compute_ks_test():
 
 def test_validate():
     val = Validator()
+    rng = np.random.default_rng(42)
     df = pd.DataFrame({
-        "v1": np.random.normal(0, 1, 1000),
-        "v2": np.random.normal(10, 2, 1000)
+        "v1": rng.normal(0, 1, 1000),
+        "v2": rng.normal(10, 2, 1000)
     })
     params = Parameters(
         variables={
