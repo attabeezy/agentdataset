@@ -21,7 +21,7 @@ class CorrelationParams(BaseModel):
 class MetaParams(BaseModel):
     source: str
     extracted_at: str
-    extraction_method: str = "regex_placeholder"
+    extraction_method: str = "regex_fallback"
 
 class Parameters(BaseModel):
     variables: Dict[str, VariableParams]
