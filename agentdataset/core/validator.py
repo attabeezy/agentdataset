@@ -35,11 +35,13 @@ class Validator:
                 low = var_params.min if var_params.min is not None else var_params.mean - 2*var_params.std
                 high = var_params.max if var_params.max is not None else var_params.mean + 2*var_params.std
                 theoretical_cdf = lambda x, l=low, h=high: stats.uniform.cdf(x, loc=l, scale=h-l)
-            elif var_params.distribution == "gamma":
+            elif var_params.distribution == "gamma" and var_params.mean > 0 and var_params.std > 0:
                 shape = (var_params.mean / var_params.std) ** 2
                 scale = var_params.std ** 2 / var_params.mean
                 theoretical_cdf = lambda x, a=shape, sc=scale: stats.gamma.cdf(x, a=a, scale=sc)
             else:
+                # normal, unknown, or gamma with non-positive mean/std → normal CDF
+                # (matches synthesizer fallback for the same invalid-gamma case)
                 theoretical_cdf = lambda x, m=var_params.mean, s=var_params.std: stats.norm.cdf(x, loc=m, scale=s)
             
             _, p_val = stats.kstest(data, theoretical_cdf)
@@ -47,24 +49,39 @@ class Validator:
         return results
 
     def compute_correlation_similarity(self, df: pd.DataFrame, parameters: Parameters) -> float:
-        """Compute cosine similarity of correlation matrices."""
+        """Score how well synthetic correlations match the target ones.
+
+        Compares only the upper-triangle (off-diagonal) entries — the diagonal is
+        always 1 and would otherwise dominate, inflating the score regardless of
+        how well the actual correlations were reproduced. Returns
+        ``1 - mean(|synthetic - target|) / 2`` over those pairs, clamped to [0, 1]
+        (the divisor 2 maps the worst case |Δ|=2 to a score of 0). With no declared
+        correlations the target is the identity, so a well-decorrelated synthetic
+        set still scores near 1.
+        """
         var_names = list(parameters.variables.keys())
-        if len(var_names) < 2: return 1.0
-        
+        if len(var_names) < 2:
+            return 1.0
+
         synthetic_corr = df[var_names].corr().fillna(0).values
         target_corr = np.eye(len(var_names))
-        
+
         for key, corr_params in parameters.correlations.items():
             v1, v2 = corr_params.var1, corr_params.var2
             if v1 in var_names and v2 in var_names:
                 idx1, idx2 = var_names.index(v1), var_names.index(v2)
                 target_corr[idx1, idx2] = corr_params.correlation
                 target_corr[idx2, idx1] = corr_params.correlation
-        
-        cos_sim = np.sum(synthetic_corr * target_corr) / (
-            np.sqrt(np.sum(synthetic_corr**2)) * np.sqrt(np.sum(target_corr**2))
-        )
-        return float(max(0.0, min(1.0, (cos_sim + 1) / 2)))
+
+        # Off-diagonal (upper-triangle) entries only.
+        triu = np.triu_indices(len(var_names), k=1)
+        synth_off = synthetic_corr[triu]
+        target_off = target_corr[triu]
+        if synth_off.size == 0:
+            return 1.0
+
+        mean_abs_err = float(np.mean(np.abs(synth_off - target_off)))
+        return float(max(0.0, min(1.0, 1.0 - mean_abs_err / 2.0)))
 
     def compute_privacy_score(self, df: pd.DataFrame, sample_size: int = 500) -> Dict[str, float]:
         """Estimate privacy via average nearest-neighbour distance.
