@@ -17,6 +17,20 @@ logger = logging.getLogger(__name__)
 # Prefix used to signal that fetch_content returned a local file path, not inline text
 PDF_PATH_PREFIX = "pdf://"
 
+# Browser-like headers — many hosts (academia.edu, researchgate.net) return 403
+# to requests' default python-requests User-Agent.
+_HTTP_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/pdf,text/html,application/xhtml+xml,*/*;q=0.8",
+}
+
+
+class SearchError(Exception):
+    """Raised when the search backend itself fails (distinct from 'no results')."""
+
 
 class DiscoveryAgent:
     def __init__(self, max_results: int = 5):
@@ -49,7 +63,11 @@ class DiscoveryAgent:
                             snippet=r['body']
                         ))
         except Exception as e:
-            logger.error("Search failed for query %r: %s", query, e)
+            logger.error("Search failed for query %r: %s", query, e, exc_info=True)
+            # Distinguish a backend failure from a genuine empty result set: if we
+            # already collected some results, return them; otherwise signal the error.
+            if not results:
+                raise SearchError(f"Search backend failed for query {query!r}: {e}") from e
 
         return results
 
@@ -65,13 +83,18 @@ class DiscoveryAgent:
             try:
                 downloaded = trafilatura.fetch_url(result.url)
                 if downloaded:
-                    return trafilatura.extract(downloaded) or ""
+                    extracted = trafilatura.extract(downloaded)
+                    if extracted:
+                        return extracted
+                    logger.warning("trafilatura extracted no text from %s — falling back to snippet", result.url)
             except Exception as e:
-                logger.error("Failed to fetch HTML %s: %s", result.url, e)
+                logger.warning("Failed to fetch HTML %s: %s — falling back to snippet", result.url, e)
+            # Fall back to the search snippet on empty extraction or any error.
+            return result.snippet or ""
 
         elif result.source_type == "pdf":
             try:
-                response = requests.get(result.url, timeout=15, stream=True)
+                response = requests.get(result.url, timeout=15, stream=True, headers=_HTTP_HEADERS)
                 response.raise_for_status()
                 tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
                 for chunk in response.iter_content(chunk_size=8192):

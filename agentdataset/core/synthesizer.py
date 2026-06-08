@@ -19,21 +19,20 @@ class Synthesizer:
         """Generate single variable data."""
         mean = params.mean
         std = params.std
-        noise_std = std * noise_level
 
-        if params.distribution == "normal":
-            data = self.rng.normal(mean, std * (1 + noise_level), self.n_rows)
-        elif params.distribution == "uniform":
+        if params.distribution == "uniform":
             low = params.min if params.min is not None else mean - 2*std
             high = params.max if params.max is not None else mean + 2*std
             spread = (high - low) * noise_level * 0.5
             data = self.rng.uniform(low - spread, high + spread, self.n_rows)
-        elif params.distribution == "gamma":
+        elif params.distribution == "gamma" and mean > 0 and std > 0:
+            # Gamma requires shape>0 and scale>0; only valid for positive mean/std.
             shape = (mean / std) ** 2
             scale = std**2 / mean
             data = self.rng.gamma(shape, scale, self.n_rows)
         else:
-            data = self.rng.normal(mean, std, self.n_rows)
+            # normal, unknown distribution, or gamma with non-positive mean/std
+            data = self.rng.normal(mean, std * (1 + noise_level), self.n_rows)
         
         return data
 

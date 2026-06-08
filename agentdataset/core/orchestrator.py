@@ -52,7 +52,8 @@ class Orchestrator:
         self.synthesizer = Synthesizer()
         self.validator = Validator()
 
-        self.best_score = 0.0
+        # Start below any real score so a legitimate first score of 0.0 still ratchets.
+        self.best_score = -1.0
         self.best_params: Optional[Parameters] = None
         self.best_data: Optional[pd.DataFrame] = None
 
@@ -148,7 +149,16 @@ class Orchestrator:
           - Every PATIENCE consecutive non-improvements  → exploit: halve noise
           - Every PATIENCE*2 consecutive non-improvements → reset to initial noise
           - Single non-improvement steps (streak % PATIENCE != 0) → explore: raise noise
+
+        Raises ValueError if `parameters` has no variables — synthesizing an empty
+        frame would otherwise produce a spurious score and write an empty data.csv.
         """
+        if not parameters.variables:
+            raise ValueError(
+                "Cannot run optimization loop: no variables were extracted. "
+                "Check the source/extraction step before synthesizing."
+            )
+
         current_params = parameters
         initial_noise = 0.1
         noise_level = initial_noise
@@ -172,15 +182,17 @@ class Orchestrator:
                 self.best_data = df
                 no_improve_streak = 0
 
-                # Save artifacts
-                df.to_csv(Path(self.context.path) / "data.csv", index=False)
-                with open(Path(self.context.path) / "parameters.json", "w") as f:
-                    f.write(current_params.model_dump_json(indent=2))
-
-                # Generate and save DATACARD
-                datacard = self.validator.generate_datacard(report, current_params, df)
-                with open(Path(self.context.path) / "DATACARD.md", "w") as f:
-                    f.write(datacard)
+                # Save artifacts — I/O failure must not abort the loop / lose progress.
+                try:
+                    df.to_csv(Path(self.context.path) / "data.csv", index=False)
+                    with open(Path(self.context.path) / "parameters.json", "w") as f:
+                        f.write(current_params.model_dump_json(indent=2))
+                    datacard = self.validator.generate_datacard(report, current_params, df)
+                    with open(Path(self.context.path) / "DATACARD.md", "w") as f:
+                        f.write(datacard)
+                except OSError as e:
+                    logger.warning("Failed to write session artifacts to %s: %s",
+                                   self.context.path, e)
             else:
                 no_improve_streak += 1
                 full_cycle = PATIENCE * 2
