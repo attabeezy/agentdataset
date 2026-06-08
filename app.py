@@ -14,7 +14,7 @@ PROVIDERS = {
     "Claude": {
         "env_var": "ANTHROPIC_API_KEY",
         "key_label": "Anthropic API Key",
-        "models": ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+        "models": ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
     },
     "Gemini": {
         "env_var": "GEMINI_API_KEY",

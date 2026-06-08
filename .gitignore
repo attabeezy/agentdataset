@@ -49,6 +49,12 @@ results/*.txt
 results/*.log
 results/*.png
 
+# Runtime session artifacts
+sessions/
+
+# Agent memory store
+memory/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -8,7 +8,7 @@ import os
 import tempfile
 from typing import List
 import requests
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 import trafilatura
 from agentdataset.models.schemas import DiscoveryResult
 
