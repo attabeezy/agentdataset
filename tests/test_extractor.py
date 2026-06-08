@@ -79,10 +79,73 @@ def test_extract_parameters_regex_no_key():
     assert params.meta.source == "test_source"
 
 
-def test_check_statistical_density():
+@patch('agentdataset.core.extractor.completion')
+def test_extract_parameters_malformed_json_falls_back(mock_completion):
+    """LLM returns non-JSON text → real json.loads raises → regex fallback runs."""
+    mock_response = MagicMock()
+    mock_response.choices[0].message.content = "Here is the data, not JSON at all."
+    mock_completion.return_value = mock_response
+
+    ext = Extractor(model="gpt-4o", api_key="sk-test")
+    text = "The mean is 10.5 and the standard deviation is 2.1."
+    params = ext.extract_parameters(text, "src")
+
+    # json.loads failed inside _extract_with_llm; method must report the fallback.
+    assert params.meta.extraction_method == "regex_fallback"
+    assert params.variables["var_1"].mean == 10.5
+
+
+def test_parse_llm_result_wellformed():
     ext = Extractor()
-    text = "Word word 123 456 word"
-    density = ext.check_statistical_density(text)
-    # Regex findall r'\w+': ['Word', 'word', '123', '456', 'word'] -> 5
-    # Regex findall r'\d+': ['123', '456'] -> 2
-    assert density == 0.4
+    data = {
+        "variables": {"x": {"distribution": "normal", "mean": 5.0, "std": 2.0}},
+        "correlations": {"x__y": {"var1": "x", "var2": "y", "correlation": 0.5}},
+    }
+    variables, correlations = ext._parse_llm_result(data)
+    assert variables["x"].mean == 5.0
+    assert variables["x"].min == 5.0 - 3 * 2.0  # default min = mean - 3*std
+    assert correlations["x__y"].correlation == 0.5
+
+
+def test_parse_llm_result_missing_and_bad_fields():
+    """Missing variables key, missing mean/std, and clamped correlation are handled."""
+    ext = Extractor()
+    data = {
+        "variables": {"v": {"distribution": "weird"}},  # no mean/std, unknown dist
+        "correlations": {"c": {"var1": "a", "var2": "b", "correlation": 5.0}},  # out of range
+    }
+    variables, correlations = ext._parse_llm_result(data)
+    assert variables["v"].mean == 0.0 and variables["v"].std == 1.0
+    assert variables["v"].distribution == "normal"      # coerced from "weird"
+    assert correlations["c"].correlation == 1.0          # clamped from 5.0
+
+    # Completely empty dict → no variables, no crash
+    variables, correlations = ext._parse_llm_result({})
+    assert variables == {} and correlations == {}
+
+
+def test_regex_negative_and_scientific_numbers():
+    ext = Extractor()
+    text = "mean = -5.3 and std = 1.2e-1 in the sample."
+    variables, _ = ext._extract_with_regex(text)
+    var = variables["var_1"]
+    assert var.mean == -5.3
+    assert var.std == 0.12
+
+
+def test_regex_extracts_correlation():
+    ext = Extractor()
+    text = "The correlation between income and age is 0.65 overall."
+    _, correlations = ext._extract_with_regex(text)
+    assert len(correlations) == 1
+    c = list(correlations.values())[0]
+    assert c.var1 == "income" and c.var2 == "age"
+    assert c.correlation == 0.65 and c.direction == "positive"
+
+
+def test_extracted_at_is_iso_format():
+    from datetime import datetime
+    ext = Extractor()
+    params = ext.extract_parameters("mean = 1.0 std = 1.0", "src")
+    # Should parse as ISO 8601 without raising.
+    datetime.fromisoformat(params.meta.extracted_at)

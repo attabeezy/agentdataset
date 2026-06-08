@@ -26,7 +26,7 @@ This document describes the end-to-end workflow — what each phase does, what d
 2. If `pdf://` prefix is detected, `Extractor.pdf_to_markdown()` parses it with PyMuPDF; temp file is deleted afterwards.
 3. `Extractor.extract_parameters()` runs:
    - **With API key**: calls the LLM via litellm, parses structured JSON response → `Parameters`.
-   - **Without key or on LLM failure**: falls back to regex (matches mean/std in either order, supports `SD`, `σ`, `s.d.`).
+   - **Without key or on LLM failure**: falls back to regex (matches mean/std in either order, supports `SD`, `σ`, `s.d.`, negative/scientific numbers, and best-effort named correlations). LLM failures log the cause (e.g. `RateLimitError`).
 4. `meta.extraction_method` is set to `"llm"` or `"regex_fallback"` accordingly.
 
 **Multi-source:** if the user selects multiple sources, `process_source` runs for each and results are merged via `merge_parameters()`:
@@ -44,7 +44,7 @@ Each iteration:
 1. `Synthesizer.synthesize(parameters, noise_level)` generates a correlated DataFrame.
 2. `Validator.validate(df, parameters)` scores it:
    - **KS score** (40%): fraction of variables passing KS-test.
-   - **Correlation score** (40%): cosine similarity of correlation matrices.
+   - **Correlation score** (40%): off-diagonal match of synthetic vs target correlations (`1 − mean(|Δ|)/2`, diagonal excluded).
    - **Bias score** (20%): fraction of variables within 20% mean deviation.
    - **Privacy score** (separate): avg nearest-neighbour distance, normalised to [0, 1].
 3. **Ratchet**: if `overall_score > best_score`, keep the dataset and save artifacts.

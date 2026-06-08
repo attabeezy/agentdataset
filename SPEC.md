@@ -18,7 +18,7 @@ AgentDataset is a 4-phase autonomous pipeline: discover research documents → e
 ### 2.2 Extraction (`core/extractor.py`)
 
 - **LLM path** (when API key is present): calls `litellm.completion()` with a structured JSON prompt enforcing the schema below. `extraction_method = "llm"`.
-- **Regex fallback** (on any LLM failure or no key): two regex patterns match mean/std pairs in either order, including `SD`, `σ`, `s.d.` variants. `extraction_method = "regex_fallback"`.
+- **Regex fallback** (on any LLM failure or no key): regex patterns match mean/std pairs in either order (incl. `SD`, `σ`, `s.d.` variants, negative and scientific-notation numbers) and best-effort named correlations (`correlation between X and Y is 0.6`, `corr(X, Y) = -0.4`). `extraction_method = "regex_fallback"`. On LLM failure the log names the cause (e.g. `RateLimitError`).
 - **PDF parsing**: `fitz` (PyMuPDF) converts each page to text; temp file is deleted after parsing.
 - **Statistical density check**: ratio of numeric tokens to word tokens — used to assess whether a document is worth extracting from.
 
@@ -59,7 +59,7 @@ Produces a `FidelityReport` with four components:
 | Component | Weight | Method |
 |-----------|--------|--------|
 | KS score | 40% | Fraction of variables passing KS-test (`p ≥ 0.05`), × 100 |
-| Correlation score | 40% | Cosine similarity of synthetic vs target correlation matrices |
+| Correlation score | 40% | Mean absolute error of off-diagonal correlations: `1 − mean(|synth − target|)/2`, clamped to [0, 1] (diagonal excluded so it can't inflate the score) |
 | Bias score | 20% | Fraction of variables within 20% mean deviation |
 | Privacy score | — (reported separately) | Avg nearest-neighbour distance on 500-row subsample, normalised to [0, 1] |
 
@@ -77,10 +77,12 @@ The loop runs for `iterations` steps. On each step:
 4. **If score does not improve**: increment `no_improve_streak` and pivot:
 
 ```
-streak % 1               → explore:  noise *= 1.1  (cap MAX_NOISE = 2.0)
-streak % PATIENCE == 0   → exploit:  noise *= 0.5  (floor MIN_NOISE = 0.01)
-streak % (PATIENCE*2)==0 → reset:    noise = initial (0.1)
+streak % (PATIENCE*2) == 0  → reset:    noise = initial (0.1)
+streak % PATIENCE == 0      → exploit:  noise *= 0.5  (floor MIN_NOISE = 0.01)
+otherwise                   → explore:  noise *= 1.1  (cap MAX_NOISE = 2.0)
 ```
+
+(Checked in that order; "otherwise" = any streak not divisible by `PATIENCE`.)
 
 `PATIENCE = 2` — so the cycle is: explore → exploit → explore → reset.
 

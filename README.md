@@ -40,7 +40,7 @@ Select in the sidebar on app load. The correct env var is pre-filled automatical
 | Provider | Env Var | Models |
 |----------|---------|--------|
 | OpenAI | `OPENAI_API_KEY` | `gpt-4o`, `gpt-3.5-turbo` |
-| Claude | `ANTHROPIC_API_KEY` | `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001` |
+| Claude | `ANTHROPIC_API_KEY` | `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001` |
 | Gemini | `GEMINI_API_KEY` | `gemini/gemini-2.0-flash`, `gemini/gemini-1.5-pro` |
 
 Without an API key, extraction falls back to regex (mean/std pattern matching).

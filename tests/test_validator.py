@@ -2,7 +2,7 @@ import pytest
 import pandas as pd
 import numpy as np
 from agentdataset.core.validator import Validator
-from agentdataset.models.schemas import Parameters, VariableParams, MetaParams
+from agentdataset.models.schemas import Parameters, VariableParams, CorrelationParams, MetaParams
 
 def test_validator_init():
     val = Validator(thresholds={"fidelity_score": 80.0})
@@ -40,6 +40,44 @@ def test_validate():
     assert report.approved in [True, False]
     assert "avg_min_dist" in report.privacy_details
     assert "privacy_score" in report.privacy_details
+
+
+def test_correlation_similarity_rewards_match():
+    """Off-diagonal metric: matching synthetic correlation scores higher than a mismatch."""
+    val = Validator()
+    rng = np.random.default_rng(7)
+    a = rng.normal(0, 1, 2000)
+    # b strongly correlated with a; c independent of a
+    b = a * 0.9 + rng.normal(0, 0.2, 2000)
+    c = rng.normal(0, 1, 2000)
+    df = pd.DataFrame({"a": a, "b": b, "c": c})
+
+    params_match = Parameters(
+        variables={n: VariableParams(name=n) for n in ("a", "b", "c")},
+        correlations={"ab": CorrelationParams(var1="a", var2="b", correlation=0.9)},
+        meta=MetaParams(source="S", extracted_at="N"),
+    )
+    params_wrong = Parameters(
+        variables={n: VariableParams(name=n) for n in ("a", "b", "c")},
+        correlations={"ac": CorrelationParams(var1="a", var2="c", correlation=0.9)},
+        meta=MetaParams(source="S", extracted_at="N"),
+    )
+    good = val.compute_correlation_similarity(df, params_match)
+    bad = val.compute_correlation_similarity(df, params_wrong)
+    assert good > bad
+    assert 0.0 <= bad <= 1.0 and 0.0 <= good <= 1.0
+
+
+def test_ks_gamma_non_positive_mean_no_crash():
+    val = Validator()
+    df = pd.DataFrame({"g": np.random.default_rng(1).normal(0, 1, 200)})
+    params = Parameters(
+        variables={"g": VariableParams(name="g", distribution="gamma", mean=-1.0, std=2.0)},
+        correlations={},
+        meta=MetaParams(source="S", extracted_at="N"),
+    )
+    pvals = val.compute_ks_test(df, params)  # must not raise
+    assert "g" in pvals
 
 
 def test_privacy_score_spread_vs_clustered():
