@@ -1,7 +1,7 @@
 import os
 import pytest
 from unittest.mock import MagicMock, patch, mock_open
-from agentdataset.core.discovery import DiscoveryAgent, PDF_PATH_PREFIX
+from agentdataset.core.discovery import DiscoveryAgent, PDF_PATH_PREFIX, SearchError, _HTTP_HEADERS
 from agentdataset.models.schemas import DiscoveryResult
 
 
@@ -70,3 +70,42 @@ def test_discovery_agent_fetch_pdf_fallback_on_error(mock_requests):
     content = agent.fetch_content(res)
 
     assert content == "pdf snippet text"
+
+
+@patch('agentdataset.core.discovery.requests')
+@patch('agentdataset.core.discovery.tempfile.NamedTemporaryFile')
+def test_pdf_download_sends_browser_headers(mock_ntf, mock_requests):
+    """PDF download must send a browser User-Agent to avoid 403s."""
+    mock_response = MagicMock()
+    mock_response.iter_content.return_value = [b"PDF"]
+    mock_requests.get.return_value = mock_response
+    mock_tmp = MagicMock(); mock_tmp.name = "/tmp/x.pdf"
+    mock_ntf.return_value = mock_tmp
+
+    agent = DiscoveryAgent()
+    res = DiscoveryResult(title="T", url="http://x/a.pdf", source_type="pdf", relevance_score=1.0)
+    agent.fetch_content(res)
+
+    _, kwargs = mock_requests.get.call_args
+    assert kwargs.get("headers") == _HTTP_HEADERS
+    assert "User-Agent" in kwargs["headers"]
+
+
+@patch('agentdataset.core.discovery.trafilatura')
+def test_html_fetch_falls_back_to_snippet(mock_traf):
+    """HTML extraction returning None falls back to the search snippet."""
+    mock_traf.fetch_url.return_value = "<html></html>"
+    mock_traf.extract.return_value = None  # nothing extractable
+
+    agent = DiscoveryAgent()
+    res = DiscoveryResult(title="T", url="http://x", source_type="html", relevance_score=1.0, snippet="snip")
+    assert agent.fetch_content(res) == "snip"
+
+
+@patch('agentdataset.core.discovery.DDGS')
+def test_search_raises_on_backend_failure(mock_ddgs):
+    """A backend failure with no results raises SearchError (not silent empty)."""
+    mock_ddgs.side_effect = RuntimeError("backend down")
+    agent = DiscoveryAgent()
+    with pytest.raises(SearchError):
+        agent.search("anything")

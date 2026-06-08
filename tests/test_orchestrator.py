@@ -132,6 +132,16 @@ def test_run_optimization_loop(mock_orchestrator):
     assert mock_orchestrator.best_score == 95.0
 
 
+def test_run_optimization_loop_rejects_empty_params(mock_orchestrator):
+    """No variables → loop refuses rather than synthesizing an empty frame."""
+    empty = Parameters(
+        variables={}, correlations={}, meta=MetaParams(source="S", extracted_at="N")
+    )
+    with pytest.raises(ValueError):
+        mock_orchestrator.run_optimization_loop(empty, iterations=1)
+    mock_orchestrator.synthesizer.synthesize.assert_not_called()
+
+
 def test_noise_pivot_strategy(mock_orchestrator):
     """Streak counter drives explore → exploit → reset transitions."""
     from agentdataset.core.orchestrator import PATIENCE, MAX_NOISE, MIN_NOISE
