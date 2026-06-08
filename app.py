@@ -3,6 +3,7 @@ import time
 import streamlit as st
 import pandas as pd
 from agentdataset.core.orchestrator import Orchestrator
+from agentdataset.core.discovery import SearchError
 
 # --- Provider config ---
 PROVIDERS = {
@@ -67,10 +68,20 @@ if "orchestrator" not in st.session_state or st.session_state.get("config_key") 
 query = st.text_input("What would you like to research? (e.g. 'SME lending in Kenya')", key="search_query")
 
 if st.button("Search Knowledge Sources"):
-    with st.spinner("Agent searching web..."):
-        results = st.session_state.orchestrator.run_discovery(query)
-        st.session_state.discovery_results = results
-        st.success(f"Found {len(results)} potential sources.")
+    if not query or not query.strip():
+        st.warning("Please enter a research query before searching.")
+    else:
+        with st.spinner("Agent searching web..."):
+            try:
+                results = st.session_state.orchestrator.run_discovery(query.strip())
+                st.session_state.discovery_results = results
+                if results:
+                    st.success(f"Found {len(results)} potential sources.")
+                else:
+                    st.info("No sources found for that query. Try different or broader terms.")
+            except SearchError as e:
+                st.session_state.discovery_results = []
+                st.error(f"Search failed (the search backend returned an error): {e}")
 
 if st.session_state.discovery_results:
     st.subheader("Discovered Sources")
@@ -88,7 +99,11 @@ if st.session_state.discovery_results:
 
         selected_sources = [st.session_state.discovery_results[i] for i in selected_indices]
 
-        if selected_sources:
+        if not selected_sources:
+            progress_bar.empty()
+            status_text.empty()
+            st.warning("Please select at least one source to generate a dataset.")
+        else:
             # Extract parameters from every selected source
             all_params = []
             for idx, source in enumerate(selected_sources):
@@ -103,17 +118,35 @@ if st.session_state.discovery_results:
 
             progress_bar.progress(20)
 
-            status_text.text("Running Synthesis-Validation Loop...")
-            best_score, best_data = st.session_state.orchestrator.run_optimization_loop(
-                params, iterations=max_iters
-            )
-            st.session_state.best_data = best_data
-            progress_bar.progress(100)
+            # Guard: extraction produced no usable variables → stop with a clear message
+            if not params.variables:
+                progress_bar.empty()
+                status_text.empty()
+                methods = ", ".join(sorted({p.meta.extraction_method for p in all_params}))
+                st.error(
+                    "**No statistical parameters could be extracted from the selected "
+                    "source(s), so no dataset was generated.**\n\n"
+                    "This usually means one of the following:\n"
+                    "- The source PDF could not be downloaded (some hosts block automated "
+                    "access with a 403), so only a short search snippet was available.\n"
+                    "- LLM extraction was unavailable (no API key, or the provider returned "
+                    "a rate-limit / quota error) and the regex fallback found no mean/std pairs.\n\n"
+                    f"Extraction method used: `{methods}`.\n\n"
+                    "Try a different source, add a working API key in the sidebar, or pick a "
+                    "source whose document is directly downloadable."
+                )
+            else:
+                status_text.text("Running Synthesis-Validation Loop...")
+                best_score, best_data = st.session_state.orchestrator.run_optimization_loop(
+                    params, iterations=max_iters
+                )
+                st.session_state.best_data = best_data
+                progress_bar.progress(100)
 
-            st.success(f"Dataset finalized with Fidelity Score: {best_score}")
+                st.success(f"Dataset finalized with Fidelity Score: {best_score}")
 
 # --- Results Panel ---
-if st.session_state.best_data is not None:
+if st.session_state.best_data is not None and not st.session_state.best_data.empty:
     st.markdown("---")
     st.subheader("Final Synthetic Dataset")
     st.dataframe(st.session_state.best_data.head(10))
