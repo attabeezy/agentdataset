@@ -33,6 +33,7 @@ ENV/
 
 # Linting
 .ruff_cache/
+.pytest_cache/
 
 # Git (optional - uncomment if you want a fresh start)
 # .git/

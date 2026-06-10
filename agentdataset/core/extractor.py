@@ -11,7 +11,12 @@ from typing import Dict, Any
 import re
 import fitz  # PyMuPDF
 from litellm import completion
-from agentdataset.models.schemas import Parameters, VariableParams, CorrelationParams, MetaParams
+from agentdataset.models.schemas import (
+    Parameters,
+    VariableParams,
+    CorrelationParams,
+    MetaParams,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,34 +44,48 @@ _NUM = r"(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)"
 
 # Pattern A: mean then std (e.g. "mean = 3.5 ... std = 1.2", "mean is 3.5 ... standard deviation is 1.2")
 _PATTERN_MEAN_STD = re.compile(
-    r"(?:mean|average|μ)" + _SEP + _NUM
+    r"(?:mean|average|μ)"
+    + _SEP
+    + _NUM
     + r".{0,80}?"
-    + r"(?:std|s\.?d\.?|standard\s+deviation|σ)" + _SEP + _NUM,
+    + r"(?:std|s\.?d\.?|standard\s+deviation|σ)"
+    + _SEP
+    + _NUM,
     re.IGNORECASE,
 )
 
 # Pattern B: std then mean (e.g. "SD = 1.2, mean = 3.5")
 _PATTERN_STD_MEAN = re.compile(
-    r"(?:std|s\.?d\.?|standard\s+deviation|σ)" + _SEP + _NUM
+    r"(?:std|s\.?d\.?|standard\s+deviation|σ)"
+    + _SEP
+    + _NUM
     + r".{0,80}?"
-    + r"(?:mean|average|μ)" + _SEP + _NUM,
+    + r"(?:mean|average|μ)"
+    + _SEP
+    + _NUM,
     re.IGNORECASE,
 )
 
 # Correlation between two named variables, e.g. "correlation between X and Y is 0.65",
 # "corr(X, Y) = -0.4", "r = 0.8".  Captures (var1, var2, value) where names are optional.
 _PATTERN_CORR_NAMED = re.compile(
-    r"correlation\s+between\s+(\w+)\s+and\s+(\w+)" + _SEP + r"(-?(?:0?\.\d+|1(?:\.0+)?))",
+    r"correlation\s+between\s+(\w+)\s+and\s+(\w+)"
+    + _SEP
+    + r"(-?(?:0?\.\d+|1(?:\.0+)?))",
     re.IGNORECASE,
 )
 _PATTERN_CORR_FUNC = re.compile(
-    r"corr(?:elation)?\s*\(\s*(\w+)\s*,\s*(\w+)\s*\)" + _SEP + r"(-?(?:0?\.\d+|1(?:\.0+)?))",
+    r"corr(?:elation)?\s*\(\s*(\w+)\s*,\s*(\w+)\s*\)"
+    + _SEP
+    + r"(-?(?:0?\.\d+|1(?:\.0+)?))",
     re.IGNORECASE,
 )
 
 
 class Extractor:
-    def __init__(self, model: str = "gpt-4o", api_key: str = "", env_var: str = "OPENAI_API_KEY"):
+    def __init__(
+        self, model: str = "gpt-4o", api_key: str = "", env_var: str = "OPENAI_API_KEY"
+    ):
         self.model = model
         self.api_key = api_key
         self.env_var = env_var
@@ -139,9 +158,12 @@ class Extractor:
                 seen.add(key)
                 name = f"var_{len(variables) + 1}"
                 variables[name] = VariableParams(
-                    name=name, distribution="normal",
-                    mean=mean, std=std,
-                    min=mean - 3 * std, max=mean + 3 * std,
+                    name=name,
+                    distribution="normal",
+                    mean=mean,
+                    std=std,
+                    min=mean - 3 * std,
+                    max=mean + 3 * std,
                 )
 
         for match in _PATTERN_STD_MEAN.finditer(text):
@@ -151,9 +173,12 @@ class Extractor:
                 seen.add(key)
                 name = f"var_{len(variables) + 1}"
                 variables[name] = VariableParams(
-                    name=name, distribution="normal",
-                    mean=mean, std=std,
-                    min=mean - 3 * std, max=mean + 3 * std,
+                    name=name,
+                    distribution="normal",
+                    mean=mean,
+                    std=std,
+                    min=mean - 3 * std,
+                    max=mean + 3 * std,
                 )
 
         # Best-effort correlation extraction (synthesizer ignores pairs whose
@@ -165,11 +190,31 @@ class Extractor:
                 key = f"{v1}__{v2}"
                 if key not in correlations:
                     correlations[key] = CorrelationParams(
-                        var1=v1, var2=v2, correlation=value,
+                        var1=v1,
+                        var2=v2,
+                        correlation=value,
                         direction="positive" if value >= 0 else "negative",
                     )
 
         return variables, correlations
+
+    def llm_call(self, prompt: str) -> str:
+        """General purpose LLM call for non-structured extraction tasks.
+
+        Returns the raw text response from the LLM.
+        """
+        api_key = self.api_key.strip() if self.api_key else None
+        response = completion(
+            model=self.model,
+            messages=[
+                {"role": "user", "content": prompt},
+            ],
+            api_key=api_key,
+            num_retries=2,
+        )
+        if not response.choices or response.choices[0].message.content is None:
+            raise ValueError("LLM returned an empty response.")
+        return response.choices[0].message.content
 
     def extract_parameters(self, text: str, source_name: str) -> Parameters:
         """Extract statistical parameters — LLM first, regex fallback."""
@@ -182,13 +227,19 @@ class Extractor:
                 data = self._extract_with_llm(text)
                 variables, correlations = self._parse_llm_result(data)
                 method = "llm"
-                logger.info("LLM extraction succeeded: %d variables, %d correlations",
-                            len(variables), len(correlations))
+                logger.info(
+                    "LLM extraction succeeded: %d variables, %d correlations",
+                    len(variables),
+                    len(correlations),
+                )
             except Exception as e:
                 # Name the cause (RateLimitError / AuthenticationError / JSONDecodeError …)
                 # so failures are diagnosable rather than a generic message.
-                logger.warning("LLM extraction failed [%s]: %s; falling back to regex.",
-                               type(e).__name__, e)
+                logger.warning(
+                    "LLM extraction failed [%s]: %s; falling back to regex.",
+                    type(e).__name__,
+                    e,
+                )
                 variables, correlations = self._extract_with_regex(text)
         else:
             variables, correlations = self._extract_with_regex(text)

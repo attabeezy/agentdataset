@@ -52,7 +52,10 @@ with st.sidebar:
 # --- Session State ---
 # Recreate the orchestrator whenever provider or model changes
 config_key = (provider_choice, model_choice, api_key)
-if "orchestrator" not in st.session_state or st.session_state.get("config_key") != config_key:
+if (
+    "orchestrator" not in st.session_state
+    or st.session_state.get("config_key") != config_key
+):
     session_id = f"run_{int(time.time())}"
     st.session_state.orchestrator = Orchestrator(
         session_id,
@@ -62,42 +65,85 @@ if "orchestrator" not in st.session_state or st.session_state.get("config_key") 
     )
     st.session_state.config_key = config_key
     st.session_state.discovery_results = []
+    st.session_state.suggested_indices = []
     st.session_state.best_data = None
 
 # --- Main: Phase 0 (Discovery) ---
-query = st.text_input("What would you like to research? (e.g. 'SME lending in Kenya')", key="search_query")
+query = st.text_input(
+    "What would you like to research? (e.g. 'SME lending in Kenya')", key="search_query"
+)
 
 if st.button("Search Knowledge Sources"):
     if not query or not query.strip():
         st.warning("Please enter a research query before searching.")
     else:
-        with st.spinner("Agent searching web..."):
+        with st.spinner("Agent optimizing query and searching web..."):
             try:
                 results = st.session_state.orchestrator.run_discovery(query.strip())
                 st.session_state.discovery_results = results
+
+                # Get suggestions from the agent
+                if results:
+                    st.session_state.suggested_indices = (
+                        st.session_state.orchestrator.suggest_sources(results)
+                    )
+                else:
+                    st.session_state.suggested_indices = []
+
                 if results:
                     st.success(f"Found {len(results)} potential sources.")
                 else:
-                    st.info("No sources found for that query. Try different or broader terms.")
+                    st.info(
+                        "No sources found for that query. Try different or broader terms."
+                    )
             except SearchError as e:
                 st.session_state.discovery_results = []
+                st.session_state.suggested_indices = []
                 st.error(f"Search failed (the search backend returned an error): {e}")
 
 if st.session_state.discovery_results:
     st.subheader("Discovered Sources")
+
+    # Add a button to automatically select suggested sources
+    suggested = st.session_state.get("suggested_indices", [])
+    if suggested:
+        if st.button("✨ Select Suggested Sources"):
+            # We can't directly mutate the checkboxes from here without a re-run logic,
+            # so we'll store the "auto-select" intent in session state.
+            st.session_state.auto_select_suggested = True
+            st.rerun()
+
     selected_indices = []
     for i, res in enumerate(st.session_state.discovery_results):
         cols = st.columns([0.1, 0.7, 0.2])
-        if cols[0].checkbox("Include", value=(i == 0), key=f"check_{i}"):
+
+        # Determine default value: if auto-select is on, use suggested indices
+        is_suggested = i in suggested
+        default_val = (
+            is_suggested if st.session_state.get("auto_select_suggested") else (i == 0)
+        )
+
+        if cols[0].checkbox("Include", value=default_val, key=f"check_{i}"):
             selected_indices.append(i)
-        cols[1].markdown(f"**[{res.title}]({res.url})**")
+
+        title_text = f"**[{res.title}]({res.url})**"
+        if is_suggested:
+            title_text += " ✨ (Suggested)"
+
+        cols[1].markdown(title_text)
         cols[2].text(f"Score: {res.relevance_score}")
+
+    # Reset auto-select flag after rendering checkboxes to avoid perpetual selection
+    if "auto_select_suggested" in st.session_state:
+        del st.session_state.auto_select_suggested
 
     if st.button("Generate Dataset from Selected"):
         progress_bar = st.progress(0)
         status_text = st.empty()
 
-        selected_sources = [st.session_state.discovery_results[i] for i in selected_indices]
+        selected_sources = [
+            st.session_state.discovery_results[i] for i in selected_indices
+        ]
 
         if not selected_sources:
             progress_bar.empty()
@@ -107,14 +153,18 @@ if st.session_state.discovery_results:
             # Extract parameters from every selected source
             all_params = []
             for idx, source in enumerate(selected_sources):
-                status_text.text(f"Extracting statistical DNA from source {idx + 1}/{len(selected_sources)}...")
+                status_text.text(
+                    f"Extracting statistical DNA from source {idx + 1}/{len(selected_sources)}..."
+                )
                 all_params.append(st.session_state.orchestrator.process_source(source))
                 progress_bar.progress(int(20 * (idx + 1) / len(selected_sources)))
 
             # Merge if multiple sources were selected
             params = st.session_state.orchestrator.merge_parameters(all_params)
             if len(selected_sources) > 1:
-                status_text.text(f"Merged parameters from {len(selected_sources)} sources.")
+                status_text.text(
+                    f"Merged parameters from {len(selected_sources)} sources."
+                )
 
             progress_bar.progress(20)
 
@@ -122,7 +172,9 @@ if st.session_state.discovery_results:
             if not params.variables:
                 progress_bar.empty()
                 status_text.empty()
-                methods = ", ".join(sorted({p.meta.extraction_method for p in all_params}))
+                methods = ", ".join(
+                    sorted({p.meta.extraction_method for p in all_params})
+                )
                 st.error(
                     "**No statistical parameters could be extracted from the selected "
                     "source(s), so no dataset was generated.**\n\n"
@@ -137,8 +189,10 @@ if st.session_state.discovery_results:
                 )
             else:
                 status_text.text("Running Synthesis-Validation Loop...")
-                best_score, best_data = st.session_state.orchestrator.run_optimization_loop(
-                    params, iterations=max_iters
+                best_score, best_data = (
+                    st.session_state.orchestrator.run_optimization_loop(
+                        params, iterations=max_iters
+                    )
                 )
                 st.session_state.best_data = best_data
                 progress_bar.progress(100)
