@@ -49,7 +49,7 @@ Without an API key, extraction falls back to regex (mean/std pattern matching).
 
 ## Output
 
-Each run writes to `sessions/<run_id>/`:
+Generated files live under `.agentdataset_cache/`, which is ignored by git. Each app run writes to `.agentdataset_cache/sessions/<run_id>/`:
 
 | File | Contents |
 |------|----------|
@@ -58,6 +58,14 @@ Each run writes to `sessions/<run_id>/`:
 | `DATACARD.md` | Fidelity report (KS-test, correlation, bias, privacy score) |
 
 Sessions are pruned automatically — only the 3 most recent are kept.
+
+---
+
+## LLM-Guided Discovery
+
+Discovery starts by asking the configured LLM to expand the user's research prompt into several search-optimized queries focused on papers, PDFs, reports, means, standard deviations, and correlations. The original query is always included, results are deduplicated by URL, and the source suggestion step asks the LLM which discovered sources are most likely to contain statistical parameters.
+
+If the LLM call fails or no API key is available, discovery falls back to the original query and extraction can still use the regex fallback.
 
 ---
 
@@ -75,9 +83,8 @@ agentdataset/
 │   │   └── validator.py      # Fidelity + privacy scoring
 │   └── models/
 │       └── schemas.py        # Pydantic data models
-├── tests/                    # 38 unit tests
-├── sessions/                 # Runtime session artifacts (auto-pruned)
-└── artifacts/                # Downloaded research PDFs
+├── tests/                    # 58 unit tests plus opt-in live e2e
+└── .agentdataset_cache/      # Ignored runtime output, reports, sessions, artifacts
 ```
 
 ---
@@ -87,3 +94,17 @@ agentdataset/
 ```bash
 uv run pytest tests/ -v
 ```
+
+The live API-backed e2e test runs automatically when a matching key is present in a repo-root `.env` file, and skips otherwise:
+
+```env
+OPENAI_API_KEY=...
+```
+
+Then run:
+
+```powershell
+uv run pytest tests/test_e2e_live.py -m live_e2e -v
+```
+
+The live test writes an inspection report to `.agentdataset_cache/e2e/live_e2e_report.md`.

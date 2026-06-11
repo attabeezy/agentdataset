@@ -8,9 +8,11 @@ This document describes the end-to-end workflow — what each phase does, what d
 
 **Entry point:** `Orchestrator.run_discovery(query)`
 
-1. Search DuckDuckGo twice: once with `filetype:pdf` appended, once as a plain query.
-2. PDF results get `relevance_score = 1.0`; HTML results get `0.8`.
-3. Returns a list of `DiscoveryResult` objects shown in the UI for the user to select.
+1. Use the configured LLM to expand the user query into several search-optimized queries focused on statistical sources. If that fails, use the original query only.
+2. Search DuckDuckGo for each optimized query.
+3. PDF results get `relevance_score = 1.0`; HTML results get `0.8`.
+4. Deduplicate results by URL and return `DiscoveryResult` objects shown in the UI for the user to select.
+5. Use `suggest_sources()` to ask the LLM which results are most likely to contain means, standard deviations, correlations, or distributions.
 
 **Network errors** are caught and logged — partial results are returned rather than crashing.
 
@@ -62,7 +64,7 @@ Each iteration:
 
 ## Output Artifacts
 
-Written to `sessions/<run_id>/` on each improvement:
+Written to `.agentdataset_cache/sessions/<run_id>/` on each improvement:
 
 | File | Contents |
 |------|----------|

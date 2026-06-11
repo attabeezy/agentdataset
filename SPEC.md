@@ -8,9 +8,12 @@ AgentDataset is a 4-phase autonomous pipeline: discover research documents → e
 
 ## 2. Modules
 
-### 2.1 Discovery (`core/discovery.py`)
+### 2.1 Discovery (`core/discovery.py` and `Orchestrator.run_discovery`)
 
-- **Search**: DuckDuckGo (`DDGS`) queries for both `filetype:pdf` and general HTML results.
+- **LLM-guided query expansion**: `Orchestrator.optimize_query()` asks the configured LLM for search-optimized queries focused on research papers, PDFs, reports, means, standard deviations, and correlations. The original query is always included; on LLM failure, only the original query is used.
+- **Search**: DuckDuckGo (`DDGS`) queries for both `filetype:pdf` and general HTML results for each optimized query.
+- **Deduplication**: discovery results are deduplicated by URL.
+- **Source suggestion**: `Orchestrator.suggest_sources()` asks the LLM which results are likely to contain statistical parameters; on failure, no suggestions are returned.
 - **PDF fetch**: `requests.get()` streams the file to a `NamedTemporaryFile`; returns `pdf://<path>` to the caller.
 - **HTML fetch**: `trafilatura` extracts clean text from the page.
 - **Error handling**: Network failures are caught and logged; snippet fallback is used for PDFs that fail to download.
@@ -38,7 +41,7 @@ AgentDataset is a 4-phase autonomous pipeline: discover research documents → e
 
 Central controller. Key responsibilities:
 
-- **Session management**: creates `sessions/<run_id>/`; prunes oldest dirs beyond `MAX_SESSIONS = 3`.
+- **Session management**: creates `.agentdataset_cache/sessions/<run_id>/`; prunes oldest dirs beyond `MAX_SESSIONS = 3`.
 - **Multi-source merging** (`merge_parameters`): when multiple sources are selected, averages same-named variables and unions unique ones; averages duplicate correlation pairs.
 - **PDF dispatch**: detects `pdf://` prefix from Discovery, routes to `extractor.pdf_to_markdown()`, then deletes the temp file.
 - **Optimization loop**: iterates Synthesis → Validation with a ratchet + pivot strategy (see §3).
@@ -114,14 +117,15 @@ Managed via `litellm`. The provider is selected in the UI; `Extractor` receives 
 
 ---
 
-## 6. Session Filesystem
+## 6. Generated Filesystem
 
 ```
-sessions/
-└── run_<timestamp>/
+.agentdataset_cache/
+└── sessions/
+    └── run_<timestamp>/
     ├── data.csv          # Best synthetic dataset
     ├── parameters.json   # Parameters used for best run
     └── DATACARD.md       # Fidelity + privacy report
 ```
 
-Only the 3 most recent session directories are retained. Older ones are deleted at `Orchestrator.__init__`.
+`.agentdataset_cache/` also holds runtime artifacts, migrated results, memory files, and live e2e reports. It is ignored by git. Only the 3 most recent session directories are retained. Older ones are deleted at `Orchestrator.__init__`.
