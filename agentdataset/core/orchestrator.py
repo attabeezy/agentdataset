@@ -29,6 +29,8 @@ MAX_NOISE = 2.0
 MIN_NOISE = 0.01
 PATIENCE = 2  # non-improvement streak length that triggers a pivot
 MAX_SESSIONS = 3  # oldest session dirs beyond this limit are deleted on startup
+AGENTDATASET_CACHE_DIR = ".agentdataset_cache"
+DEFAULT_SESSION_DIR = str(Path(AGENTDATASET_CACHE_DIR) / "sessions")
 
 
 def _prune_old_sessions(base_dir: str, keep: int = MAX_SESSIONS) -> None:
@@ -51,7 +53,7 @@ class Orchestrator:
     def __init__(
         self,
         session_id: str,
-        base_dir: str = "sessions",
+        base_dir: str = DEFAULT_SESSION_DIR,
         model: str = "gpt-4o",
         api_key: str = "",
         env_var: str = "OPENAI_API_KEY",

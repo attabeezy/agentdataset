@@ -36,26 +36,14 @@ ENV/
 .ruff_cache/
 .pytest_cache/
 
+# Local secrets
+.env
+
 # Git (optional - uncomment if you want a fresh start)
 # .git/
 
-# AgentDataset - downloaded/generated files
-artifacts/*.pdf
-artifacts/*.html
-artifacts/catalog.json
-artifacts/selector.md
-results/*.csv
-results/*.tsv
-results/*.md
-results/*.txt
-results/*.log
-results/*.png
-
-# Runtime session artifacts
-sessions/
-
-# Agent memory store
-memory/
+# AgentDataset generated/runtime files
+.agentdataset_cache/
 
 # OS
 .DS_Store
