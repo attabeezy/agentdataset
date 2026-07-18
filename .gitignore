@@ -35,6 +35,11 @@ ENV/
 # Linting
 .ruff_cache/
 .pytest_cache/
+.pytest_tmp/
+
+# Coverage
+.coverage
+htmlcov/
 
 # Local secrets
 .env

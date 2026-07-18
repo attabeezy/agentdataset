@@ -129,3 +129,36 @@ Managed via `litellm`. The provider is selected in the UI; `Extractor` receives 
 ```
 
 `.agentdataset_cache/` also holds runtime artifacts, migrated results, memory files, and live e2e reports. It is ignored by git. Only the 3 most recent session directories are retained. Older ones are deleted at `Orchestrator.__init__`.
+
+---
+
+## 7. Research Viability & Publishability
+
+AgentDataset sits at the intersection of Agentic AI, Synthetic Data Generation, and Data Privacy. It offers a structured, autonomous approach to solving the problem of generating high-fidelity synthetic datasets from academic literature.
+
+### 7.1 Novel Contributions
+
+- **End-to-End Autonomous Workflow**: Combines LLM extraction tools and synthetic data generators into a closed-loop autonomous agent that searches the web, reads PDFs, and optimizes its own output.
+- **The "Noise Pivot" Optimization Loop**: An explore/exploit ratcheting system for tuning the `noise_level` against a multi-component fidelity score (KS-test, Correlation MAE, Bias).
+- **Fidelity vs. Privacy Quantification**: Automatically generates a `DATACARD.md` that quantifies both the statistical fidelity (KS tests, correlation matrices) and privacy (nearest-neighbor distance).
+- **The "Caveman Protocol"**: A token-optimization strategy using compressed, filler-free prompting for extraction to reduce cost and latency in agentic loops.
+
+### 7.2 Potential Publication Venues
+
+- **Machine Learning / AI Venues**:
+  - *NeurIPS Datasets and Benchmarks Track*: Highly relevant for frameworks generating datasets.
+  - *Innovative Applications of Artificial Intelligence (IAAI-27)*: Excellent fit for the "Emerging Applications" track, given this is a highly practical, deployable system that solves a real-world data scarcity problem using applied AI.
+  - *ICLR or ICML (AI for Science / Applied AI workshops)*: For the autonomous agent architecture.
+- **Data Engineering & Databases**:
+  - *VLDB or SIGMOD*: Positioned as an automated data curation and synthesis pipeline.
+- **Privacy & Security**:
+  - *PETS (Privacy Enhancing Technologies Symposium)*: Emphasizing the privacy score (nearest-neighbor distance) and the ability to generate statistically accurate proxies for highly sensitive data without exposing PII.
+
+### 7.3 How to Strengthen
+
+To prepare for top-tier conference submission, the following evaluations should be added:
+
+1. **Empirical Benchmarks**: Run the pipeline on 3-5 well-known datasets (e.g., UCI Adult, medical, financial). Compare downstream machine learning performance of models trained on synthetic data vs. real data.
+2. **Ablation Studies**: Measure the impact of the LLM vs. Regex fallback, and show how much the *Noise Pivot* optimization loop improves the final `DATACARD` score compared to a single-shot synthesis (zero iterations).
+3. **Cost/Latency Analysis**: Quantify the cost (in tokens/USD) and time required to generate a dataset from scratch using the different supported LLMs (OpenAI vs. Claude vs. Gemini).
+

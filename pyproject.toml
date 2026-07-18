@@ -3,26 +3,22 @@ name = "agentdataset"
 version = "0.1.0"
 description = "AgentDataset - Autonomous Synthetic Data Factory"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "pydantic>=2.10.0",
-    "markdown>=3.7.0",
     "numpy>=2.2.0",
     "scipy>=1.15.0",
     "pandas>=2.2.0",
-    "matplotlib>=3.10.0",
     "PyMuPDF>=1.25.0",
     "requests>=2.32.0",
-    "tqdm>=4.67.0",
     "trafilatura>=2.0.0",
     "litellm>=1.83.14",
     "streamlit>=1.57.0",
-    "pytest>=9.0.3",
-    "pytest-mock>=3.15.1",
     "ddgs>=9.14.4",
+    "scikit-learn>=1.9.0",
 ]
 
-[build-backend]
+[build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
@@ -31,9 +27,14 @@ packages = ["agentdataset"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+addopts = "--basetemp=.pytest_tmp --cov=agentdataset --cov-report=term-missing"
 markers = [
     "live_e2e: live API-backed end-to-end test that requires .env credentials",
 ]
 
 [dependency-groups]
-dev = []
+dev = [
+    "pytest>=9.0.3",
+    "pytest-mock>=3.15.1",
+    "pytest-cov>=7.0.0",
+]
