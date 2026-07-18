@@ -142,6 +142,7 @@ AgentDataset sits at the intersection of Agentic AI, Synthetic Data Generation, 
 - **The "Noise Pivot" Optimization Loop**: An explore/exploit ratcheting system for tuning the `noise_level` against a multi-component fidelity score (KS-test, Correlation MAE, Bias).
 - **Fidelity vs. Privacy Quantification**: Automatically generates a `DATACARD.md` that quantifies both the statistical fidelity (KS tests, correlation matrices) and privacy (nearest-neighbor distance).
 - **The "Caveman Protocol"**: A token-optimization strategy using compressed, filler-free prompting for extraction to reduce cost and latency in agentic loops.
+- **Mixed Continuous/Categorical Synthesis**: The synthesizer's Cholesky/rank-transform copula extends to binary categorical variables (e.g. classification targets), so the pipeline can model real datasets whose targets aren't purely continuous, not just regression-style data.
 
 ### 7.2 Potential Publication Venues
 
@@ -154,11 +155,13 @@ AgentDataset sits at the intersection of Agentic AI, Synthetic Data Generation, 
 - **Privacy & Security**:
   - *PETS (Privacy Enhancing Technologies Symposium)*: Emphasizing the privacy score (nearest-neighbor distance) and the ability to generate statistically accurate proxies for highly sensitive data without exposing PII.
 
-### 7.3 How to Strengthen
+### 7.3 Evaluation Status
 
-To prepare for top-tier conference submission, the following evaluations should be added:
+All three strengthening items below are implemented as real, non-mocked measurements in `benchmark.py` (run via `python benchmark.py`, or each function individually).
 
-1. **Empirical Benchmarks**: Run the pipeline on 3-5 well-known datasets (e.g., UCI Adult, medical, financial). Compare downstream machine learning performance of models trained on synthetic data vs. real data.
-2. **Ablation Studies**: Measure the impact of the LLM vs. Regex fallback, and show how much the *Noise Pivot* optimization loop improves the final `DATACARD` score compared to a single-shot synthesis (zero iterations).
-3. **Cost/Latency Analysis**: Quantify the cost (in tokens/USD) and time required to generate a dataset from scratch using the different supported LLMs (OpenAI vs. Claude vs. Gemini).
+1. **Empirical Benchmarks** (`run_empirical_benchmark`) — **Done.** Runs the pipeline on 3 real public datasets: UCI Adult Income (demographic), Pima Indians Diabetes (medical), and Statlog German Credit (financial). Real `describe()`/`corr()` statistics are templated into extractable "literature style" text, extracted through OpenRouter (single key covering OpenAI/Anthropic/Google, falling back to regex automatically if unavailable), synthesized, and compared via TRTR vs. TSTR logistic regression (accuracy, F1, ROC-AUC) against real held-out data, alongside the existing fidelity report. This required adding categorical-variable support to the core pipeline (see 7.1) so classification targets like income or credit risk could be modeled, not just continuous regression targets.
+2. **Ablation Studies** (`run_ablation_study`) — **Done.** LLM vs. regex extraction is scored against known ground truth across 8 varied domain texts (not a single snippet), with paired t-tests. The Noise Pivot optimization loop is measured across iteration counts 0/1/2/3/5/10, over multiple seeds and source texts, with paired t-test and Wilcoxon significance tests comparing 0 vs. 5 iterations.
+3. **Cost/Latency Analysis** (`run_cost_latency_analysis`) — **Done.** Real litellm cost, token, and latency tracking (`completion_cost`, `usage`, `token_counter`) across OpenAI/Anthropic/Google, routed through OpenRouter with a single key, gracefully skipping providers when no key is configured. The Caveman Protocol's token savings are measured directly per model rather than asserted (found to be ~43%, not the earlier claimed 73%).
+
+Remaining follow-up work: extend categorical support beyond binary (2-category) variables, and broaden the empirical benchmark beyond 3 datasets / a single downstream model (logistic regression) if reviewers ask for more breadth.
 
