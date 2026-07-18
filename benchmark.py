@@ -8,9 +8,12 @@ import litellm
 from litellm import completion
 from scipy import stats as scipy_stats
 from pathlib import Path
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error
+from typing import Optional, List
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from ucimlrepo import fetch_ucirepo
 
 from agentdataset.core.orchestrator import Orchestrator
 from agentdataset.core.extractor import Extractor, CAVEMAN_PROMPT
@@ -32,81 +35,213 @@ def load_env():
                 key, val = line.split("=", 1)
                 os.environ[key.strip()] = val.strip().strip("'\"")
 
-def run_empirical_benchmark():
+# Extraction/synthesis for item 1 runs through OpenRouter (one key covers all
+# vendors) rather than per-provider keys, per the user's instruction.
+_REAL_BENCHMARK_MODEL = "openrouter/openai/gpt-4o"
+_REAL_BENCHMARK_ENV_VAR = "OPENROUTER_API_KEY"
+
+
+def _load_adult() -> dict:
+    """UCI Adult Income (id=2): demographic/income classification."""
+    ds = fetch_ucirepo(id=2)
+    df = ds.data.features.join(ds.data.targets)
+    df = df.rename(columns={"education-num": "education_num"})
+    df["income"] = df["income"].str.rstrip(".")  # train/test splits differ ("<=50K" vs "<=50K.")
+    df = df[["age", "education_num", "sex", "income"]].dropna()
+    return {
+        "name": "adult_income",
+        "domain": "demographic",
+        "df": df,
+        "continuous": ["age", "education_num"],
+        "categorical_features": ["sex"],
+        "target": "income",
+    }
+
+
+def _load_pima() -> dict:
+    """Pima Indians Diabetes (not on ucimlrepo; classic CSV mirror): medical classification."""
+    url = "https://raw.githubusercontent.com/jbrownlee/Datasets/master/pima-indians-diabetes.data.csv"
+    cols = [
+        "pregnancies", "glucose", "blood_pressure", "skin_thickness",
+        "insulin", "bmi", "diabetes_pedigree", "age", "outcome",
+    ]
+    df = pd.read_csv(url, names=cols)
+    df["outcome"] = df["outcome"].map({0: "no_diabetes", 1: "diabetes"})
+    df = df[["glucose", "bmi", "outcome"]].dropna()
+    return {
+        "name": "pima_diabetes",
+        "domain": "medical",
+        "df": df,
+        "continuous": ["glucose", "bmi"],
+        "categorical_features": [],
+        "target": "outcome",
+    }
+
+
+def _load_german_credit() -> dict:
+    """Statlog German Credit (id=144): financial credit-risk classification."""
+    ds = fetch_ucirepo(id=144)
+    df = ds.data.features.join(ds.data.targets)
+    df = df.rename(columns={
+        "Attribute2": "duration",
+        "Attribute5": "credit_amount",
+        "Attribute20": "foreign_worker",
+        "class": "credit_risk",
+    })
+    df["foreign_worker"] = df["foreign_worker"].map({"A201": "yes", "A202": "no"})
+    df["credit_risk"] = df["credit_risk"].map({1: "good", 2: "bad"})
+    df = df[["duration", "credit_amount", "foreign_worker", "credit_risk"]].dropna()
+    return {
+        "name": "german_credit",
+        "domain": "financial",
+        "df": df,
+        "continuous": ["duration", "credit_amount"],
+        "categorical_features": ["foreign_worker"],
+        "target": "credit_risk",
+    }
+
+
+def _dataset_to_source_text(dataset: dict) -> str:
+    """Build a "literature style" description from the REAL dataset's own
+    statistics (not fabricated), phrased so both the LLM and the regex
+    fallback can extract it. Binary categorical variables only — see
+    extractor._PATTERN_CATEGORICAL."""
+    df = dataset["df"]
+    continuous = dataset["continuous"]
+    categorical = dataset["categorical_features"] + [dataset["target"]]
+    lines = []
+
+    for col in continuous:
+        mean, std = float(df[col].mean()), float(df[col].std())
+        lines.append(f"The variable {col} has mean {mean:.4f} and std {std:.4f}.")
+
+    # Canonical binary encoding: alphabetically-first label -> code 0. Used
+    # consistently for both the stated probabilities and the correlation
+    # numbers below, so extraction round-trips correctly regardless of which
+    # order the LLM/regex happens to preserve.
+    label_order = {}
+    for col in categorical:
+        labels = sorted(df[col].dropna().unique().tolist())
+        if len(labels) != 2:
+            raise ValueError(f"Column '{col}' is not binary categorical: {labels}")
+        label_order[col] = labels
+        probs = df[col].value_counts(normalize=True)
+        p0, p1 = float(probs[labels[0]]), float(probs[labels[1]])
+        lines.append(
+            f"The categorical variable {col} takes value '{labels[0]}' with probability {p0:.4f} "
+            f"and '{labels[1]}' with probability {p1:.4f}."
+        )
+
+    numeric_df = df.copy()
+    for col, labels in label_order.items():
+        numeric_df[col] = numeric_df[col].map({label: i for i, label in enumerate(labels)})
+
+    pairs = [(c, dataset["target"]) for c in continuous if dataset["target"] != c]
+    pairs += [(c, dataset["target"]) for c in dataset["categorical_features"]]
+    pairs += [(continuous[i], continuous[j]) for i in range(len(continuous)) for j in range(i + 1, len(continuous))]
+    for v1, v2 in pairs:
+        corr_val = float(numeric_df[v1].corr(numeric_df[v2]))
+        lines.append(f"The correlation between {v1} and {v2} is {corr_val:.4f}.")
+
+    return "\n".join(lines)
+
+
+def run_empirical_benchmark(datasets: Optional[List[dict]] = None) -> pd.DataFrame:
     print("\n" + "="*50)
-    print("1. EMPIRICAL BENCHMARK (Downstream ML Performance)")
+    print("1. EMPIRICAL BENCHMARK (Downstream ML Performance on real datasets)")
     print("="*50)
 
-    # 1. Simulate a "Real" Dataset (Oracle)
-    np.random.seed(42)
-    n_samples = 1000
-    income = np.random.normal(60000, 15000, n_samples)
-    age = np.random.normal(45, 10, n_samples)
+    if datasets is None:
+        datasets = [_load_adult(), _load_pima(), _load_german_credit()]
 
-    # Target variable depends on income and age
-    loan_amount = 0.5 * income + 1000 * age + np.random.normal(0, 5000, n_samples)
+    rows = []
+    for dataset in datasets:
+        name = dataset["name"]
+        target = dataset["target"]
+        feature_cols = dataset["continuous"] + dataset["categorical_features"]
+        df = dataset["df"]
 
-    df_real = pd.DataFrame({
-        "income": income,
-        "age": age,
-        "loan_amount": loan_amount
-    })
+        try:
+            print(f"\n--- {name} ({dataset['domain']}) ---")
+            text = _dataset_to_source_text(dataset)
 
-    # Calculate Oracle Statistics
-    means = df_real.mean()
-    stds = df_real.std()
-    corr = df_real.corr()
+            train_df, test_df = train_test_split(
+                df, test_size=0.2, random_state=42, stratify=df[target]
+            )
 
-    # Text representing the literature about this dataset
-    source_text = f"""
-    A recent study on lending practices analyzed a dataset of {n_samples} borrowers.
-    Income distribution: mean = {means['income']:.0f}, std = {stds['income']:.0f}.
-    Age distribution: mean = {means['age']:.0f}, std = {stds['age']:.0f}.
-    Loan amount distribution: mean = {means['loan_amount']:.0f}, std = {stds['loan_amount']:.0f}.
+            orchestrator = Orchestrator(
+                session_id=f"real_benchmark_{name}",
+                model=_REAL_BENCHMARK_MODEL,
+                env_var=_REAL_BENCHMARK_ENV_VAR,
+            )
+            orchestrator.synthesizer = Synthesizer(n_rows=len(train_df))
 
-    Correlation analysis revealed:
-    - correlation between income and loan_amount is {corr.loc['income', 'loan_amount']:.2f}.
-    - correlation between age and loan_amount is {corr.loc['age', 'loan_amount']:.2f}.
-    - correlation between income and age is {corr.loc['income', 'age']:.2f}.
-    """
+            params = orchestrator.extractor.extract_parameters(text, name)
+            if target not in params.variables:
+                logger.warning("Extraction did not recover target '%s' for %s; skipping.", target, name)
+                continue
 
-    print("Generating synthetic data based on extracted parameters...")
+            best_score, df_synth = orchestrator.run_optimization_loop(params, iterations=3)
+            if df_synth is None or any(c not in df_synth.columns for c in feature_cols + [target]):
+                logger.warning("Synthesis is missing required columns for %s; skipping.", name)
+                continue
 
-    orchestrator = Orchestrator(session_id="benchmark_empirical")
-    params = orchestrator.extractor.extract_parameters(source_text, "Oracle_Study")
+            fidelity_report = orchestrator.validator.validate(df_synth, params)
 
-    if not params.variables:
-        print("Extraction failed. Using regex fallback mock...")
-        v, c = orchestrator.extractor._extract_with_regex(source_text)
-        params = Parameters(variables=v, correlations=c, meta=MetaParams(source="Oracle_Study", extracted_at=datetime.now().isoformat(), extraction_method="regex_fallback"))
+            target_encoder = LabelEncoder().fit(train_df[target])
+            feature_encoders = {
+                col: LabelEncoder().fit(train_df[col]) for col in dataset["categorical_features"]
+            }
 
-    best_score, df_synth = orchestrator.run_optimization_loop(params, iterations=3)
+            def _prepare_X_y(frame: pd.DataFrame):
+                X = frame[feature_cols].copy()
+                for col, enc in feature_encoders.items():
+                    X[col] = enc.transform(X[col])
+                y = target_encoder.transform(frame[target])
+                return X, y
 
-    # Train test split for real data
-    X_real = df_real[['income', 'age']]
-    y_real = df_real['loan_amount']
-    X_train_real, X_test_real, y_train_real, y_test_real = train_test_split(X_real, y_real, test_size=0.2, random_state=42)
+            X_train_real, y_train_real = _prepare_X_y(train_df)
+            X_test_real, y_test_real = _prepare_X_y(test_df)
+            X_train_synth, y_train_synth = _prepare_X_y(df_synth)
 
-    # Train test split for synthetic data
-    X_train_synth = df_synth.iloc[:, :2]
-    y_train_synth = df_synth.iloc[:, 2]
+            def _fit_and_score(X_train, y_train) -> dict:
+                model = LogisticRegression(max_iter=1000)
+                model.fit(X_train, y_train)
+                preds = model.predict(X_test_real)
+                probs = model.predict_proba(X_test_real)[:, 1]
+                return {
+                    "accuracy": accuracy_score(y_test_real, preds),
+                    "f1": f1_score(y_test_real, preds),
+                    "roc_auc": roc_auc_score(y_test_real, probs),
+                }
 
-    # Model 1: Trained on Real, Tested on Real
-    model_real = LinearRegression()
-    model_real.fit(X_train_real, y_train_real)
-    preds_real = model_real.predict(X_test_real)
-    mse_real = mean_squared_error(y_test_real, preds_real)
+            trtr = _fit_and_score(X_train_real, y_train_real)
+            tstr = _fit_and_score(X_train_synth, y_train_synth)
 
-    # Model 2: Trained on Synthetic, Tested on Real (TRTS)
-    model_synth = LinearRegression()
-    model_synth.fit(X_train_synth, y_train_synth)
-    preds_synth = model_synth.predict(X_test_real)
-    mse_synth = mean_squared_error(y_test_real, preds_synth)
+            print(
+                f"TRTR: acc={trtr['accuracy']:.3f} f1={trtr['f1']:.3f} auc={trtr['roc_auc']:.3f} | "
+                f"TSTR: acc={tstr['accuracy']:.3f} f1={tstr['f1']:.3f} auc={tstr['roc_auc']:.3f} | "
+                f"fidelity={fidelity_report.overall_score:.1f} | extraction={params.meta.extraction_method}"
+            )
 
-    print(f"\nResults:")
-    print(f"Model trained on REAL data -> MSE on Real Test Set: {mse_real:.2f}")
-    print(f"Model trained on SYNTH data -> MSE on Real Test Set: {mse_synth:.2f}")
-    print(f"Relative Performance (TRTS / TRTR): {mse_synth / mse_real:.2f}x (closer to 1.0 is better)")
+            rows.append({
+                "dataset": name,
+                "domain": dataset["domain"],
+                "extraction_method": params.meta.extraction_method,
+                "fidelity_score": fidelity_report.overall_score,
+                "trtr_accuracy": trtr["accuracy"], "tstr_accuracy": tstr["accuracy"],
+                "trtr_f1": trtr["f1"], "tstr_f1": tstr["f1"],
+                "trtr_roc_auc": trtr["roc_auc"], "tstr_roc_auc": tstr["roc_auc"],
+            })
+        except Exception:
+            logger.exception("Real-dataset benchmark failed for %s", name)
+
+    df_results = pd.DataFrame(rows)
+    if not df_results.empty:
+        print("\n" + df_results.to_string(index=False))
+    else:
+        print("No dataset produced usable results.")
+    return df_results
 
 
 # Ground-truth-embedded "literature" texts spanning several domains, used for both
