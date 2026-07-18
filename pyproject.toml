@@ -27,7 +27,7 @@ packages = ["agentdataset"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-addopts = "--basetemp=.pytest_tmp --cov=agentdataset --cov-report=term-missing"
+addopts = "--basetemp=.pytest_tmp --cov=agentdataset --cov=app --cov-report=term-missing"
 markers = [
     "live_e2e: live API-backed end-to-end test that requires .env credentials",
 ]
