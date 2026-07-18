@@ -1,10 +1,10 @@
 # AgentDataset Models
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
-_ALLOWED_DISTRIBUTIONS = {"normal", "uniform", "gamma"}
+_ALLOWED_DISTRIBUTIONS = {"normal", "uniform", "gamma", "categorical"}
 _ALLOWED_SOURCE_TYPES = {"pdf", "html"}
 
 class VariableParams(BaseModel):
@@ -14,6 +14,8 @@ class VariableParams(BaseModel):
     std: float = 1.0
     min: Optional[float] = None
     max: Optional[float] = None
+    # Label -> probability, only used when distribution == "categorical".
+    categories: Optional[Dict[str, float]] = None
 
     @field_validator("distribution", mode="before")
     @classmethod
@@ -21,6 +23,25 @@ class VariableParams(BaseModel):
         # Unknown distributions (e.g. an LLM hallucination) degrade to normal
         # rather than crashing extraction; the synthesizer treats them the same.
         return v if v in _ALLOWED_DISTRIBUTIONS else "normal"
+
+    @field_validator("categories")
+    @classmethod
+    def _normalize_categories(cls, v):
+        if not v:
+            return v
+        total = sum(v.values())
+        if total <= 0:
+            return None
+        return {label: prob / total for label, prob in v.items()}
+
+    @model_validator(mode="after")
+    def _demote_categorical_without_categories(self):
+        # A "categorical" distribution with no usable categories can't be
+        # synthesized; degrade to normal rather than crashing downstream,
+        # matching the same defensive pattern as unknown distributions.
+        if self.distribution == "categorical" and not self.categories:
+            self.distribution = "normal"
+        return self
 
 class CorrelationParams(BaseModel):
     var1: str

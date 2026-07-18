@@ -22,12 +22,26 @@ class Validator:
         }
 
     def compute_ks_test(self, df: pd.DataFrame, parameters: Parameters) -> Dict[str, float]:
-        """Compute KS-test p-values."""
+        """Compute distribution-fit p-values: KS-test for continuous variables,
+        chi-square goodness-of-fit for categorical ones. Stored in the same
+        dict/field regardless of which test produced them."""
         results = {}
         for name, var_params in parameters.variables.items():
             if name not in df.columns: continue
+
+            if var_params.distribution == "categorical" and var_params.categories:
+                labels = list(var_params.categories.keys())
+                observed_counts = np.array([(df[name] == label).sum() for label in labels], dtype=float)
+                expected_counts = np.array([var_params.categories[label] for label in labels]) * len(df)
+                if (expected_counts > 0).all():
+                    _, p_val = stats.chisquare(observed_counts, expected_counts)
+                else:
+                    p_val = 0.0
+                results[name] = float(p_val)
+                continue
+
             data = df[name].values
-            
+
             # Theoretical CDF mapping — use default-arg capture to avoid late-binding closure bug
             if var_params.distribution == "normal":
                 theoretical_cdf = lambda x, m=var_params.mean, s=var_params.std: stats.norm.cdf(x, loc=m, scale=s)
@@ -63,7 +77,17 @@ class Validator:
         if len(var_names) < 2:
             return 1.0
 
-        synthetic_corr = df[var_names].corr().fillna(0).values
+        # Categorical columns are strings; encode as 0/1/2... (order given by
+        # `categories`) so .corr() can include them — exactly point-biserial
+        # correlation for the binary case.
+        numeric_df = df[var_names].copy()
+        for name in var_names:
+            var_params = parameters.variables[name]
+            if var_params.distribution == "categorical" and var_params.categories:
+                labels = list(var_params.categories.keys())
+                numeric_df[name] = numeric_df[name].map({label: i for i, label in enumerate(labels)})
+
+        synthetic_corr = numeric_df.corr().fillna(0).values
         target_corr = np.eye(len(var_names))
 
         for key, corr_params in parameters.correlations.items():
@@ -121,10 +145,20 @@ class Validator:
         ks_pvalues = self.compute_ks_test(df, parameters)
         corr_sim = self.compute_correlation_similarity(df, parameters)
         
-        # Simple bias score based on mean deviation
+        # Simple bias score: relative mean deviation for continuous variables,
+        # absolute category-frequency deviation for categorical ones.
         bias_count = 0
         for name, var_params in parameters.variables.items():
-            if name in df.columns:
+            if name not in df.columns:
+                continue
+            if var_params.distribution == "categorical" and var_params.categories:
+                observed_freqs = df[name].value_counts(normalize=True)
+                if any(
+                    abs(observed_freqs.get(label, 0.0) - target_prob) > 0.1
+                    for label, target_prob in var_params.categories.items()
+                ):
+                    bias_count += 1
+            else:
                 denom = abs(var_params.mean) if var_params.mean != 0 else (var_params.std or 1.0)
                 if abs(df[name].mean() - var_params.mean) / denom > 0.2:
                     bias_count += 1
@@ -154,7 +188,10 @@ class Validator:
         var_details = []
         for name, p_val in report.ks_pvalues.items():
             status = "[PASS]" if p_val >= self.thresholds["ks_pvalue"] else "[FAIL]"
-            var_details.append(f"- {status} **{name}**: KS p-value={p_val:.4f}")
+            var_params = parameters.variables.get(name)
+            is_categorical = var_params is not None and var_params.distribution == "categorical" and var_params.categories
+            label = "Chi2 p-value" if is_categorical else "KS p-value"
+            var_details.append(f"- {status} **{name}**: {label}={p_val:.4f}")
 
         card = f"""# DATACARD: Synthetic Dataset
 

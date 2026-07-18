@@ -37,6 +37,50 @@ def test_synthesize_with_vars():
     assert "v2" in df.columns
 
 
+def test_generate_variable_categorical():
+    syn = Synthesizer(n_rows=1000)
+    params = VariableParams(name="v1", distribution="categorical", categories={"yes": 0.7, "no": 0.3})
+    data = syn.generate_variable(params, noise_level=0.0)
+    assert len(data) == 1000
+    # Integer codes (0/1), mapped to labels later in synthesize().
+    assert set(np.unique(data)).issubset({0, 1})
+
+
+def test_synthesize_categorical_variable_produces_labels():
+    syn = Synthesizer(n_rows=1000, seed=0)
+    params = Parameters(
+        variables={
+            "sex": VariableParams(name="sex", distribution="categorical", categories={"Female": 0.4, "Male": 0.6}),
+        },
+        correlations={},
+        meta=MetaParams(source="S", extracted_at="N"),
+    )
+    df = syn.synthesize(params)
+    assert set(df["sex"].unique()) <= {"Female", "Male"}
+    freqs = df["sex"].value_counts(normalize=True)
+    assert abs(freqs["Male"] - 0.6) < 0.1
+
+
+def test_synthesize_categorical_correlated_with_continuous():
+    """A continuous variable strongly correlated with a binary categorical
+    variable should show a real difference in means across categories."""
+    syn = Synthesizer(n_rows=2000, seed=0)
+    params = Parameters(
+        variables={
+            "score": VariableParams(name="score", distribution="normal", mean=0.0, std=1.0),
+            "outcome": VariableParams(name="outcome", distribution="categorical", categories={"no": 0.5, "yes": 0.5}),
+        },
+        correlations={
+            "c": CorrelationParams(var1="score", var2="outcome", correlation=0.8),
+        },
+        meta=MetaParams(source="S", extracted_at="N"),
+    )
+    df = syn.synthesize(params)
+    mean_yes = df.loc[df["outcome"] == "yes", "score"].mean()
+    mean_no = df.loc[df["outcome"] == "no", "score"].mean()
+    assert mean_yes > mean_no
+
+
 def test_gamma_with_non_positive_mean_does_not_crash():
     """Gamma needs mean>0; non-positive mean must fall back to normal, not crash."""
     syn = Synthesizer(n_rows=100)

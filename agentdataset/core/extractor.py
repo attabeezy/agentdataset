@@ -27,12 +27,14 @@ Extract variables, distributions, correlations.
 Output strict JSON matching this schema exactly:
 {
   "variables": {
-    "<name>": {"distribution": "normal|uniform|gamma", "mean": 0.0, "std": 1.0, "min": null, "max": null}
+    "<name>": {"distribution": "normal|uniform|gamma|categorical", "mean": 0.0, "std": 1.0, "min": null, "max": null, "categories": null}
   },
   "correlations": {
     "<key>": {"var1": "<name>", "var2": "<name>", "correlation": 0.5, "direction": "positive|negative"}
   }
 }
+"categories" is only used when distribution is "categorical": an object mapping
+each category label to its probability, e.g. {"yes": 0.3, "no": 0.7}.
 No fluff. No greeting. Output JSON only.
 """
 
@@ -81,6 +83,17 @@ _PATTERN_CORR_FUNC = re.compile(
     re.IGNORECASE,
 )
 
+# Binary categorical variable, e.g. "The categorical variable sex takes value
+# 'Male' with probability 0.67 and 'Female' with probability 0.33." Captures
+# (name, label1, prob1, label2, prob2). Only binary (2-category) phrasing is
+# recognized by the regex fallback; the LLM path handles arbitrary category
+# counts via the JSON schema instead.
+_PATTERN_CATEGORICAL = re.compile(
+    r"categorical\s+variable\s+(\w+)\s+takes\s+value\s+'([^']+)'\s+with\s+probability\s+"
+    r"(0?\.\d+|1(?:\.0+)?)\s+and\s+'([^']+)'\s+with\s+probability\s+(0?\.\d+|1(?:\.0+)?)",
+    re.IGNORECASE,
+)
+
 
 class Extractor:
     def __init__(
@@ -124,8 +137,13 @@ class Extractor:
         """Convert raw LLM JSON dict into (variables, correlations) dicts of Pydantic models."""
         variables: Dict[str, VariableParams] = {}
         for name, v in data.get("variables", {}).items():
-            mean = float(v.get("mean", 0.0))
-            std = float(v.get("std", 1.0))
+            # LLM output may explicitly set "mean"/"std" to null for categorical
+            # variables (they don't apply), not just omit the keys.
+            mean = float(v.get("mean") if v.get("mean") is not None else 0.0)
+            std = float(v.get("std") if v.get("std") is not None else 1.0)
+            categories = v.get("categories") or None
+            if categories is not None:
+                categories = {label: float(prob) for label, prob in categories.items()}
             variables[name] = VariableParams(
                 name=name,
                 distribution=v.get("distribution", "normal"),
@@ -133,6 +151,7 @@ class Extractor:
                 std=std,
                 min=float(v["min"]) if v.get("min") is not None else mean - 3 * std,
                 max=float(v["max"]) if v.get("max") is not None else mean + 3 * std,
+                categories=categories,
             )
 
         correlations: Dict[str, CorrelationParams] = {}
@@ -179,6 +198,17 @@ class Extractor:
                     std=std,
                     min=mean - 3 * std,
                     max=mean + 3 * std,
+                )
+
+        # Binary categorical variables — captured with their real name, unlike
+        # the anonymized "var_N" naming used for mean/std pairs above.
+        for match in _PATTERN_CATEGORICAL.finditer(text):
+            name, label1, prob1, label2, prob2 = match.groups()
+            if name not in variables:
+                variables[name] = VariableParams(
+                    name=name,
+                    distribution="categorical",
+                    categories={label1: float(prob1), label2: float(prob2)},
                 )
 
         # Best-effort correlation extraction (synthesizer ignores pairs whose

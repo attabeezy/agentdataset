@@ -13,6 +13,19 @@ def test_variable_params():
     assert var.std == 2.0
     assert var.min is None
 
+def test_variable_params_categorical():
+    var = VariableParams(name="sex", distribution="categorical", categories={"Male": 0.6, "Female": 0.4})
+    assert var.distribution == "categorical"
+    assert var.categories == {"Male": 0.6, "Female": 0.4}
+
+def test_variable_params_categorical_probabilities_normalized():
+    var = VariableParams(name="sex", distribution="categorical", categories={"Male": 3, "Female": 1})
+    assert var.categories == {"Male": 0.75, "Female": 0.25}
+
+def test_variable_params_categorical_without_categories_demotes_to_normal():
+    var = VariableParams(name="sex", distribution="categorical")
+    assert var.distribution == "normal"
+
 def test_correlation_params():
     corr = CorrelationParams(var1="v1", var2="v2", correlation=0.5)
     assert corr.var1 == "v1"

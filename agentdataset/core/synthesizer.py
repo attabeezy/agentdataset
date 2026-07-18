@@ -20,7 +20,14 @@ class Synthesizer:
         mean = params.mean
         std = params.std
 
-        if params.distribution == "uniform":
+        if params.distribution == "categorical" and params.categories:
+            # Rank-transform (in synthesize()) needs sortable values, so draw
+            # integer category codes here; synthesize() maps them back to labels.
+            labels = list(params.categories.keys())
+            probs = np.array([params.categories[label] for label in labels], dtype=float)
+            probs = probs / probs.sum()
+            data = self.rng.choice(len(labels), size=self.n_rows, p=probs)
+        elif params.distribution == "uniform":
             low = params.min if params.min is not None else mean - 2*std
             high = params.max if params.max is not None else mean + 2*std
             spread = (high - low) * noise_level * 0.5
@@ -70,9 +77,15 @@ class Synthesizer:
         for i, name in enumerate(var_names):
             params = parameters.variables[name]
             raw_data = self.generate_variable(params, noise_level)
-            
+
             # Apply rank transform for correlation
             ranks = pd.Series(base_data[:, i]).rank()
-            data_dict[name] = np.take(np.sort(raw_data), np.argsort(ranks).argsort())
+            reordered = np.take(np.sort(raw_data), np.argsort(ranks).argsort())
+
+            if params.distribution == "categorical" and params.categories:
+                labels = np.array(list(params.categories.keys()))
+                data_dict[name] = labels[reordered.astype(int)]
+            else:
+                data_dict[name] = reordered
 
         return pd.DataFrame(data_dict)

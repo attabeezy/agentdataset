@@ -133,6 +133,29 @@ def test_regex_negative_and_scientific_numbers():
     assert var.std == 0.12
 
 
+def test_regex_extracts_categorical():
+    ext = Extractor()
+    text = "The categorical variable sex takes value 'Female' with probability 0.4 and 'Male' with probability 0.6."
+    variables, _ = ext._extract_with_regex(text)
+    assert "sex" in variables
+    var = variables["sex"]
+    assert var.distribution == "categorical"
+    assert var.categories == {"Female": 0.4, "Male": 0.6}
+
+
+def test_parse_llm_result_categorical():
+    ext = Extractor()
+    data = {
+        "variables": {
+            "sex": {"distribution": "categorical", "categories": {"Female": 0.4, "Male": 0.6}}
+        },
+        "correlations": {},
+    }
+    variables, _ = ext._parse_llm_result(data)
+    assert variables["sex"].distribution == "categorical"
+    assert variables["sex"].categories == {"Female": 0.4, "Male": 0.6}
+
+
 def test_regex_extracts_correlation():
     ext = Extractor()
     text = "The correlation between income and age is 0.65 overall."
