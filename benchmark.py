@@ -35,10 +35,28 @@ def load_env():
                 key, val = line.split("=", 1)
                 os.environ[key.strip()] = val.strip().strip("'\"")
 
-# Extraction/synthesis for item 1 runs through OpenRouter (one key covers all
-# vendors) rather than per-provider keys, per the user's instruction.
-_REAL_BENCHMARK_MODEL = "openrouter/openai/gpt-4o"
-_REAL_BENCHMARK_ENV_VAR = "OPENROUTER_API_KEY"
+# All LLM-backed benchmarking (empirical benchmark, ablation, cost/latency)
+# runs through OpenRouter (one key covers all vendors) rather than per-provider
+# keys, per the user's instruction.
+_OPENROUTER_MODEL = "openrouter/openai/gpt-4o"
+_OPENROUTER_ENV_VAR = "OPENROUTER_API_KEY"
+
+# Where benchmark outputs are persisted so runs produce reusable artifacts
+# instead of only console output.
+RESULTS_DIR = Path("results")
+
+
+def _save_results(df: pd.DataFrame, filename: str) -> None:
+    """Best-effort CSV write; a save failure shouldn't abort a benchmark run."""
+    if df is None or df.empty:
+        return
+    try:
+        RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        path = RESULTS_DIR / filename
+        df.to_csv(path, index=False)
+        print(f"Saved results to {path}")
+    except OSError as e:
+        logger.warning("Failed to save results to %s: %s", filename, e)
 
 
 def _load_adult() -> dict:
@@ -146,22 +164,25 @@ def _dataset_to_source_text(dataset: dict) -> str:
     return "\n".join(lines)
 
 
-def run_empirical_benchmark(datasets: Optional[List[dict]] = None) -> pd.DataFrame:
+def run_empirical_benchmark(dataset_loaders: Optional[List] = None) -> pd.DataFrame:
     print("\n" + "="*50)
     print("1. EMPIRICAL BENCHMARK (Downstream ML Performance on real datasets)")
     print("="*50)
 
-    if datasets is None:
-        datasets = [_load_adult(), _load_pima(), _load_german_credit()]
+    if dataset_loaders is None:
+        dataset_loaders = [_load_adult, _load_pima, _load_german_credit]
 
     rows = []
-    for dataset in datasets:
-        name = dataset["name"]
-        target = dataset["target"]
-        feature_cols = dataset["continuous"] + dataset["categorical_features"]
-        df = dataset["df"]
-
+    for loader in dataset_loaders:
         try:
+            # Loading (network fetch) happens inside the try block too, so a
+            # transient failure for one dataset doesn't abort the others.
+            dataset = loader()
+            name = dataset["name"]
+            target = dataset["target"]
+            feature_cols = dataset["continuous"] + dataset["categorical_features"]
+            df = dataset["df"]
+
             print(f"\n--- {name} ({dataset['domain']}) ---")
             text = _dataset_to_source_text(dataset)
 
@@ -171,8 +192,8 @@ def run_empirical_benchmark(datasets: Optional[List[dict]] = None) -> pd.DataFra
 
             orchestrator = Orchestrator(
                 session_id=f"real_benchmark_{name}",
-                model=_REAL_BENCHMARK_MODEL,
-                env_var=_REAL_BENCHMARK_ENV_VAR,
+                model=_OPENROUTER_MODEL,
+                env_var=_OPENROUTER_ENV_VAR,
             )
             orchestrator.synthesizer = Synthesizer(n_rows=len(train_df))
 
@@ -234,13 +255,14 @@ def run_empirical_benchmark(datasets: Optional[List[dict]] = None) -> pd.DataFra
                 "trtr_roc_auc": trtr["roc_auc"], "tstr_roc_auc": tstr["roc_auc"],
             })
         except Exception:
-            logger.exception("Real-dataset benchmark failed for %s", name)
+            logger.exception("Real-dataset benchmark failed for loader %s", loader.__name__)
 
     df_results = pd.DataFrame(rows)
     if not df_results.empty:
         print("\n" + df_results.to_string(index=False))
     else:
         print("No dataset produced usable results.")
+    _save_results(df_results, "empirical_benchmark.csv")
     return df_results
 
 
@@ -459,9 +481,11 @@ def run_ablation_study():
     print("2. ABLATION STUDIES")
     print("="*50)
 
-    extractor = Extractor()
-    run_ablation_extraction_method(extractor)
-    run_ablation_noise_pivot()
+    extractor = Extractor(model=_OPENROUTER_MODEL, env_var=_OPENROUTER_ENV_VAR)
+    df_extraction = run_ablation_extraction_method(extractor)
+    _save_results(df_extraction, "ablation_extraction_method.csv")
+    df_noise_pivot = run_ablation_noise_pivot()
+    _save_results(df_noise_pivot, "ablation_noise_pivot.csv")
 
 
 # Providers checked for cost/latency measurement. All three are routed through
@@ -470,8 +494,8 @@ def run_ablation_study():
 # separate provider keys.
 _COST_LATENCY_PROVIDERS = [
     {"name": "OpenAI", "model": "openrouter/openai/gpt-4o", "key_env": "OPENROUTER_API_KEY"},
-    {"name": "Anthropic", "model": "openrouter/anthropic/claude-3.5-sonnet", "key_env": "OPENROUTER_API_KEY"},
-    {"name": "Google", "model": "openrouter/google/gemini-2.0-flash-001", "key_env": "OPENROUTER_API_KEY"},
+    {"name": "Anthropic", "model": "openrouter/anthropic/claude-sonnet-4.5", "key_env": "OPENROUTER_API_KEY"},
+    {"name": "Google", "model": "openrouter/google/gemini-2.5-flash", "key_env": "OPENROUTER_API_KEY"},
 ]
 
 # A deliberately verbose, "naturally written" version of extractor.CAVEMAN_PROMPT,
@@ -564,6 +588,7 @@ def run_cost_latency_analysis(n_repeats: int = 5):
     # Real Caveman-vs-verbose token count comparison, per model. token_counter
     # works offline (no API key needed), so this always runs.
     print("\nCaveman Protocol token savings (measured via litellm.token_counter):")
+    caveman_rows = []
     for p in _COST_LATENCY_PROVIDERS:
         try:
             caveman_tokens = litellm.token_counter(
@@ -577,9 +602,16 @@ def run_cost_latency_analysis(n_repeats: int = 5):
                 f"  {p['name']:<10} ({p['model']}): verbose={verbose_tokens} tok, "
                 f"caveman={caveman_tokens} tok, reduction={reduction:.1f}%"
             )
+            caveman_rows.append({
+                "provider": p["name"], "model": p["model"],
+                "verbose_tokens": verbose_tokens, "caveman_tokens": caveman_tokens,
+                "reduction_pct": reduction,
+            })
         except Exception as e:
             logger.warning("Token counting failed for %s: %s", p["name"], e)
 
+    _save_results(df, "cost_latency.csv")
+    _save_results(pd.DataFrame(caveman_rows), "caveman_token_savings.csv")
     return df
 
 
