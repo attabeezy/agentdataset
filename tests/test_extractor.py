@@ -143,6 +143,28 @@ def test_regex_extracts_categorical():
     assert var.categories == {"Female": 0.4, "Male": 0.6}
 
 
+def test_regex_extracts_three_category_variable():
+    ext = Extractor()
+    text = (
+        "The categorical variable marital_status takes value 'married' with probability 0.5, "
+        "'never_married' with probability 0.3, and 'prev_married' with probability 0.2."
+    )
+    variables, _ = ext._extract_with_regex(text)
+    assert "marital_status" in variables
+    var = variables["marital_status"]
+    assert var.distribution == "categorical"
+    assert var.categories == {"married": 0.5, "never_married": 0.3, "prev_married": 0.2}
+
+
+def test_regex_ignores_single_category_fragment():
+    """A lone label/probability pair would normalize to probability 1.0 — it is
+    treated as a parse fragment, not a categorical variable."""
+    ext = Extractor()
+    text = "The categorical variable status takes value 'active' with probability 0.9."
+    variables, _ = ext._extract_with_regex(text)
+    assert "status" not in variables
+
+
 def test_parse_llm_result_categorical():
     ext = Extractor()
     data = {

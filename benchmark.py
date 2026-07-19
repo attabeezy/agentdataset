@@ -63,15 +63,26 @@ def _load_adult() -> dict:
     """UCI Adult Income (id=2): demographic/income classification."""
     ds = fetch_ucirepo(id=2)
     df = ds.data.features.join(ds.data.targets)
-    df = df.rename(columns={"education-num": "education_num"})
+    df = df.rename(columns={"education-num": "education_num", "marital-status": "marital_status"})
     df["income"] = df["income"].str.rstrip(".")  # train/test splits differ ("<=50K" vs "<=50K.")
-    df = df[["age", "education_num", "sex", "income"]].dropna()
+    # Collapse the 7 raw marital-status labels into 3 categories so the
+    # benchmark exercises a real multi-category (3+) feature.
+    df["marital_status"] = df["marital_status"].map({
+        "Married-civ-spouse": "married",
+        "Married-spouse-absent": "married",
+        "Married-AF-spouse": "married",
+        "Never-married": "never_married",
+        "Divorced": "prev_married",
+        "Separated": "prev_married",
+        "Widowed": "prev_married",
+    })
+    df = df[["age", "education_num", "sex", "marital_status", "income"]].dropna()
     return {
         "name": "adult_income",
         "domain": "demographic",
         "df": df,
         "continuous": ["age", "education_num"],
-        "categorical_features": ["sex"],
+        "categorical_features": ["sex", "marital_status"],
         "target": "income",
     }
 
@@ -122,8 +133,8 @@ def _load_german_credit() -> dict:
 def _dataset_to_source_text(dataset: dict) -> str:
     """Build a "literature style" description from the REAL dataset's own
     statistics (not fabricated), phrased so both the LLM and the regex
-    fallback can extract it. Binary categorical variables only — see
-    extractor._PATTERN_CATEGORICAL."""
+    fallback can extract it. Categorical variables may have any number of
+    categories — see extractor._PATTERN_CATEGORICAL."""
     df = dataset["df"]
     continuous = dataset["continuous"]
     categorical = dataset["categorical_features"] + [dataset["target"]]
@@ -133,22 +144,21 @@ def _dataset_to_source_text(dataset: dict) -> str:
         mean, std = float(df[col].mean()), float(df[col].std())
         lines.append(f"The variable {col} has mean {mean:.4f} and std {std:.4f}.")
 
-    # Canonical binary encoding: alphabetically-first label -> code 0. Used
+    # Canonical encoding: labels sorted alphabetically -> codes 0..N-1. Used
     # consistently for both the stated probabilities and the correlation
     # numbers below, so extraction round-trips correctly regardless of which
     # order the LLM/regex happens to preserve.
     label_order = {}
     for col in categorical:
         labels = sorted(df[col].dropna().unique().tolist())
-        if len(labels) != 2:
-            raise ValueError(f"Column '{col}' is not binary categorical: {labels}")
         label_order[col] = labels
         probs = df[col].value_counts(normalize=True)
-        p0, p1 = float(probs[labels[0]]), float(probs[labels[1]])
-        lines.append(
-            f"The categorical variable {col} takes value '{labels[0]}' with probability {p0:.4f} "
-            f"and '{labels[1]}' with probability {p1:.4f}."
-        )
+        parts = [f"'{label}' with probability {float(probs[label]):.4f}" for label in labels]
+        # "'a' with probability p and 'b' with probability q" for 2 labels,
+        # "'a' with probability p, 'b' with probability q, and 'c' with
+        # probability r" for 3+ — both forms match the extractor regex.
+        listed = " and ".join(parts) if len(parts) == 2 else ", ".join(parts[:-1]) + f", and {parts[-1]}"
+        lines.append(f"The categorical variable {col} takes value {listed}.")
 
     numeric_df = df.copy()
     for col, labels in label_order.items():

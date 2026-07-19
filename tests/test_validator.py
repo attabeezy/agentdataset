@@ -125,6 +125,67 @@ def test_validate_categorical_bias_score():
     assert report.bias_score == 100.0
 
 
+def test_compute_ks_test_three_categories_chi_square():
+    val = Validator()
+    rng = np.random.default_rng(42)
+    df = pd.DataFrame({"status": rng.choice(["a", "b", "c"], size=3000, p=[0.5, 0.3, 0.2])})
+    params = Parameters(
+        variables={"status": VariableParams(name="status", distribution="categorical", categories={"a": 0.5, "b": 0.3, "c": 0.2})},
+        correlations={},
+        meta=MetaParams(source="S", extracted_at="N"),
+    )
+    p_values = val.compute_ks_test(df, params)
+    assert p_values["status"] > 0.05
+
+
+def test_compute_ks_test_three_categories_mismatch_low_pvalue():
+    val = Validator()
+    df = pd.DataFrame({"status": ["a"] * 900 + ["b"] * 50 + ["c"] * 50})
+    params = Parameters(
+        variables={"status": VariableParams(name="status", distribution="categorical", categories={"a": 0.34, "b": 0.33, "c": 0.33})},
+        correlations={},
+        meta=MetaParams(source="S", extracted_at="N"),
+    )
+    p_values = val.compute_ks_test(df, params)
+    assert p_values["status"] < 0.05
+
+
+def test_correlation_similarity_with_three_category_column():
+    """A 3-category column must be encoded as 0/1/2 (categories order), not
+    dropped, by the correlation-similarity computation."""
+    val = Validator()
+    rng = np.random.default_rng(7)
+    a = rng.normal(0, 1, 3000)
+    cat = np.where(a < -0.5, "low", np.where(a < 0.5, "mid", "high"))
+    df = pd.DataFrame({"a": a, "cat": cat})
+    params = Parameters(
+        variables={
+            "a": VariableParams(name="a"),
+            "cat": VariableParams(name="cat", distribution="categorical", categories={"low": 0.3, "mid": 0.4, "high": 0.3}),
+        },
+        correlations={"ac": CorrelationParams(var1="a", var2="cat", correlation=0.9)},
+        meta=MetaParams(source="S", extracted_at="N"),
+    )
+    score = val.compute_correlation_similarity(df, params)
+    assert 0.0 <= score <= 1.0
+    # The synthetic correlation is strongly positive under the 0/1/2 encoding,
+    # so the score must beat a target-vs-independent baseline.
+    df_shuffled = df.assign(cat=rng.permutation(df["cat"].values))
+    assert score > val.compute_correlation_similarity(df_shuffled, params)
+
+
+def test_validate_three_category_bias_score():
+    val = Validator()
+    df = pd.DataFrame({"status": ["a"] * 500 + ["b"] * 300 + ["c"] * 200})
+    params = Parameters(
+        variables={"status": VariableParams(name="status", distribution="categorical", categories={"a": 0.5, "b": 0.3, "c": 0.2})},
+        correlations={},
+        meta=MetaParams(source="S", extracted_at="N"),
+    )
+    report = val.validate(df, params)
+    assert report.bias_score == 100.0
+
+
 def test_ks_gamma_non_positive_mean_no_crash():
     val = Validator()
     df = pd.DataFrame({"g": np.random.default_rng(1).normal(0, 1, 200)})

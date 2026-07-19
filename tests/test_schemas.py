@@ -22,6 +22,10 @@ def test_variable_params_categorical_probabilities_normalized():
     var = VariableParams(name="sex", distribution="categorical", categories={"Male": 3, "Female": 1})
     assert var.categories == {"Male": 0.75, "Female": 0.25}
 
+def test_variable_params_three_categories_normalized():
+    var = VariableParams(name="status", distribution="categorical", categories={"a": 5, "b": 3, "c": 2})
+    assert var.categories == {"a": 0.5, "b": 0.3, "c": 0.2}
+
 def test_variable_params_categorical_without_categories_demotes_to_normal():
     var = VariableParams(name="sex", distribution="categorical")
     assert var.distribution == "normal"

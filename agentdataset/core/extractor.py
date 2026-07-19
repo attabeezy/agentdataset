@@ -83,14 +83,20 @@ _PATTERN_CORR_FUNC = re.compile(
     re.IGNORECASE,
 )
 
-# Binary categorical variable, e.g. "The categorical variable sex takes value
-# 'Male' with probability 0.67 and 'Female' with probability 0.33." Captures
-# (name, label1, prob1, label2, prob2). Only binary (2-category) phrasing is
-# recognized by the regex fallback; the LLM path handles arbitrary category
-# counts via the JSON schema instead.
+# Categorical variable with any number of categories, e.g. "The categorical
+# variable sex takes value 'Male' with probability 0.67 and 'Female' with
+# probability 0.33." or "... takes value 'a' with probability 0.2, 'b' with
+# probability 0.3, and 'c' with probability 0.5." Captures (name, blob) where
+# blob is the whole run of label/probability pairs; _PATTERN_CATEGORY_PAIR
+# then pulls the individual (label, prob) pairs out of the blob.
+_PROB = r"(?:0?\.\d+|1(?:\.0+)?|0)"
 _PATTERN_CATEGORICAL = re.compile(
-    r"categorical\s+variable\s+(\w+)\s+takes\s+value\s+'([^']+)'\s+with\s+probability\s+"
-    r"(0?\.\d+|1(?:\.0+)?)\s+and\s+'([^']+)'\s+with\s+probability\s+(0?\.\d+|1(?:\.0+)?)",
+    r"categorical\s+variable\s+(\w+)\s+takes\s+value\s+"
+    r"((?:'[^']+'\s+with\s+probability\s+" + _PROB + r"(?:\s*,\s*(?:and\s+)?|\s+and\s+)?)+)",
+    re.IGNORECASE,
+)
+_PATTERN_CATEGORY_PAIR = re.compile(
+    r"'([^']+)'\s+with\s+probability\s+(" + _PROB + r")",
     re.IGNORECASE,
 )
 
@@ -200,15 +206,18 @@ class Extractor:
                     max=mean + 3 * std,
                 )
 
-        # Binary categorical variables — captured with their real name, unlike
-        # the anonymized "var_N" naming used for mean/std pairs above.
+        # Categorical variables (any category count) — captured with their real
+        # name, unlike the anonymized "var_N" naming used for mean/std pairs above.
         for match in _PATTERN_CATEGORICAL.finditer(text):
-            name, label1, prob1, label2, prob2 = match.groups()
-            if name not in variables:
+            name, blob = match.groups()
+            pairs = _PATTERN_CATEGORY_PAIR.findall(blob)
+            # A single pair would normalize to probability 1.0 — almost certainly
+            # a parse fragment rather than a real categorical description.
+            if name not in variables and len(pairs) >= 2:
                 variables[name] = VariableParams(
                     name=name,
                     distribution="categorical",
-                    categories={label1: float(prob1), label2: float(prob2)},
+                    categories={label: float(prob) for label, prob in pairs},
                 )
 
         # Best-effort correlation extraction (synthesizer ignores pairs whose

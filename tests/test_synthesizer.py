@@ -81,6 +81,66 @@ def test_synthesize_categorical_correlated_with_continuous():
     assert mean_yes > mean_no
 
 
+def test_generate_variable_categorical_three_categories():
+    syn = Synthesizer(n_rows=3000)
+    params = VariableParams(
+        name="v1", distribution="categorical", categories={"a": 0.5, "b": 0.3, "c": 0.2}
+    )
+    data = syn.generate_variable(params, noise_level=0.0)
+    assert set(np.unique(data)).issubset({0, 1, 2})
+    freqs = pd.Series(data).value_counts(normalize=True)
+    assert abs(freqs[0] - 0.5) < 0.05
+    assert abs(freqs[1] - 0.3) < 0.05
+    assert abs(freqs[2] - 0.2) < 0.05
+
+
+def test_synthesize_three_category_variable_produces_labels():
+    syn = Synthesizer(n_rows=3000, seed=0)
+    params = Parameters(
+        variables={
+            "status": VariableParams(
+                name="status",
+                distribution="categorical",
+                categories={"married": 0.5, "never_married": 0.3, "prev_married": 0.2},
+            ),
+        },
+        correlations={},
+        meta=MetaParams(source="S", extracted_at="N"),
+    )
+    df = syn.synthesize(params)
+    assert set(df["status"].unique()) == {"married", "never_married", "prev_married"}
+    freqs = df["status"].value_counts(normalize=True)
+    assert abs(freqs["married"] - 0.5) < 0.05
+    assert abs(freqs["never_married"] - 0.3) < 0.05
+    assert abs(freqs["prev_married"] - 0.2) < 0.05
+
+
+def test_synthesize_three_category_correlated_with_continuous():
+    """The copula treats category codes as ordinal (insertion order of the
+    categories dict), so a strong positive correlation should produce
+    monotonically increasing group means across the three categories."""
+    syn = Synthesizer(n_rows=3000, seed=0)
+    params = Parameters(
+        variables={
+            "score": VariableParams(name="score", distribution="normal", mean=0.0, std=1.0),
+            "level": VariableParams(
+                name="level",
+                distribution="categorical",
+                categories={"low": 0.4, "mid": 0.3, "high": 0.3},
+            ),
+        },
+        correlations={
+            "c": CorrelationParams(var1="score", var2="level", correlation=0.8),
+        },
+        meta=MetaParams(source="S", extracted_at="N"),
+    )
+    df = syn.synthesize(params)
+    mean_low = df.loc[df["level"] == "low", "score"].mean()
+    mean_mid = df.loc[df["level"] == "mid", "score"].mean()
+    mean_high = df.loc[df["level"] == "high", "score"].mean()
+    assert mean_low < mean_mid < mean_high
+
+
 def test_gamma_with_non_positive_mean_does_not_crash():
     """Gamma needs mean>0; non-positive mean must fall back to normal, not crash."""
     syn = Synthesizer(n_rows=100)

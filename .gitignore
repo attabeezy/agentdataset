@@ -50,6 +50,9 @@ htmlcov/
 # AgentDataset generated/runtime files
 .agentdataset_cache/
 
+# AAAI/IAAI author kit (paper build artifacts)
+AuthorKit27/
+
 # OS
 .DS_Store
 Thumbs.db
