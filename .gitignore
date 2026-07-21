@@ -56,3 +56,6 @@ AuthorKit27/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code conversation exports (/export)
+*-local-command-caveat*.txt

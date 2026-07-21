@@ -165,3 +165,43 @@ All three strengthening items below are implemented as real, non-mocked measurem
 
 Remaining follow-up work: broaden the empirical benchmark beyond 3 datasets / a single downstream model (logistic regression) if reviewers ask for more breadth.
 
+---
+
+## 8. Paper (IAAI-27) — Status & Pickup Notes
+
+**Target venue:** IAAI-27 (co-located with AAAI-27), Emerging Applications track.
+**Format:** AAAI two-column, **6-page** main-content limit; references + appendices unlimited.
+**Review model:** **single-blind** — author names are required (not anonymized).
+
+### 8.1 Draft location & build
+The paper lives in `AuthorKit27/` (git-ignored — build artifacts excluded from the repo):
+
+- `AuthorKit27/AgentDataset.tex` — main paper. Compiles clean via MiKTeX `pdflatex` + `bibtex` to 9 pages: **main content ends within page 5** (within the limit), references p. 6, technical appendix + reproducibility checklist pp. 7–9. (The `AnonymousSubmission2027.tex`/`CameraReady2027.tex` files in the kit are unused AAAI template boilerplate.)
+- `AuthorKit27/references.bib` — 29 references (from two literature-review passes; flagged citations verified/corrected).
+- `AuthorKit27/Figures/architecture.tex` → `architecture.pdf` — TikZ pipeline diagram (standalone-compiled to vector PDF, included via `\includegraphics`).
+- `AuthorKit27/ReproducibilityChecklist.tex` — filled in, `\input` at end of paper.
+- Uses the `[preprint]` style option (authors shown, copyright slug suppressed during review). **Do NOT** use `[submission]` — that anonymizes the author block (wrong for single-blind).
+
+**Build:** from `AuthorKit27/`, run `pdflatex AgentDataset` → `bibtex AgentDataset` → `pdflatex AgentDataset` ×2.
+Compliance verified: 0 overfull boxes, 0 undefined refs, no Type-3 fonts, all fonts embedded, PDF 1.5.
+
+### 8.2 Reviewer-readiness assessment (5 critique points)
+Status of an external critique of the evaluation, as of this writing:
+
+1. **Error bars on empirical benchmark — DONE.** `run_empirical_benchmark` now extracts once per dataset then runs a 5-seed loop varying both the split (`random_state=seed`) and synthesis (`Synthesizer(seed=seed)`), reporting mean ± sample-std (ddof=1) for every TRTR/TSTR metric in `results/empirical_benchmark.csv`.
+2. **Categorical narrow / pairwise-only — HALF DONE.** The *binary-only* limitation is **resolved** (commit `0004dd8`: arbitrary-cardinality support + 3-category Adult `marital_status`). Still true and *stated in the paper* (Discussion + appendix): only pairwise correlations (no joint >2-var structure), and a compact 3-feature-per-dataset schema.
+3. **Adult F1 gap — DONE (characterized).** With 5-seed error bars: TRTR F1 0.547±0.007 vs TSTR 0.119±0.013 — stable, not noise. `analysis/adult_f1_gap.py` (→ `results/adult_f1_gap.csv`) shows the cause is **not** a distorted target marginal (synthetic `>50K` prevalence ≈ real ≈ 0.24) but **attenuated feature↔target correlation** (AgentDataset retains ~73% of the real point-biserial signal; independent-marginals flattens it to ~0 → F1 0.0), driving minority-class under-prediction at the 0.5 threshold (recall 0.46→0.07). Partly a calibration artifact: even SDV (AUC 0.852) collapses to F1 0.11 at that threshold. Written up in the paper's Evaluation (`\paragraph{Characterizing the Adult F1 gap}`) + Discussion.
+4. **Caveman "measured vs claimed" honesty — DONE.** Reconciled to measured **21.9%** (189 vs 242 tokens) in both this doc and the paper; framed as measured, not asserted.
+5. **No baseline synthesizer — DONE.** Added two baselines in `benchmark.py`, both run inside the same 5-seed TSTR protocol (results carry a `synthesizer` column: `agentdataset` | `independent` | `sdv_gaussian_copula`): `synthesize_independent_marginals` (deep-copies params, clears correlations, reuses `Synthesizer` — no new deps) and `synthesize_sdv_gaussian_copula` (SDV `GaussianCopulaSynthesizer` fit on real train data; **guarded import** so a missing/broken `sdv` skips gracefully; `sdv>=1.17.0` added to deps). Finding: AgentDataset beats independent-marginals where correlations matter (Adult F1 .119 vs .000; Pima AUC .822 vs .397) and trails SDV (Adult AUC .601 vs .852) — but SDV is fit on **real** records, so it's framed in the paper as a data-access upper bound, not a like-for-like competitor.
+
+### 8.3 Prioritized next steps (pick up here)
+1. **(crit #1) — DONE.** 5-seed loop + mean ± std in `run_empirical_benchmark`.
+2. **(crit #5) — DONE.** Independent-marginals + SDV GaussianCopula baselines on the same TSTR protocol.
+3. **(crit #3) — DONE.** Adult F1 gap analyzed (`analysis/adult_f1_gap.py`) and written up.
+4. **DONE.** Folded into the paper's Evaluation: Table 1 rebuilt with error bars + baseline columns (`AgentDataset.tex`, rebuilt clean — 0 overfull, 0 undefined, main content ≤ 6 pp).
+5. **Housekeeping before submission — OPEN.** Confirm co-author list/affiliations (IAAI recommends a deploying-institution co-author; note the `% TODO` at `AgentDataset.tex:28`); final proofread.
+
+**Story shift to be aware of:** the 5-seed numbers overturned the old single-seed narrative — **Pima is now the clean success case** (TSTR ≈ TRTR on all metrics), not the failure; Adult's minority-class F1 collapse is the headline limitation. Q1 prose + Discussion were rewritten to match.
+
+**Note:** re-running steps 1–3 requires `python benchmark.py` / `python analysis/adult_f1_gap.py` (LLM API calls / compute), which regenerates `results/*.csv`; the paper's numbers/tables must then be updated to match.
+

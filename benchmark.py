@@ -174,7 +174,62 @@ def _dataset_to_source_text(dataset: dict) -> str:
     return "\n".join(lines)
 
 
-def run_empirical_benchmark(dataset_loaders: Optional[List] = None) -> pd.DataFrame:
+# SDV is an optional, heavy dependency that may fail to install/import on this
+# Python 3.13 environment. Guard the import so the whole benchmark can still run
+# with the other two synthesizers when SDV is unavailable.
+try:
+    from sdv.single_table import GaussianCopulaSynthesizer
+    from sdv.metadata import SingleTableMetadata
+    _SDV_AVAILABLE = True
+except Exception as e:  # pragma: no cover - depends on environment
+    logger.warning("SDV is unavailable (%s); its baseline will be skipped.", e)
+    _SDV_AVAILABLE = False
+
+
+def synthesize_independent_marginals(params: Parameters, n_rows: int, seed: int) -> pd.DataFrame:
+    """Independent-marginals baseline: draw EACH variable independently from its
+    own extracted marginal, completely ignoring correlations.
+
+    Delegates to the same Synthesizer machinery so per-variable marginal handling
+    (normal/uniform/gamma/categorical) is byte-for-byte identical to AgentDataset;
+    the ONLY difference is that the copula/correlation structure is dropped. We
+    deep-copy params (pydantic model) and clear .correlations so the shared params
+    object is never mutated. With no correlations, Synthesizer skips the Cholesky
+    step and each column keeps its rank-transformed marginal but is uncorrelated.
+    """
+    params_no_corr = params.model_copy(deep=True)
+    params_no_corr.correlations = {}
+    return Synthesizer(n_rows=n_rows, seed=seed).synthesize(params_no_corr)
+
+
+def synthesize_sdv_gaussian_copula(
+    train_df: pd.DataFrame, feature_cols: List[str], target: str, n_rows: int, seed: int
+) -> Optional[pd.DataFrame]:
+    """SDV GaussianCopula baseline: fit SDV's GaussianCopulaSynthesizer on the REAL
+    training data (SDV learns from data, not from extracted params) restricted to
+    feature_cols + [target], and sample n_rows rows.
+
+    Returns None (with a logged warning) if SDV is unavailable or if fitting/
+    sampling raises, so the benchmark still completes with the other synthesizers.
+    """
+    if not _SDV_AVAILABLE:
+        return None
+    try:
+        cols = feature_cols + [target]
+        real = train_df[cols].copy()
+        metadata = SingleTableMetadata()
+        metadata.detect_from_dataframe(real)
+        synthesizer = GaussianCopulaSynthesizer(metadata)
+        synthesizer.fit(real)
+        # SDV has no direct seed argument on sample(); seed numpy for parity.
+        np.random.seed(seed)
+        return synthesizer.sample(num_rows=n_rows)
+    except Exception as e:
+        logger.warning("SDV GaussianCopula synthesis failed (seed=%d): %s", seed, e)
+        return None
+
+
+def run_empirical_benchmark(dataset_loaders: Optional[List] = None, n_seeds: int = 5) -> pd.DataFrame:
     print("\n" + "="*50)
     print("1. EMPIRICAL BENCHMARK (Downstream ML Performance on real datasets)")
     print("="*50)
@@ -196,74 +251,195 @@ def run_empirical_benchmark(dataset_loaders: Optional[List] = None) -> pd.DataFr
             print(f"\n--- {name} ({dataset['domain']}) ---")
             text = _dataset_to_source_text(dataset)
 
-            train_df, test_df = train_test_split(
-                df, test_size=0.2, random_state=42, stratify=df[target]
-            )
-
-            orchestrator = Orchestrator(
+            # Extraction is an expensive LLM call and is NOT seed-dependent, so
+            # it runs ONCE per dataset, hoisted above the seed loop. The
+            # orchestrator built here is only used for extraction; a fresh one
+            # is created per seed below so the optimization ratchet starts clean.
+            extract_orchestrator = Orchestrator(
                 session_id=f"real_benchmark_{name}",
                 model=_OPENROUTER_MODEL,
                 env_var=_OPENROUTER_ENV_VAR,
             )
-            orchestrator.synthesizer = Synthesizer(n_rows=len(train_df))
-
-            params = orchestrator.extractor.extract_parameters(text, name)
+            params = extract_orchestrator.extractor.extract_parameters(text, name)
             if target not in params.variables:
                 logger.warning("Extraction did not recover target '%s' for %s; skipping.", target, name)
                 continue
 
-            best_score, df_synth = orchestrator.run_optimization_loop(params, iterations=3)
-            if df_synth is None or any(c not in df_synth.columns for c in feature_cols + [target]):
-                logger.warning("Synthesis is missing required columns for %s; skipping.", name)
-                continue
+            # TRTR is the real-data baseline and is identical across all three
+            # synthesizers, so it is collected once per dataset (one value/seed).
+            trtr_metrics = {"trtr_accuracy": [], "trtr_f1": [], "trtr_roc_auc": []}
 
-            fidelity_report = orchestrator.validator.validate(df_synth, params)
-
-            target_encoder = LabelEncoder().fit(train_df[target])
-            feature_encoders = {
-                col: LabelEncoder().fit(train_df[col]) for col in dataset["categorical_features"]
+            # Per-synthesizer TSTR metric collectors; each list gets (at most) one
+            # value per seed. fidelity_score only applies to AgentDataset (it
+            # validates against the extracted params, which the baselines don't use).
+            _SYNTHESIZERS = ["agentdataset", "independent", "sdv_gaussian_copula"]
+            seed_metrics = {
+                synth: {
+                    "tstr_accuracy": [], "tstr_f1": [], "tstr_roc_auc": [],
+                    "fidelity_score": [],
+                }
+                for synth in _SYNTHESIZERS
             }
 
-            def _prepare_X_y(frame: pd.DataFrame):
-                X = frame[feature_cols].copy()
-                for col, enc in feature_encoders.items():
-                    X[col] = enc.transform(X[col])
-                y = target_encoder.transform(frame[target])
-                return X, y
+            for seed in range(n_seeds):
+                # Seed threads into the split so each seed sees a different
+                # train/test partition ...
+                train_df, test_df = train_test_split(
+                    df, test_size=0.2, random_state=seed, stratify=df[target]
+                )
 
-            X_train_real, y_train_real = _prepare_X_y(train_df)
-            X_test_real, y_test_real = _prepare_X_y(test_df)
-            X_train_synth, y_train_synth = _prepare_X_y(df_synth)
+                # ... and into synthesis. The Synthesizer draws all randomness
+                # from self.rng (np.random.default_rng(seed), set in its
+                # __init__ — see agentdataset/core/synthesizer.py:13-16); it does
+                # NOT re-seed per synthesize() call. So constructing a fresh
+                # Synthesizer(seed=seed) per iteration is what makes each seed
+                # produce a different synthetic dataset. np.random.seed(seed) is
+                # also set for parity with run_ablation_noise_pivot.
+                np.random.seed(seed)
+                orchestrator = Orchestrator(
+                    session_id=f"real_benchmark_{name}_{seed}",
+                    model=_OPENROUTER_MODEL,
+                    env_var=_OPENROUTER_ENV_VAR,
+                )
+                orchestrator.synthesizer = Synthesizer(n_rows=len(train_df), seed=seed)
 
-            def _fit_and_score(X_train, y_train) -> dict:
-                model = LogisticRegression(max_iter=1000)
-                model.fit(X_train, y_train)
-                preds = model.predict(X_test_real)
-                probs = model.predict_proba(X_test_real)[:, 1]
-                return {
-                    "accuracy": accuracy_score(y_test_real, preds),
-                    "f1": f1_score(y_test_real, preds),
-                    "roc_auc": roc_auc_score(y_test_real, probs),
+                best_score, df_synth = orchestrator.run_optimization_loop(params, iterations=3)
+                if df_synth is None or any(c not in df_synth.columns for c in feature_cols + [target]):
+                    logger.warning("Synthesis is missing required columns for %s (seed=%d); skipping seed.", name, seed)
+                    continue
+
+                fidelity_report = orchestrator.validator.validate(df_synth, params)
+
+                # Encoders are fit on this seed's train split so TRTR and every
+                # synthesizer's TSTR share the same encoding and test set — a fair
+                # comparison across all three synthesizers within the seed.
+                target_encoder = LabelEncoder().fit(train_df[target])
+                feature_encoders = {
+                    col: LabelEncoder().fit(train_df[col]) for col in dataset["categorical_features"]
                 }
 
-            trtr = _fit_and_score(X_train_real, y_train_real)
-            tstr = _fit_and_score(X_train_synth, y_train_synth)
+                def _prepare_X_y(frame: pd.DataFrame):
+                    X = frame[feature_cols].copy()
+                    for col, enc in feature_encoders.items():
+                        X[col] = enc.transform(X[col])
+                    y = target_encoder.transform(frame[target])
+                    return X, y
+
+                X_test_real, y_test_real = _prepare_X_y(test_df)
+                X_train_real, y_train_real = _prepare_X_y(train_df)
+
+                def _fit_and_score(X_train, y_train) -> dict:
+                    model = LogisticRegression(max_iter=1000)
+                    model.fit(X_train, y_train)
+                    preds = model.predict(X_test_real)
+                    probs = model.predict_proba(X_test_real)[:, 1]
+                    return {
+                        "accuracy": accuracy_score(y_test_real, preds),
+                        "f1": f1_score(y_test_real, preds),
+                        "roc_auc": roc_auc_score(y_test_real, probs),
+                    }
+
+                # TRTR: real-data baseline, shared across all synthesizers.
+                trtr = _fit_and_score(X_train_real, y_train_real)
+                trtr_metrics["trtr_accuracy"].append(trtr["accuracy"])
+                trtr_metrics["trtr_f1"].append(trtr["f1"])
+                trtr_metrics["trtr_roc_auc"].append(trtr["roc_auc"])
+
+                # Build each synthesizer's synthetic training frame. Baselines
+                # produce the same feature_cols + [target] columns so _prepare_X_y
+                # works. AgentDataset's df_synth was validated above; fidelity only
+                # applies to it (baselines aren't measured against extracted params).
+                synth_frames = {
+                    "agentdataset": (df_synth, fidelity_report.overall_score),
+                    "independent": (
+                        synthesize_independent_marginals(params, len(train_df), seed),
+                        None,
+                    ),
+                    "sdv_gaussian_copula": (
+                        synthesize_sdv_gaussian_copula(
+                            train_df, feature_cols, target, len(train_df), seed
+                        ),
+                        None,
+                    ),
+                }
+
+                for synth_name, (frame, fidelity) in synth_frames.items():
+                    if frame is None:
+                        # SDV unavailable or failed; skip only this synthesizer.
+                        continue
+                    if any(c not in frame.columns for c in feature_cols + [target]):
+                        logger.warning(
+                            "%s synthetic frame missing required columns for %s (seed=%d); skipping.",
+                            synth_name, name, seed,
+                        )
+                        continue
+                    try:
+                        # Defensive: baseline categoricals may contain labels the
+                        # per-seed encoder never saw; skip that synthesizer/seed.
+                        X_train_synth, y_train_synth = _prepare_X_y(frame)
+                    except ValueError as ve:
+                        logger.warning(
+                            "%s produced unseen labels for %s (seed=%d): %s; skipping.",
+                            synth_name, name, seed, ve,
+                        )
+                        continue
+                    tstr = _fit_and_score(X_train_synth, y_train_synth)
+                    seed_metrics[synth_name]["tstr_accuracy"].append(tstr["accuracy"])
+                    seed_metrics[synth_name]["tstr_f1"].append(tstr["f1"])
+                    seed_metrics[synth_name]["tstr_roc_auc"].append(tstr["roc_auc"])
+                    if fidelity is not None:
+                        seed_metrics[synth_name]["fidelity_score"].append(fidelity)
+
+            if not trtr_metrics["trtr_accuracy"]:
+                logger.warning("No seed produced usable results for %s; skipping.", name)
+                continue
+
+            def _agg(metrics: dict) -> dict:
+                # Aggregate mean/std across seeds (ddof=1 to match prior behavior).
+                out = {}
+                for metric, vals in metrics.items():
+                    out[f"{metric}_mean"] = np.mean(vals) if vals else float("nan")
+                    out[f"{metric}_std"] = (
+                        np.std(vals, ddof=1) if len(vals) >= 2 else 0.0
+                    )
+                return out
+
+            # TRTR aggregation is shared and included on every synthesizer row.
+            trtr_agg = _agg(trtr_metrics)
 
             print(
-                f"TRTR: acc={trtr['accuracy']:.3f} f1={trtr['f1']:.3f} auc={trtr['roc_auc']:.3f} | "
-                f"TSTR: acc={tstr['accuracy']:.3f} f1={tstr['f1']:.3f} auc={tstr['roc_auc']:.3f} | "
-                f"fidelity={fidelity_report.overall_score:.1f} | extraction={params.meta.extraction_method}"
+                f"TRTR: acc={trtr_agg['trtr_accuracy_mean']:.3f}±{trtr_agg['trtr_accuracy_std']:.3f} "
+                f"f1={trtr_agg['trtr_f1_mean']:.3f}±{trtr_agg['trtr_f1_std']:.3f} "
+                f"auc={trtr_agg['trtr_roc_auc_mean']:.3f}±{trtr_agg['trtr_roc_auc_std']:.3f}"
             )
 
-            rows.append({
-                "dataset": name,
-                "domain": dataset["domain"],
-                "extraction_method": params.meta.extraction_method,
-                "fidelity_score": fidelity_report.overall_score,
-                "trtr_accuracy": trtr["accuracy"], "tstr_accuracy": tstr["accuracy"],
-                "trtr_f1": trtr["f1"], "tstr_f1": tstr["f1"],
-                "trtr_roc_auc": trtr["roc_auc"], "tstr_roc_auc": tstr["roc_auc"],
-            })
+            # One output row per (dataset, synthesizer).
+            for synth_name in _SYNTHESIZERS:
+                tstr_vals = seed_metrics[synth_name]
+                if not tstr_vals["tstr_accuracy"]:
+                    logger.warning(
+                        "Synthesizer %s produced no usable results for %s; skipping its row.",
+                        synth_name, name,
+                    )
+                    continue
+                synth_agg = _agg(tstr_vals)
+                print(
+                    f"  [{synth_name}] TSTR: "
+                    f"acc={synth_agg['tstr_accuracy_mean']:.3f}±{synth_agg['tstr_accuracy_std']:.3f} "
+                    f"f1={synth_agg['tstr_f1_mean']:.3f}±{synth_agg['tstr_f1_std']:.3f} "
+                    f"auc={synth_agg['tstr_roc_auc_mean']:.3f}±{synth_agg['tstr_roc_auc_std']:.3f} | "
+                    f"fidelity={synth_agg['fidelity_score_mean']:.1f}±{synth_agg['fidelity_score_std']:.1f} | "
+                    f"n_seeds={len(tstr_vals['tstr_accuracy'])} | extraction={params.meta.extraction_method}"
+                )
+                rows.append({
+                    "dataset": name,
+                    "domain": dataset["domain"],
+                    "synthesizer": synth_name,
+                    "extraction_method": params.meta.extraction_method,
+                    "n_seeds": len(tstr_vals["tstr_accuracy"]),
+                    **trtr_agg,
+                    **synth_agg,
+                })
         except Exception:
             logger.exception("Real-dataset benchmark failed for loader %s", loader.__name__)
 

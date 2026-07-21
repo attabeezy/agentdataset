@@ -17,6 +17,7 @@ dependencies = [
     "ddgs>=9.14.4",
     "scikit-learn>=1.9.0",
     "ucimlrepo>=0.0.7",
+    "sdv>=1.17.0",
 ]
 
 [build-system]
