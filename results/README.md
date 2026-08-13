@@ -12,7 +12,13 @@ by the corresponding function on every run:
 - `cost_latency.csv` — `run_cost_latency_analysis()`: per-call latency,
   cost, and token usage per provider.
 - `caveman_token_savings.csv` — measured Caveman vs verbose prompt token
-  counts per model.
+  counts per model. The verbose baseline was corrected in the P1 §9.6 work: it
+  previously omitted the `categorical` distribution and the `categories` field,
+  so it requested strictly less than `CAVEMAN_PROMPT` and *understated* the
+  saving. Against a schema-matched baseline the reduction is **38.6%**
+  (308 → 189 tokens), not the previously reported 21.9% (242 → 189).
+  `tests/test_extraction_challenge.py::test_prompt_schema_parity` prevents the
+  two prompts from drifting apart again.
 
 Files are only written for functions that ran and produced at least one row.
 
@@ -53,6 +59,33 @@ Files are only written for functions that ran and produced at least one row.
   `failure_stage`, when the validation split has fewer than 500 rows or fewer
   than 50 members of either class.
 
+### Extraction robustness and prompt ablation (§9.6)
+
+- `extraction_challenge_raw.csv` — one row per (case, arm, model, repetition)
+  over the 30-case challenge set in `analysis/extraction_challenge_set.json`.
+  Arms are `caveman` (the production prompt), `natural_language` (a verbose
+  prompt requesting the identical schema), and `regex` (the fallback, run once
+  and never folded into LLM results). Columns split false positives by cause:
+  `fp_distractor` (context error), `fp_fabricated` (hallucination),
+  `fp_conflated` (mean and SD taken from different populations), and `fp_other`.
+- `extraction_challenge_summary.csv` — per-arm × per-model means with
+  deterministic 10,000-resample bootstrap intervals, via
+  `summarize_long_results` in `agentdataset/evaluation.py`.
+- `extraction_challenge_by_category.csv` — the same metrics per taxonomy
+  category (negated findings, multiple populations, footnotes, …), so a reader
+  can see which kind of messiness each method fails on.
+- `extraction_challenge_run_manifest.json` — provenance, model list, challenge
+  set sha256, real/constructed split, per-call token and cost history, and the
+  API error count.
+
+API failures are recorded as rows with `api_error=True` rather than dropped, so
+they cannot bias the reported rates downward. All arms keep the production
+`response_format={"type": "json_object"}` setting, so the malformed rate is
+schema-level; retries are disabled so nondeterminism stays visible. Every model
+is routed through OpenRouter, so one `OPENROUTER_API_KEY` covers the sweep. See
+`analysis/EXTRACTION_CHALLENGE_PROTOCOL.md` for the annotation rules and
+limitations.
+
 Reproduce the new studies with:
 
 ```powershell
@@ -60,6 +93,12 @@ Reproduce the new studies with:
 .venv\Scripts\python.exe analysis\real_paper_eval.py --mode cached
 .venv\Scripts\python.exe analysis\p0_utility_benchmark.py --seeds 30
 .venv\Scripts\python.exe analysis\adult_calibration.py --seeds 30
+
+# Extraction challenge set and prompt ablation (§9.6)
+.venv\Scripts\python.exe analysis\build_extraction_challenge_set.py --check
+.venv\Scripts\python.exe analysis\extraction_ablation.py --dry-run          # regex only, no API key
+.venv\Scripts\python.exe analysis\extraction_ablation.py --models openai --reps 1 --cases negated_finding
+.venv\Scripts\python.exe analysis\extraction_ablation.py --reps 5           # full 3-model sweep
 ```
 
 The utility benchmark computes parameters from each training fold only. Raw

@@ -440,21 +440,49 @@ This is the reviewer's most important request and should be completed before opt
 
 ### 9.6 P1 — Extraction robustness and prompt ablations
 
-- [ ] **Build a messy/ambiguous extraction challenge set.**
+- [x] **Build a messy/ambiguous extraction challenge set.**
   - Include negated findings, multiple populations, conflicting values across sections, repeated variables at different time points, units, confidence intervals, table footnotes, scientific notation, and irrelevant nearby numbers.
   - Prefer real excerpts that can be legally quoted in short form; supplement with clearly labeled constructed examples.
   - Annotate expected output and “should not extract” values.
   - Keep challenge cases separate from development examples to reduce overfitting.
   - **Deliverables:** challenge-set fixture plus annotation metadata under `analysis/` or `tests/fixtures/`.
   - **Done when:** the benchmark distinguishes correct extraction, abstention, and context errors.
+  - **Done:** `analysis/extraction_challenge_set.json` — 30 cases, three per taxonomy
+    category, 11 real and 19 constructed. Real excerpts are *generated*, not typed:
+    `analysis/build_extraction_challenge_set.py` declares anchor pairs and slices the
+    cached sources verbatim, recording character offsets and the source sha256, so the
+    fixture cannot drift from the papers. Constructed cases all open with "In this
+    constructed …" and are never presented as real literature (enforced by test).
+  - Gold values reuse the dual-pass adjudicated `analysis/real_paper_ground_truth.csv`
+    rather than being re-annotated. Annotation rules, the scoring contract, and the
+    known limitations are in `analysis/EXTRACTION_CHALLENGE_PROTOCOL.md`.
+  - Abstention is a first-class outcome: `benchmark._score_challenge_case` gives
+    precision 1.0 for emitting nothing and recall 1.0 on a gold-empty case, so a case
+    whose correct answer is silence scores F1 = 1.0 and is penalised only for speaking.
+    Three cases (`neg_001`, `time_001`, `sdse_003`) have silence as the correct answer.
 
-- [ ] **Compare LLM, regex, and prompt styles on the same challenge set.**
+- [x] **Compare LLM, regex, and prompt styles on the same challenge set.**
   - Compare the Caveman Protocol with the natural-language prompt using identical model, temperature, documents, and repetitions.
   - Measure accuracy, precision/recall/F1, malformed-output rate, hallucination rate, input/output tokens, latency, and cost.
   - Use multiple LLM repetitions to expose nondeterminism.
   - Test the regex fallback separately rather than treating fallback outputs as LLM results.
   - **Likely file:** extend `run_ablation_extraction_method()` in `benchmark.py`.
   - **Done when:** the paper can state whether the 21.9% prompt-token reduction changes extraction quality.
+  - **Done:** `benchmark.run_extraction_challenge()` (dispatched from
+    `run_ablation_extraction_method()` when a challenge set is supplied, so the legacy
+    synthetic-text ablation and `results/ablation_extraction_method.csv` are unchanged),
+    driven by `analysis/extraction_ablation.py`. Three arms × 3 OpenRouter-routed models
+    × 5 repetitions; regex runs once and is reported separately.
+  - **Prompt-parity correction.** `_VERBOSE_PROMPT` omitted the `categorical`
+    distribution and the `categories` field, so the 21.9% figure was measured against a
+    baseline that requested strictly less than `CAVEMAN_PROMPT` — a strawman that
+    *understated* the saving. Against a schema-matched baseline the reduction is
+    **38.6%** (308 → 189 tokens). `test_prompt_schema_parity` now blocks the two prompts
+    from diverging again.
+  - Failures are recorded (`api_error=True`), not dropped, so they cannot bias the rates
+    downward. `response_format=json_object` is kept at its production setting, so the
+    malformed rate is schema-level only — stated as a limitation. Retries are disabled so
+    nondeterminism is visible.
 
 ### 9.7 P1 — Synthesis and optimization diagnostics
 
