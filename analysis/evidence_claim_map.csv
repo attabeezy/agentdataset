@@ -1,0 +1,8 @@
+claim_id,paper_section,claim,status,evidence_file,evidence_filter,action_if_unsupported
+C01,Abstract,The assisted workflow was run on three real published sources,qualified,analysis/real_paper_discovery_summary.csv;analysis/real_paper_extraction_summary.csv,three fixed sources,State that contextual extraction requires human verification
+C02,Abstract,Linear and nonlinear classification plus regression utility were evaluated,verified,results/p0_utility_summary.csv,n=30 per dataset-model-synthesizer-metric,Limit conclusions to four evaluated datasets
+C03,Introduction,No individual-level record enters AgentDataset,verified,agentdataset/core/extractor.py;agentdataset/core/synthesizer.py,architecture inspection,Retain with disclosure-risk caveat
+C04,Evaluation,Discovery found all three fixed target papers,verified,analysis/real_paper_discovery_summary.csv,target_found=True,Report ranks and the CALERIE Recall@5 failure
+C05,Evaluation,LLM extraction has higher observed F1 than forced regex on three real papers,verified_descriptive,analysis/real_paper_extraction_summary.csv,condition=llm versus regex,Report absolute poor performance and no inferential claim
+C06,Conclusion,Autonomous web-to-dataset performance is demonstrated,rejected,analysis/real_paper_extraction_summary.csv,f1_micro=0.247,Use assisted-workflow wording and require review
+C07,Privacy,Aggregate-only input guarantees privacy,rejected,,,Replace with threat model and no formal guarantee

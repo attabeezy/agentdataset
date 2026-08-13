@@ -49,9 +49,11 @@ htmlcov/
 
 # AgentDataset generated/runtime files
 .agentdataset_cache/
+docs/
 
 # AAAI/IAAI author kit (paper build artifacts)
 AuthorKit27/
+output/
 
 # OS
 .DS_Store
