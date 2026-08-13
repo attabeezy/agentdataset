@@ -401,7 +401,7 @@ This is the reviewer's most important request and should be completed before opt
 
 ### 9.5 P1 — Complete the Adult calibration story
 
-- [ ] **Implement post-hoc calibration and threshold evaluation.**
+- [x] **Implement post-hoc calibration and threshold evaluation.**
   - Keep the default 0.5-threshold result as the primary unadjusted comparison.
   - Compare:
     - threshold selected on synthetic validation data;
@@ -412,6 +412,31 @@ This is the reviewer's most important request and should be completed before opt
   - Include confidence intervals across seeds and compare AgentDataset, independent marginals, and SDV.
   - **Likely files:** extend `analysis/adult_f1_gap.py` or add `analysis/adult_calibration.py`; save `results/adult_calibration.csv`.
   - **Done when:** the paper shows how much of the F1 loss is recoverable without real validation labels and how much remains structural.
+  - **Result.** `analysis/adult_calibration.py` (→ `results/adult_calibration_raw.csv`,
+    `results/adult_calibration.csv`, `results/adult_calibration_run_manifest.json`) runs eight
+    strategies × four sources × two models over the same 30 paired splits as the P0 utility
+    benchmark. The `uncalibrated_full_fit` strategy reproduces the P0 protocol and reconciles
+    exactly (LR/AgentDataset minority-F1 .3811, TRTR .5417, SDV .1118), confirming the split and
+    encoding are shared.
+    - **Most of the Adult minority-F1 gap is a decision-threshold artifact.** Selecting the
+      threshold on a validation split of the *synthetic* training frame cuts AgentDataset's LR
+      deficit from −.161 [−.165, −.156] to −.008 [−.011, −.005] (95% of the gap) and HGB's from
+      −.227 to −.032 [−.037, −.028] (86%). No real labels are used.
+    - **Probability reshaping alone does nothing.** Platt (−.162) and isotonic (−.182) at the
+      default 0.5 threshold leave the LR gap intact; the recovery comes from the operating point,
+      not the calibration map. Uncalibrated synthetic-trained models predict positive at .086
+      against a true prevalence of .239.
+    - **The residual is structural and equals the ranking deficit.** An oracle threshold fitted on
+      the real test labels (reported only as an upper bound, flagged `uses_real_test_labels=1`)
+      still leaves HGB −.025 below TRTR — exactly its ROC-AUC loss — and independent marginals
+      −.192 below, since thresholding cannot restore dependence that was never synthesized
+      (AUC .509). This is the concrete link to the pairwise-dependence limitation in §9.7.
+    - Leakage is prevented structurally: `_select_f1_threshold` and `_fit_calibrator` take only
+      validation arrays. `tests/test_adult_calibration.py` asserts that flipping every real test
+      label leaves all non-oracle thresholds and predicted-positive rates unchanged while the
+      oracle threshold moves, so the guard cannot pass vacuously.
+    - Paper text and the appendix table are staged in `analysis/adult_calibration_paper_snippets.tex`
+      (AuthorKit27/ is git-ignored, so paper blocks are version-controlled here and pasted in).
 
 ### 9.6 P1 — Extraction robustness and prompt ablations
 
@@ -541,7 +566,7 @@ If time is constrained, the minimum defensible response to this review is:
 - [ ] a real-paper study covering at least three heterogeneous documents, with discovery and extraction scored separately;
 - [ ] carefully scoped privacy claims, a disclosure-risk threat model, and relevant disclosure-control citations;
 - [ ] one nonlinear classifier and one regression task;
-- [ ] Adult threshold/calibration results that avoid real-test-set tuning;
+- [x] Adult threshold/calibration results that avoid real-test-set tuning;
 - [ ] end-to-end rather than per-call cost reporting;
 - [ ] an explicit limitations discussion for idealized extraction, pairwise dependence, sample size, and distribution shift;
 - [ ] updated paper tables, appendix details, reproducibility commands, and a clean final build.

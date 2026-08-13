@@ -1,0 +1,93 @@
+% Paper text for the Adult calibration study (PROJECT.md 9.5).
+%
+% AuthorKit27/ is git-ignored, so these blocks are kept here under version control
+% and pasted into the paper by hand. Every number below is transcribed from
+% results/adult_calibration.csv (30 seeds, 10,000-resample bootstrap intervals).
+%
+% Block 1 -> AuthorKit27/main.tex, end of "\subsection{Q2: End-to-End Utility}",
+%            immediately after the paragraph ending "...unsupported robustness claim."
+% Block 2 -> AuthorKit27/main.tex, appendix "Experimental Setup", immediately after
+%            "\paragraph{TRTR/TSTR protocol.}".
+
+
+% ---------------------------------------------------------------- Block 1: Q2 body
+
+\paragraph{Calibration and the minority-F1 gap.} The Adult minority-F1 numbers
+above are measured at a fixed $0.5$ threshold, which conflates ranking quality
+with operating point. We therefore refit each classifier on an $80/20$ split of
+its own \emph{synthetic} training frame and select a threshold, a Platt sigmoid,
+or an isotonic map on the synthetic validation fold alone; the real test fold is
+scored against but never tuned on. Choosing the operating point without any real
+labels removes most of the gap: AgentDataset's LR deficit falls from $-.161$
+$[-.165,-.156]$ to $-.008$ $[-.011,-.005]$, and HGB from $-.227$ to $-.032$
+$[-.037,-.028]$. Platt and isotonic maps applied at the default threshold recover
+nothing ($-.162$ and $-.182$ for LR), so what is recovered is the decision
+threshold, not the shape of the probabilities: uncalibrated synthetic-trained
+models simply under-predict the minority class, at a predicted-positive rate of
+$.086$ against a true prevalence of $.239$. What remains is structural and tracks
+the ranking deficit. An oracle threshold fitted directly on the real test labels
+---an upper bound, not a usable method---still leaves HGB $-.025$ below TRTR,
+matching its AUC loss, and leaves independent marginals $-.192$ below, because no
+threshold can restore dependence that was never synthesized (AUC $.509$). Adult
+minority-class utility is therefore mostly an operating-point artifact for the
+linear model and genuinely structural for the nonlinear one
+(Table~\ref{tab:calibration}).
+
+
+% ------------------------------------------------------- Block 2: appendix + table
+
+\paragraph{Adult calibration protocol.} For each of the 30 seeds we hold out
+$20\%$ of every synthetic training frame as a validation split, fit the model on
+the remainder, and derive all calibration decisions from that split: the
+F1-maximizing threshold, a Platt sigmoid on the model log-odds, and an isotonic
+map. Isotonic regression is reported only where the validation split has at least
+$500$ rows and $50$ members of each class, and is otherwise recorded as skipped
+rather than imputed. We report minority precision, recall, and F1, the
+predicted-positive rate, Brier score, and ROC-AUC, with paired TRTR deltas and
+bootstrap intervals. Threshold selection and monotone calibration leave AUC
+unchanged by construction, so any F1 movement in Table~\ref{tab:calibration} is
+an operating-point effect. The single strategy that touches real test labels is
+the oracle bound, which is flagged in the released raw rows
+(\texttt{uses\_real\_test\_labels}) and excluded from every claim of recoverable
+utility.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrr}
+\toprule
+Calibration strategy & TRTR & Agent & Indep. & SDV \\
+\midrule
+Uncalibrated ($0.5$)       & .542/.586 & .381/.359 & .000/.000 & .112/.102 \\
+Platt ($0.5$)              & .541/.587 & .379/.353 & .000/.000 & .113/.085 \\
+Isotonic ($0.5$)           & .528/.584 & .347/.338 & .000/.000 & .121/.106 \\
+Threshold on synth.\ val.  & .624/.642 & .617/.610 & .387/.386 & .554/.557 \\
+\midrule
+Oracle threshold$^\ddagger$ & .628/.646 & .626/.621 & .436/.414 & .605/.601 \\
+\bottomrule
+\end{tabular}
+\caption{Adult minority-F1 (LR/HGB) over 30 seeds under post-hoc calibration.
+Every strategy above the rule fits its calibrator and threshold on a validation
+split of the synthetic training frame only. Platt and isotonic maps combined with
+threshold selection match the threshold-only row to three decimals and are
+omitted. $^\ddagger$Threshold fitted on the real test labels: an upper bound on
+what thresholding alone can achieve, not a usable method.}
+\label{tab:calibration}
+\end{table}
+
+
+% --------------------------------------------------- Optional: abstract/discussion
+%
+% Only if space allows. Current abstract (main.tex ~75-77) reads
+%   "...preserve much linear ranking signal but lose minority-class and nonlinear
+%    utility."
+% A more precise version given these results:
+%   "...preserve much linear ranking signal; minority-class losses are largely an
+%    artifact of the default decision threshold, while nonlinear losses are not."
+%
+% Discussion (main.tex ~509-513): "...the HGB and minority-F1 gaps show that
+% higher-order dependence and decision-threshold behavior are not recovered
+% automatically" is already consistent, and can add: "Threshold selection on
+% synthetic validation data recovers the minority-F1 gap for the linear model but
+% not the nonlinear one."
