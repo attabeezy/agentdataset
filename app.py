@@ -26,7 +26,7 @@ PROVIDERS = {
 
 # --- Page Config ---
 st.set_page_config(page_title="AgentDataset", page_icon="🤖", layout="wide")
-st.title("🤖 AgentDataset: Autonomous Data Factory")
+st.title("🤖 AgentDataset: Assisted Data Synthesis")
 st.markdown("---")
 
 # --- Sidebar: Config ---

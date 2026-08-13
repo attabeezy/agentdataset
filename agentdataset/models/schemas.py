@@ -76,8 +76,17 @@ class FidelityReport(BaseModel):
     bias_score: float
     ks_pvalues: Dict[str, float]
     bias_details: Dict[str, Any]
-    privacy_details: Dict[str, float]
+    dispersion_details: Dict[str, Any]
     approved: bool
+
+    @property
+    def privacy_details(self) -> Dict[str, Any]:
+        """Deprecated compatibility alias for pre-0.2 callers.
+
+        This value describes spacing among synthetic rows only. It is not a
+        privacy audit or guarantee; new code should use ``dispersion_details``.
+        """
+        return self.dispersion_details
 
 class SessionContext(BaseModel):
     session_id: str

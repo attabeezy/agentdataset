@@ -12,6 +12,12 @@ from agentdataset.models.schemas import (
     MetaParams,
 )
 
+APP_TEST_TIMEOUT = 60
+
+
+def _run_app(at):
+    return at.run(timeout=APP_TEST_TIMEOUT)
+
 
 def _click(at, label):
     for b in at.button:
@@ -46,18 +52,18 @@ def _make_params(source="s", variables=None, method="llm"):
 
 def _run_search(at, query="SME lending"):
     at.text_input(key="search_query").input(query)
-    at.run()
+    _run_app(at)
     _click(at, "Search Knowledge Sources")
-    at.run()
+    _run_app(at)
 
 
 def test_empty_query_shows_warning():
     with patch("agentdataset.core.orchestrator.Orchestrator") as MockOrch:
         instance = MockOrch.return_value
         at = AppTest.from_file("app.py")
-        at.run()
+        _run_app(at)
         _click(at, "Search Knowledge Sources")
-        at.run()
+        _run_app(at)
 
         assert any("Please enter a research query" in w.value for w in at.warning)
         instance.run_discovery.assert_not_called()
@@ -70,7 +76,7 @@ def test_successful_search_shows_sources_and_suggestions():
         instance.suggest_sources.return_value = [1]
 
         at = AppTest.from_file("app.py")
-        at.run()
+        _run_app(at)
         _run_search(at)
 
         assert any("Found 2 potential sources" in s.value for s in at.success)
@@ -86,7 +92,7 @@ def test_no_sources_found_shows_info():
         instance.suggest_sources.return_value = []
 
         at = AppTest.from_file("app.py")
-        at.run()
+        _run_app(at)
         _run_search(at)
 
         assert any("No sources found" in i.value for i in at.info)
@@ -98,7 +104,7 @@ def test_search_error_shows_error_message():
         instance.run_discovery.side_effect = SearchError("backend down")
 
         at = AppTest.from_file("app.py")
-        at.run()
+        _run_app(at)
         _run_search(at)
 
         assert any("Search failed" in e.value for e in at.error)
@@ -116,11 +122,11 @@ def test_zero_variable_extraction_shows_error():
         instance.merge_parameters.return_value = empty_params
 
         at = AppTest.from_file("app.py")
-        at.run()
+        _run_app(at)
         _run_search(at)
 
         _click(at, "Generate Dataset from Selected")
-        at.run()
+        _run_app(at)
 
         assert any(
             "No statistical parameters could be extracted" in e.value
@@ -154,14 +160,14 @@ def test_multi_source_merge_calls_optimization_with_merged_params():
         )
 
         at = AppTest.from_file("app.py")
-        at.run()
+        _run_app(at)
         _run_search(at)
 
         at.checkbox(key="check_1").check()
-        at.run()
+        _run_app(at)
 
         _click(at, "Generate Dataset from Selected")
-        at.run()
+        _run_app(at)
 
         assert instance.process_source.call_count == 2
         instance.merge_parameters.assert_called_once_with([params_a, params_b])
@@ -189,11 +195,11 @@ def test_successful_generation_shows_results_panel():
         instance.run_optimization_loop.return_value = (0.87, df)
 
         at = AppTest.from_file("app.py")
-        at.run()
+        _run_app(at)
         _run_search(at)
 
         _click(at, "Generate Dataset from Selected")
-        at.run()
+        _run_app(at)
 
         assert any("Fidelity Score: 0.87" in s.value for s in at.success)
         assert at.session_state["best_data"] is not None
@@ -209,14 +215,14 @@ def test_no_sources_selected_shows_warning():
         instance.suggest_sources.return_value = []
 
         at = AppTest.from_file("app.py")
-        at.run()
+        _run_app(at)
         _run_search(at)
 
         at.checkbox(key="check_0").uncheck()
-        at.run()
+        _run_app(at)
 
         _click(at, "Generate Dataset from Selected")
-        at.run()
+        _run_app(at)
 
         assert any(
             "Please select at least one source" in w.value for w in at.warning

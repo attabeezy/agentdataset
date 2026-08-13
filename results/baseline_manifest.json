@@ -1,0 +1,18 @@
+{
+  "snapshot": "pre_july_2026_reviewer_revision",
+  "recorded_at": "2026-08-02",
+  "git_commit": "08852c2cfe6c68bb46cc45aad95e58a8f26b54c4",
+  "git_dirty_only": [".gitignore", "PROJECT.md"],
+  "python_version": "3.13.5",
+  "uv_version": "0.11.26",
+  "uv_lock_sha256": "5ac40da015af432f039e096ad94c70714a353f8f24133f5eec51bcef98a1ea3c",
+  "files": {
+    "ablation_extraction_method.csv": "497178f7234f8ec33b27dc3a98f8a86779c35b32218a3c86691682456dcd6cc2",
+    "ablation_noise_pivot.csv": "ce5cb400c1fc95b8fb3e9c684da325951f0a2d68bbf6a4ae9b5415efc5411830",
+    "adult_f1_gap.csv": "628208792ae9e9bcd5f2a0ed7f7fd0edc584e21516fe450717929997ee0618b5",
+    "caveman_token_savings.csv": "5d1ef28d880024a735694529fc0c121631ba5829c0b27e24613891648400aba0",
+    "cost_latency.csv": "0f30437cc46af6ce41a155692bbed3c166dde55e685fbac879fd42e4d790822c",
+    "empirical_benchmark.csv": "0c4b2a492cbe8e43771d87e9c8f26b3403384f2fba30f1bccc6e40625bfa4b20"
+  },
+  "note": "Hashes freeze the exact historical result bytes without duplicating them. New experiments write seed-level raw files and must not overwrite these files."
+}

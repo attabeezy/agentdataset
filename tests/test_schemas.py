@@ -57,7 +57,7 @@ def test_fidelity_report():
         bias_score=100.0,
         ks_pvalues={"v1": 0.5},
         bias_details={},
-        privacy_details={"avg_min_dist": 0.1},
+        dispersion_details={"avg_nearest_neighbor_distance": 0.1},
         approved=True
     )
     assert report.approved is True

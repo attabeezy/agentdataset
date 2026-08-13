@@ -38,8 +38,8 @@ def test_validate():
     report = val.validate(df, params)
     assert report.overall_score > 0
     assert report.approved in [True, False]
-    assert "avg_min_dist" in report.privacy_details
-    assert "privacy_score" in report.privacy_details
+    assert "avg_nearest_neighbor_distance" in report.dispersion_details
+    assert "normalized_row_dispersion" in report.dispersion_details
 
 
 def test_correlation_similarity_rewards_match():
@@ -198,11 +198,28 @@ def test_ks_gamma_non_positive_mean_no_crash():
     assert "g" in pvals
 
 
-def test_privacy_score_spread_vs_clustered():
-    """Spread-out data should score higher than tightly clustered data."""
+def test_row_dispersion_spread_vs_clustered():
+    """Spread-out data should have higher normalized row dispersion."""
     val = Validator()
     spread = pd.DataFrame({"x": np.linspace(0, 100, 200), "y": np.linspace(0, 100, 200)})
     clustered = pd.DataFrame({"x": np.ones(200) * 50, "y": np.ones(200) * 50})
-    spread_score = val.compute_privacy_score(spread)["privacy_score"]
-    clustered_score = val.compute_privacy_score(clustered)["privacy_score"]
+    spread_score = val.compute_row_dispersion(spread)["normalized_row_dispersion"]
+    clustered_score = val.compute_row_dispersion(clustered)["normalized_row_dispersion"]
     assert spread_score > clustered_score
+
+
+def test_datacard_labels_dispersion_as_non_privacy_diagnostic():
+    val = Validator()
+    params = Parameters(
+        variables={"x": VariableParams(name="x", mean=0, std=1)},
+        correlations={},
+        meta=MetaParams(source="test", extracted_at="2026-08-02", extraction_method="regex_fallback"),
+    )
+    frame = pd.DataFrame({"x": np.linspace(-1, 1, 20)})
+    report = val.validate(frame, params)
+    card = val.generate_datacard(report, params, frame)
+
+    assert "Synthetic-row dispersion diagnostic" in card
+    assert "not a privacy audit" in card
+    assert "Privacy Score" not in card
+    assert report.privacy_details == report.dispersion_details
