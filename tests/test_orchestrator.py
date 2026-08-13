@@ -1,4 +1,5 @@
 import pytest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 import pandas as pd
 from agentdataset.core.orchestrator import Orchestrator
@@ -140,6 +141,26 @@ def test_run_optimization_loop_rejects_empty_params(mock_orchestrator):
     with pytest.raises(ValueError):
         mock_orchestrator.run_optimization_loop(empty, iterations=1)
     mock_orchestrator.synthesizer.synthesize.assert_not_called()
+
+
+def test_optimization_artifacts_support_unicode(mock_orchestrator):
+    params = Parameters(
+        variables={"score_α": VariableParams(name="score_α")},
+        correlations={},
+        meta=MetaParams(source="study α", extracted_at="now"),
+    )
+    frame = pd.DataFrame({"score_α": [1.0, 2.0, 3.0]})
+    mock_orchestrator.synthesizer.synthesize.return_value = frame
+    mock_orchestrator.validator.validate.return_value = MagicMock(
+        overall_score=95.0, ks_score=100.0, corr_score=100.0, bias_score=100.0
+    )
+    mock_orchestrator.validator.generate_datacard.return_value = "diagnostic α"
+
+    mock_orchestrator.run_optimization_loop(params, iterations=1)
+
+    session = Path(mock_orchestrator.context.path)
+    assert "α" in (session / "parameters.json").read_text(encoding="utf-8")
+    assert "α" in (session / "DATACARD.md").read_text(encoding="utf-8")
 
 
 def test_noise_pivot_strategy(mock_orchestrator):

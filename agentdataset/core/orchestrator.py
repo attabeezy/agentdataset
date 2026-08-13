@@ -1,6 +1,6 @@
 """
 AgentDataset Orchestrator
-The Autonomous Engine (Brain)
+The Agentic Workflow Engine
 """
 
 import logging
@@ -73,6 +73,7 @@ class Orchestrator:
         self.best_score = -1.0
         self.best_params: Optional[Parameters] = None
         self.best_data: Optional[pd.DataFrame] = None
+        self.optimization_trace: list[dict] = []
 
     def merge_parameters(self, params_list: List[Parameters]) -> Parameters:
         """Merge parameters extracted from multiple sources.
@@ -268,6 +269,7 @@ class Orchestrator:
         initial_noise = 0.1
         noise_level = initial_noise
         no_improve_streak = 0
+        self.optimization_trace = []
 
         for i in range(iterations):
             logger.info("Loop %d/%d (noise=%.4f)...", i + 1, iterations, noise_level)
@@ -278,9 +280,19 @@ class Orchestrator:
             # Validation
             report = self.validator.validate(df, current_params)
             logger.info("  Fidelity Score: %s", report.overall_score)
+            improved = report.overall_score > self.best_score
+            self.optimization_trace.append({
+                "iteration": i + 1,
+                "noise_level": noise_level,
+                "overall_score": report.overall_score,
+                "ks_score": report.ks_score,
+                "corr_score": report.corr_score,
+                "bias_score": report.bias_score,
+                "improved": improved,
+            })
 
             # Ratchet Logic
-            if report.overall_score > self.best_score:
+            if improved:
                 logger.info("  [KEEP] New best score!")
                 self.best_score = report.overall_score
                 self.best_params = current_params
@@ -290,12 +302,12 @@ class Orchestrator:
                 # Save artifacts — I/O failure must not abort the loop / lose progress.
                 try:
                     df.to_csv(Path(self.context.path) / "data.csv", index=False)
-                    with open(Path(self.context.path) / "parameters.json", "w") as f:
+                    with open(Path(self.context.path) / "parameters.json", "w", encoding="utf-8") as f:
                         f.write(current_params.model_dump_json(indent=2))
                     datacard = self.validator.generate_datacard(
                         report, current_params, df
                     )
-                    with open(Path(self.context.path) / "DATACARD.md", "w") as f:
+                    with open(Path(self.context.path) / "DATACARD.md", "w", encoding="utf-8") as f:
                         f.write(datacard)
                 except OSError as e:
                     logger.warning(

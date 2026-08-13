@@ -194,3 +194,21 @@ def test_extracted_at_is_iso_format():
     params = ext.extract_parameters("mean = 1.0 std = 1.0", "src")
     # Should parse as ISO 8601 without raising.
     datetime.fromisoformat(params.meta.extracted_at)
+
+
+def test_parse_llm_result_tolerates_explicit_null_numbers():
+    ext = Extractor()
+    variables, correlations = ext._parse_llm_result({
+        "variables": {
+            "group": {
+                "distribution": "categorical", "mean": None, "std": None,
+                "categories": {"a": 0.5, "bad": None, "b": 0.5},
+            }
+        },
+        "correlations": {
+            "x__y": {"var1": "x", "var2": "y", "correlation": None}
+        },
+    })
+
+    assert variables["group"].categories == {"a": 0.5, "b": 0.5}
+    assert correlations["x__y"].correlation == 0.0

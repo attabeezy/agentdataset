@@ -9,7 +9,9 @@ import os
 from datetime import datetime
 from typing import Dict, Any
 import re
+import time
 import fitz  # PyMuPDF
+import litellm
 from litellm import completion
 from agentdataset.models.schemas import (
     Parameters,
@@ -108,6 +110,24 @@ class Extractor:
         self.model = model
         self.api_key = api_key
         self.env_var = env_var
+        self.call_history: list[dict] = []
+
+    def _record_completion(self, response, started_at: float, purpose: str) -> None:
+        """Capture non-secret per-call usage for end-to-end accounting."""
+        usage = getattr(response, "usage", None)
+        try:
+            cost = float(litellm.completion_cost(completion_response=response))
+        except Exception:
+            cost = float("nan")
+        self.call_history.append({
+            "purpose": purpose,
+            "model": self.model,
+            "latency_seconds": time.perf_counter() - started_at,
+            "prompt_tokens": getattr(usage, "prompt_tokens", None),
+            "completion_tokens": getattr(usage, "completion_tokens", None),
+            "total_tokens": getattr(usage, "total_tokens", None),
+            "cost_usd": cost,
+        })
 
     def pdf_to_markdown(self, pdf_path: str) -> str:
         """Convert PDF to clean text."""
@@ -125,6 +145,7 @@ class Extractor:
         # Pass api_key directly rather than mutating os.environ (avoids cross-call
         # leakage); fall back to None so litellm reads the env var itself.
         api_key = self.api_key.strip() if self.api_key else None
+        started_at = time.perf_counter()
         response = completion(
             model=self.model,
             messages=[
@@ -133,8 +154,10 @@ class Extractor:
             ],
             response_format={"type": "json_object"},
             api_key=api_key,
+            temperature=0,
             num_retries=2,
         )
+        self._record_completion(response, started_at, "structured_extraction")
         if not response.choices or response.choices[0].message.content is None:
             raise ValueError("LLM returned an empty response (no choices/content).")
         return json.loads(response.choices[0].message.content)
@@ -149,7 +172,10 @@ class Extractor:
             std = float(v.get("std") if v.get("std") is not None else 1.0)
             categories = v.get("categories") or None
             if categories is not None:
-                categories = {label: float(prob) for label, prob in categories.items()}
+                categories = {
+                    label: float(prob) for label, prob in categories.items()
+                    if prob is not None
+                } or None
             variables[name] = VariableParams(
                 name=name,
                 distribution=v.get("distribution", "normal"),
@@ -165,7 +191,7 @@ class Extractor:
             correlations[key] = CorrelationParams(
                 var1=c["var1"],
                 var2=c["var2"],
-                correlation=float(c.get("correlation", 0.0)),
+                correlation=float(c.get("correlation") if c.get("correlation") is not None else 0.0),
                 direction=c.get("direction", "positive"),
             )
 
@@ -243,14 +269,17 @@ class Extractor:
         Returns the raw text response from the LLM.
         """
         api_key = self.api_key.strip() if self.api_key else None
+        started_at = time.perf_counter()
         response = completion(
             model=self.model,
             messages=[
                 {"role": "user", "content": prompt},
             ],
             api_key=api_key,
+            temperature=0,
             num_retries=2,
         )
+        self._record_completion(response, started_at, "general_llm")
         if not response.choices or response.choices[0].message.content is None:
             raise ValueError("LLM returned an empty response.")
         return response.choices[0].message.content
