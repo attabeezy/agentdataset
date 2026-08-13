@@ -1,0 +1,111 @@
+source_id,condition,gold_id,error_category,detail
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,physical_activity_high_intensity_long_bout_rural:mean=42.5
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,physical_activity_high_intensity_long_bout_rural:std=6.2
+cdc_nhanes_rural_urban,llm,cdc_001,variable,physical_activity_high_intensity_long_bout_urban
+cdc_nhanes_rural_urban,llm,cdc_002,variable,physical_activity_high_intensity_long_bout_urban
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,physical_activity_low_intensity_rural:mean=0.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,physical_activity_low_intensity_rural:std=1.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,physical_activity_low_intensity_urban:mean=0.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,physical_activity_low_intensity_urban:std=1.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,total_physical_activity_rural:mean=438.3
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,total_physical_activity_rural:std=35.3
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,total_physical_activity_urban:mean=371.2
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,total_physical_activity_urban:std=12.5
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,household_physical_activity_rural:mean=0.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,household_physical_activity_rural:std=1.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,household_physical_activity_urban:mean=0.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,household_physical_activity_urban:std=1.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,leisure_physical_activity_rural:mean=0.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,leisure_physical_activity_rural:std=1.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,leisure_physical_activity_urban:mean=0.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,leisure_physical_activity_urban:std=1.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,transportation_physical_activity_rural:mean=0.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,transportation_physical_activity_rural:std=1.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,transportation_physical_activity_urban:mean=0.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,transportation_physical_activity_urban:std=1.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,urban_status:probability=0.5
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,urban_status:probability=0.25
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,urban_status:probability=0.25
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,physical_activity_high_intensity_long_bout_rural__physical_activity_high_intensity_long_bout_urban:correlation=-0.5
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,total_physical_activity_rural__total_physical_activity_urban:correlation=0.5
+cdc_nhanes_rural_urban,llm,cdc_003,no_extraction,Physical activity in any bout length >=2020 CPM
+cdc_nhanes_rural_urban,llm,cdc_004,no_extraction,Physical activity in any bout length >=2020 CPM
+cdc_nhanes_rural_urban,llm,cdc_005,no_extraction,Age
+cdc_nhanes_rural_urban,llm,cdc_006,no_extraction,Age
+cdc_nhanes_rural_urban,regex,cdc_001,no_extraction,Physical activity in >=10 min bouts >=2020 CPM
+cdc_nhanes_rural_urban,regex,cdc_002,no_extraction,Physical activity in >=10 min bouts >=2020 CPM
+cdc_nhanes_rural_urban,regex,cdc_003,no_extraction,Physical activity in any bout length >=2020 CPM
+cdc_nhanes_rural_urban,regex,cdc_004,no_extraction,Physical activity in any bout length >=2020 CPM
+cdc_nhanes_rural_urban,regex,cdc_005,no_extraction,Age
+cdc_nhanes_rural_urban,regex,cdc_006,no_extraction,Age
+calerie_rct,llm,,unsupported_or_out_of_scope,CRP:mean=0.0
+calerie_rct,llm,,unsupported_or_out_of_scope,CRP:std=1.0
+calerie_rct,llm,,unsupported_or_out_of_scope,TNF-α:mean=0.0
+calerie_rct,llm,,unsupported_or_out_of_scope,TNF-α:std=1.0
+calerie_rct,llm,,unsupported_or_out_of_scope,WBC:mean=0.0
+calerie_rct,llm,,unsupported_or_out_of_scope,WBC:std=1.0
+calerie_rct,llm,,unsupported_or_out_of_scope,BMI:mean=25.1
+calerie_rct,llm,,unsupported_or_out_of_scope,BMI:std=1.7
+calerie_rct,llm,,unsupported_or_out_of_scope,Body Fat:mean=33.6
+calerie_rct,llm,,unsupported_or_out_of_scope,Body Fat:std=6.6
+calerie_rct,llm,,unsupported_or_out_of_scope,Glucose:mean=81.9
+calerie_rct,llm,,unsupported_or_out_of_scope,Glucose:std=5.6
+calerie_rct,llm,,unsupported_or_out_of_scope,Insulin:mean=5.4
+calerie_rct,llm,,unsupported_or_out_of_scope,Insulin:std=0.2
+calerie_rct,llm,,unsupported_or_out_of_scope,HDL-C:mean=49.1
+calerie_rct,llm,,unsupported_or_out_of_scope,HDL-C:std=13.3
+calerie_rct,llm,,unsupported_or_out_of_scope,LDL-C:mean=98.0
+calerie_rct,llm,,unsupported_or_out_of_scope,LDL-C:std=26.5
+calerie_rct,llm,,unsupported_or_out_of_scope,Tg:mean=103.5
+calerie_rct,llm,,unsupported_or_out_of_scope,Tg:std=50.5
+calerie_rct,llm,,unsupported_or_out_of_scope,BMI__WBC:correlation=0.14
+calerie_rct,llm,calerie_001,no_extraction,Age
+calerie_rct,llm,calerie_002,no_extraction,Age
+calerie_rct,llm,calerie_003,no_extraction,Race White
+calerie_rct,llm,calerie_004,no_extraction,Race African American
+calerie_rct,llm,calerie_005,no_extraction,Race Other
+calerie_rct,llm,calerie_006,no_extraction,Sex Female
+calerie_rct,llm,calerie_007,no_extraction,Sex Male
+calerie_rct,regex,calerie_001,no_extraction,Age
+calerie_rct,regex,calerie_002,no_extraction,Age
+calerie_rct,regex,calerie_003,no_extraction,Race White
+calerie_rct,regex,calerie_004,no_extraction,Race African American
+calerie_rct,regex,calerie_005,no_extraction,Race Other
+calerie_rct,regex,calerie_006,no_extraction,Sex Female
+calerie_rct,regex,calerie_007,no_extraction,Sex Male
+student_mental_health,llm,student_001,numeric_value,gold=35.71;predicted=35.7
+student_mental_health,llm,student_002,numeric_value,gold=8.88;predicted=8.9
+student_mental_health,llm,student_003,numeric_value,gold=13.11;predicted=13.1
+student_mental_health,llm,student_004,numeric_value,gold=4.83;predicted=4.8
+student_mental_health,llm,student_007,numeric_value,gold=6.39;predicted=0.0
+student_mental_health,llm,student_008,numeric_value,gold=5.97;predicted=1.0
+student_mental_health,llm,,unsupported_or_out_of_scope,sleep_quality:mean=0.0
+student_mental_health,llm,,unsupported_or_out_of_scope,sleep_quality:std=1.0
+student_mental_health,llm,student_012,numeric_value,gold=30.83;predicted=0.0
+student_mental_health,llm,,unsupported_or_out_of_scope,social_support:std=1.0
+student_mental_health,llm,,unsupported_or_out_of_scope,ehealth_literacy:mean=0.0
+student_mental_health,llm,,unsupported_or_out_of_scope,ehealth_literacy:std=1.0
+student_mental_health,llm,student_005,numeric_value,gold=4.89;predicted=0.0
+student_mental_health,llm,student_006,numeric_value,gold=1.66;predicted=1.0
+student_mental_health,llm,student_010,numeric_value,gold=0.4;predicted=0.36
+student_mental_health,llm,,unsupported_or_out_of_scope,internet_addiction__sleep_quality:correlation=0.27
+student_mental_health,llm,,unsupported_or_out_of_scope,internet_addiction__social_support:correlation=-0.25
+student_mental_health,llm,,unsupported_or_out_of_scope,smartphone_addiction__ehealth_literacy:correlation=0.21
+student_mental_health,llm,,unsupported_or_out_of_scope,smartphone_addiction__loneliness:correlation=0.16
+student_mental_health,llm,,unsupported_or_out_of_scope,social_support__depression:correlation=0.0
+student_mental_health,llm,,unsupported_or_out_of_scope,social_support__loneliness:correlation=0.0
+student_mental_health,llm,,unsupported_or_out_of_scope,social_support__sleep_quality:correlation=0.0
+student_mental_health,llm,student_009,no_extraction,SAS-SV with IAT-6
+student_mental_health,llm,student_011,no_extraction,UCLA-3 with PHQ-9
+student_mental_health,regex,student_001,no_extraction,SAS-SV
+student_mental_health,regex,student_002,no_extraction,SAS-SV
+student_mental_health,regex,student_003,no_extraction,IAT-6
+student_mental_health,regex,student_004,no_extraction,IAT-6
+student_mental_health,regex,student_005,no_extraction,UCLA-3
+student_mental_health,regex,student_006,no_extraction,UCLA-3
+student_mental_health,regex,student_007,no_extraction,PHQ-9
+student_mental_health,regex,student_008,no_extraction,PHQ-9
+student_mental_health,regex,student_009,no_extraction,SAS-SV with IAT-6
+student_mental_health,regex,student_010,no_extraction,IAT-6 with PHQ-9
+student_mental_health,regex,student_011,no_extraction,UCLA-3 with PHQ-9
+student_mental_health,regex,student_012,no_extraction,DUFSSQ-8
