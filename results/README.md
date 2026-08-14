@@ -112,10 +112,39 @@ extraction F1 .247 → .308 and precision .167 → .226 with **recall unchanged*
 while true positives were identical. The natural-language prompt wins by
 inventing less, not by finding more.
 
-Downstream synthesis shifted accordingly — a smaller parameter set gives
-fidelity 97.6 → 95.8 (calerie), 64.3 → 61.5 (cdc) — and `calerie_rct` now
-reports 3 synthesizer fallback warnings where it previously reported none. That
-is an open item in PROJECT.md §9.6, not a settled result.
+Downstream synthesis shifted accordingly, because a smaller parameter set is
+being synthesized. A `calerie_rct` fallback warning seen in the first
+post-switch run did **not** reproduce on an independent re-run (0 across all
+sources), so it was a property of that run's particular extraction rather than
+a structural issue.
+
+### Replication (two independent runs)
+
+`extraction_challenge_raw_run1.csv` preserves the first 930-extraction sweep;
+`extraction_challenge_raw.csv` is the second, run from a clean tree. Both reach
+the same conclusion:
+
+| pooled LLM arms | F1 | precision | recall | hallucination |
+|---|---|---|---|---|
+| caveman run1 → run2 | .710 → .719 | .639 → .648 | .960 → .963 | .154 → .154 |
+| natural run1 → run2 | .778 → .782 | .720 → .723 | .989 → .988 | .098 → .094 |
+
+Caveman-minus-natural F1 gap: **−.0686** (run 1) and **−.0629** (run 2), both
+significant (Wilcoxon p=.0001 and p=.0004). The regex arm is bit-identical
+across runs (max |ΔF1| = 0.0), confirming the spread is LLM-side.
+
+Run 2 hit 45 `APIError` rows on Anthropic (15% of its calls) where run 1 hit
+none. Retries are disabled by design so provider instability stays visible;
+failures are recorded as rows and shrink the paired sample rather than biasing
+the rates. Recompute the comparison from the two committed raw files with:
+
+```powershell
+.venv\Scripts\python.exe -c "import pandas as pd; a=pd.read_csv('results/extraction_challenge_raw_run1.csv'); b=pd.read_csv('results/extraction_challenge_raw.csv'); m=['f1','precision','recall','hallucination_rate']; print(pd.concat({'run1':a[a.arm!='regex'].groupby('arm')[m].mean(),'run2':b[b.arm!='regex'].groupby('arm')[m].mean()},axis=1).round(4))"
+```
+
+Both run manifests record `git_dirty: false` at a commit present in history.
+`collect_provenance()` is now called before any output is written — previously
+it ran afterwards, which made a dirty flag structurally unavoidable.
 
 A second finding is recorded in `fence_stripped`: Anthropic models via OpenRouter
 ignore `response_format=json_object` and wrap the object in a Markdown fence on

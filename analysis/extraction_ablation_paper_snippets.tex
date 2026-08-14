@@ -104,11 +104,14 @@ The real-paper evaluation of Section~\ref{sec:realpapers}, re-run under the new
 prompt on identical cached source text, replicates this independently: extraction
 $F_1$ rises from $.247$ to $.308$ and precision from $.167$ to $.226$, while
 recall is unchanged at $.480$. The item counts show the mechanism directly---false
-positives roughly halve ($27 \rightarrow 12$ and $21 \rightarrow 17$ on the two
-affected sources) while true positives are identical. The natural-language prompt
-wins by inventing less, not by finding more, which is the same signature the
-challenge set produces. Absolute performance on real papers remains low, and we
-do not claim otherwise.
+positives fall sharply on the affected sources ($27 \rightarrow 12$ then $10$ on
+the first) while true positives are unchanged. The natural-language prompt wins
+by inventing less, not by finding more, which is the same signature the challenge
+set produces. This too was run twice: $F_1$ $.247 \rightarrow .308 \rightarrow
+.304$ and precision $.167 \rightarrow .226 \rightarrow .222$ across the Caveman
+baseline and two natural-language runs, with recall constant at $.480$
+throughout. Absolute performance on real papers remains low, and we do not claim
+otherwise.
 
 Difficulty tracks provenance and category as one would hope. Real excerpts are
 markedly harder than constructed ones ($F_1$ $.550$ vs.\ $.803$ for the Caveman
@@ -141,6 +144,18 @@ Anthropic & 3.95 & 0.0042 & 379 & 201 \\
 
 
 % ------------------------------------------------ Optional: appendix + table
+
+\paragraph{Replication.} We ran the full sweep twice, independently, at identical
+settings. The Caveman deficit is $-.069$ in the first run and $-.063$ in the
+second (Wilcoxon $p=.0001$ and $p=.0004$); pooled arm means agree to within $.010$
+$F_1$ ($.710$ vs.\ $.719$ Caveman, $.778$ vs.\ $.782$ natural-language), and the
+hallucination gap is present in both ($.154$ vs.\ $.098$, and $.154$ vs.\ $.094$).
+The regex arm is bit-identical between runs, confirming that the observed spread
+is model-side rather than harness-side. The second run additionally lost $15\%$
+of its Anthropic calls to transient \texttt{APIError}s; because retries are
+disabled and failures are recorded as rows rather than dropped, this shrinks the
+paired sample from 90 to 85 without biasing the reported rates. Both runs are
+released.
 
 \paragraph{Extraction challenge protocol.} All arms run at temperature $0$ with
 \texttt{response\_format} set to \texttt{json\_object}, the production setting,

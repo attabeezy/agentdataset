@@ -547,14 +547,46 @@ This is the reviewer's most important request and should be completed before opt
     they measure how the synthesizer behaves on a different (smaller, more accurate)
     parameter set.
 
-- [ ] **Investigate new synthesizer fallback warnings on `calerie_rct`.**
-  - `fallback_warning_count` went 0 → 3 for the `llm` condition on `calerie_rct` after
-    the prompt switch; the other two sources still report 0.
-  - The synthesizer is falling back on a parameter set that is *more* accurate than the
-    one it handled cleanly before, which suggests the fallback is triggered by
-    parameter shape (count, type, or a categorical) rather than by parameter quality.
-  - **Done when:** the trigger is identified and either fixed or documented as expected
-    for that parameter shape.
+- [x] **Investigate new synthesizer fallback warnings on `calerie_rct` — did not reproduce.**
+  - `fallback_warning_count` was 0 → 3 for the `llm` condition on `calerie_rct` in the
+    first post-switch run. On an independent re-run it is **0.0 for all three sources**.
+  - So the warnings track the specific parameter set a given extraction happened to
+    produce — which varies run to run under LLM nondeterminism — not a structural
+    problem with parameter shape, as first suspected. Closed as transient rather than
+    left open on the strength of a single observation.
+  - Worth noting as a general lesson: a single run of an LLM-backed pipeline is not
+    enough to distinguish a systematic defect from sampling noise.
+
+- [x] **Regenerate §9.6 and P0 with clean provenance, and replicate.**
+  - **The regeneration was not needed for correctness.** An audit confirmed the fixture
+    sha256 still matched, both prompt texts were byte-identical across the move into
+    `extractor.py` (1286 and 624 chars), and `_score_challenge_case`, `_numbers_in_text`
+    and `run_extraction_challenge` had zero diff hunks since the sweep. `_prompt_for_arm`
+    pins both arms to fixed texts, so the ablation never depended on which prompt was
+    production.
+  - **It surfaced a real defect instead.** Every analysis entry point called
+    `collect_provenance()` *after* writing its CSVs, so `git_dirty: True` was structural —
+    the run's own outputs were in the tree by the time provenance was recorded, and no
+    run could ever report a clean checkout. Fixed in all four entry points; guarded by
+    `tests/test_baseline_manifest.py::test_provenance_is_captured_before_outputs_are_written`.
+    Both regenerated manifests now record `git_dirty: False` at a commit in history.
+  - **The ablation replicates.** Run 1 preserved as `extraction_challenge_raw_run1.csv`.
+    Caveman-minus-natural-language F1 gap: −.0686 (run 1) vs −.0629 (run 2), both
+    significant (Wilcoxon p=.0001, p=.0004). Pooled: caveman F1 .710 → .719, natural
+    .778 → .782; hallucination .154 → .154 and .098 → .094; recall near-ceiling in both.
+    The regex arm is bit-identical across runs (max |ΔF1| = 0.0), confirming the spread
+    is LLM-side. The fenced-JSON finding is exact: `fence_stripped` is 1.0 for all 255
+    successful Anthropic calls and 0.0 for all 600 OpenAI and Google calls.
+  - **P0 replicates.** Extraction F1 .247 (Caveman) → .308 (run 1) → .304 (run 2);
+    precision .167 → .226 → .222; recall flat at .480 in all three. Predicted items
+    fell 29 → 14 → 12 on cdc with true positives constant at 2. The `gold` condition is
+    bit-identical in both regenerations, confirming the seeded synthesis is deterministic.
+  - **One difference, reported not smoothed:** run 2 hit 45 `APIError` rows on Anthropic
+    (15% of its calls) where run 1 hit zero. Retries are disabled by design so provider
+    instability stays visible; the failures are recorded as rows, so they shrink the
+    paired sample to 85 rather than biasing the rates. Within-(case, model) F1 std
+    roughly doubled (.009 → .018 caveman, .007 → .012 natural), consistent with that.
+    Anthropic's usable-call rate was 85%.
 
 ### 9.7 P1 — Synthesis and optimization diagnostics
 
