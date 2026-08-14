@@ -1,7 +1,9 @@
 import os
+import re
 import time
 import json
 import logging
+import uuid
 import numpy as np
 import pandas as pd
 import litellm
@@ -16,7 +18,12 @@ from sklearn.preprocessing import LabelEncoder
 from ucimlrepo import fetch_ucirepo
 
 from agentdataset.core.orchestrator import Orchestrator
-from agentdataset.core.extractor import Extractor, CAVEMAN_PROMPT
+from agentdataset.core.extractor import (
+    Extractor,
+    CAVEMAN_PROMPT,
+    EXTRACTION_PROMPT,
+    NATURAL_LANGUAGE_PROMPT,
+)
 from agentdataset.core.synthesizer import Synthesizer
 from agentdataset.core.validator import Validator
 from agentdataset.models.schemas import Parameters, MetaParams, VariableParams, CorrelationParams
@@ -531,9 +538,501 @@ def _score_extraction(extracted_vars: dict, ground_truth: dict) -> dict:
     }
 
 
-def run_ablation_extraction_method(extractor: Extractor, n_llm_repeats: int = 3) -> pd.DataFrame:
-    """Ablation A: LLM vs regex extraction, scored against known ground truth
-    across multiple varied source texts (not a single snippet)."""
+# =========================================================================
+# Extraction challenge set (P1 9.6): messy/ambiguous text, scored so that
+# correct extraction, correct abstention and hallucination are distinguishable.
+#
+# The legacy `_score_extraction` above matches by nearest mean over whatever the
+# extractor emitted, so it can only ever report a success rate — an extractor
+# that emits fifty junk variables scores the same as one that emits two correct
+# ones. The scorer below counts false positives explicitly, which is what makes
+# precision, hallucination rate and abstention measurable.
+# =========================================================================
+
+CHALLENGE_SET_PATH = Path("analysis") / "extraction_challenge_set.json"
+
+# Numeric literals as they appear in real papers: thousands separators, decimals,
+# "1.2e-3", "2.5E+04", "6.02 x 10^5" / "6.02 × 10^5".
+#
+# The leading (?<![\d.]) guard stops a hyphen that separates a range from being
+# read as a minus sign: "95% CI 1.08-1.87" must yield 1.08 and 1.87, not 1.08 and
+# -1.87. A genuine negative ("r = -0.30") is preceded by a space and still parses.
+_TEXT_NUMBER = re.compile(
+    r"(?<![\d.])[-+]?\d[\d,]*(?:\.\d+)?"
+    r"(?:\s*[eE][-+]?\d+|\s*[x×]\s*10\s*\^?\s*[-+]?\d+)?"
+)
+
+# Relative tolerance for calling two numbers "the same value". Tight on purpose:
+# extraction should reproduce reported values, not approximate them.
+_VALUE_RTOL = 1e-3
+_VALUE_ATOL = 1e-9
+
+
+def _close(a: float, b: float, rtol: float = _VALUE_RTOL) -> bool:
+    """True when two reported values are the same number to within tolerance."""
+    if a is None or b is None:
+        return False
+    try:
+        a, b = float(a), float(b)
+    except (TypeError, ValueError):
+        return False
+    if not (np.isfinite(a) and np.isfinite(b)):
+        return False
+    return abs(a - b) <= max(rtol * max(abs(a), abs(b)), _VALUE_ATOL)
+
+
+def _numbers_in_text(text: str) -> list[float]:
+    """Every numeric literal a reader could plausibly lift from `text`.
+
+    Used as the ground for hallucination detection: a value the extractor emits
+    that appears nowhere here was not read out of the document, it was invented.
+    Percentages contribute both their face value and their proportion form (77.6
+    and 0.776), because either is a defensible reading of "111 (77.6%)".
+    """
+    values: list[float] = []
+    for match in _TEXT_NUMBER.finditer(text or ""):
+        raw = match.group(0)
+        cleaned = raw.replace(",", "").replace(" ", "")
+        try:
+            if "^" in cleaned or "x10" in cleaned.lower().replace("×", "x"):
+                normalized = re.sub(r"[x×]10\^?", "e", cleaned, flags=re.IGNORECASE)
+                value = float(normalized)
+            else:
+                value = float(cleaned)
+        except ValueError:
+            continue
+        values.append(value)
+        tail = (text or "")[match.end():match.end() + 1]
+        if tail == "%":
+            values.append(value / 100.0)
+    return values
+
+
+def _normalize_name(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(name).lower()).strip()
+
+
+def _name_matches(extracted_name: str, gold: dict) -> bool:
+    candidates = [gold.get("name", "")] + list(gold.get("aliases") or [])
+    target = _normalize_name(extracted_name)
+    if not target:
+        return False
+    return any(target == _normalize_name(c) for c in candidates if c)
+
+
+def _score_challenge_case(
+    variables: dict,
+    correlations: dict,
+    case: dict,
+    rtol: float = _VALUE_RTOL,
+) -> dict:
+    """Score one extraction attempt against one annotated challenge case.
+
+    Matching is by *value*, not by name: the regex fallback emits generic
+    "var_N" names (extractor._extract_with_regex), so name-based matching would
+    zero it out for a reason unrelated to whether it read the numbers correctly.
+    Name correctness is reported separately as `name_accuracy`.
+
+    Gold entries carry a `variant_group`. Several entries may share a group when
+    the source legitimately reports the same variable for several populations,
+    arms or timepoints (rural vs urban, CR vs AL, baseline vs 12 months).
+    Reporting any one member satisfies the group; reporting several is also
+    correct. What is *not* correct is pairing a mean from one member with an SD
+    from another — that is counted as `fp_conflated`.
+
+    False positives are split by cause:
+      fp_distractor  — matches an annotated "must not extract" value (p-value,
+                       sample size, threshold, wrong population): a context error.
+      fp_fabricated  — appears nowhere in the source text: a hallucination.
+      fp_conflated   — mean and SD taken from different populations.
+      fp_other       — present in the text but not gold and not annotated.
+
+    Precision is 1.0 when nothing was extracted: emitting nothing produces no
+    false positives. Combined with recall 1.0 on a case whose gold is empty,
+    that makes correct abstention score F1 = 1.0 rather than being punished.
+    """
+    gold_vars = [g for g in case.get("gold_variables", [])
+                 if g.get("distribution") != "categorical"]
+    gold_corrs = list(case.get("gold_correlations", []))
+    must_not = case.get("must_not_extract", []) or []
+    text_numbers = _numbers_in_text(case.get("text", ""))
+
+    def _in_text(value) -> bool:
+        return any(_close(value, n, rtol) for n in text_numbers)
+
+    def _is_distractor(value) -> bool:
+        return any(_close(value, d["value"], rtol) for d in must_not)
+
+    extracted_vars = list(variables.items())
+    extracted_corrs = list(correlations.items())
+
+    used_gold: set[int] = set()
+    tp = 0
+    fp_distractor = fp_fabricated = fp_conflated = fp_other = 0
+    matched_groups: set[str] = set()
+    name_hits = 0
+    std_errs: list[float] = []
+
+    for name, vp in extracted_vars:
+        hit = None
+        for index, gold in enumerate(gold_vars):
+            if index in used_gold:
+                continue
+            if _close(vp.mean, gold["mean"], rtol) and _close(vp.std, gold["std"], rtol):
+                hit = index
+                break
+        if hit is not None:
+            used_gold.add(hit)
+            gold = gold_vars[hit]
+            tp += 1
+            matched_groups.add(gold["variant_group"])
+            if _name_matches(name, gold):
+                name_hits += 1
+            denominator = max(abs(float(gold["std"])), 1e-9)
+            std_errs.append(abs(float(vp.std) - float(gold["std"])) / denominator)
+            continue
+
+        # Mean and SD each match gold, but from different members of one group.
+        mean_groups = {g["variant_group"] for g in gold_vars if _close(vp.mean, g["mean"], rtol)}
+        std_groups = {g["variant_group"] for g in gold_vars if _close(vp.std, g["std"], rtol)}
+        if mean_groups & std_groups:
+            fp_conflated += 1
+        elif _is_distractor(vp.mean) or _is_distractor(vp.std):
+            fp_distractor += 1
+        elif not _in_text(vp.mean):
+            fp_fabricated += 1
+        else:
+            fp_other += 1
+
+    used_corr: set[int] = set()
+    for _, cp in extracted_corrs:
+        hit = None
+        for index, gold in enumerate(gold_corrs):
+            if index in used_corr:
+                continue
+            if _close(cp.correlation, gold["correlation"], rtol):
+                hit = index
+                break
+        if hit is not None:
+            used_corr.add(hit)
+            tp += 1
+            matched_groups.add(gold_corrs[hit]["variant_group"])
+        elif _is_distractor(cp.correlation):
+            fp_distractor += 1
+        elif not _in_text(cp.correlation):
+            fp_fabricated += 1
+        else:
+            fp_other += 1
+
+    all_groups = {g["variant_group"] for g in gold_vars} | {
+        g["variant_group"] for g in gold_corrs
+    }
+    fp = fp_distractor + fp_fabricated + fp_conflated + fp_other
+    n_extracted = len(extracted_vars) + len(extracted_corrs)
+
+    # Nothing emitted => no false positives => precision 1.0 (see docstring).
+    precision = 1.0 if n_extracted == 0 else tp / n_extracted
+    recall = 1.0 if not all_groups else len(matched_groups) / len(all_groups)
+    f1 = 0.0 if (precision + recall) == 0 else 2 * precision * recall / (precision + recall)
+
+    return {
+        "n_extracted": n_extracted,
+        "n_gold_groups": len(all_groups),
+        "tp": tp,
+        "fn": len(all_groups) - len(matched_groups),
+        "fp": fp,
+        "fp_distractor": fp_distractor,
+        "fp_fabricated": fp_fabricated,
+        "fp_conflated": fp_conflated,
+        "fp_other": fp_other,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "hallucination_rate": (fp_fabricated / n_extracted) if n_extracted else 0.0,
+        "context_error_rate": (fp_distractor / n_extracted) if n_extracted else 0.0,
+        "conflation_rate": (fp_conflated / n_extracted) if n_extracted else 0.0,
+        "name_accuracy": (name_hits / tp) if tp else float("nan"),
+        "std_rel_err": (sum(std_errs) / len(std_errs)) if std_errs else float("nan"),
+        "abstained": n_extracted == 0,
+        "correct_abstention": n_extracted == 0 and not all_groups,
+    }
+
+
+def load_challenge_set(
+    path: Path | str = CHALLENGE_SET_PATH,
+    categories: Optional[List[str]] = None,
+) -> list[dict]:
+    """Load the annotated challenge set, optionally filtered to categories."""
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    cases = payload["cases"]
+    if categories:
+        wanted = set(categories)
+        cases = [c for c in cases if c["category"] in wanted]
+        if not cases:
+            raise ValueError(f"No challenge cases match categories {sorted(wanted)}")
+    return cases
+
+
+def _prompt_for_arm(arm: str) -> Optional[str]:
+    """System prompt for an LLM arm.
+
+    Both arms name a fixed text so the ablation stays reproducible regardless of
+    which one is currently the production default: `natural_language` is
+    NATURAL_LANGUAGE_PROMPT whether or not EXTRACTION_PROMPT points at it.
+    """
+    if arm == "caveman":
+        return CAVEMAN_PROMPT
+    if arm == "natural_language":
+        return NATURAL_LANGUAGE_PROMPT
+    raise ValueError(f"Unknown LLM arm: {arm}")
+
+
+LLM_ARMS = ("caveman", "natural_language")
+
+
+def run_extraction_challenge(
+    extractor: Extractor,
+    challenge_set: Optional[list[dict]] = None,
+    models: Optional[list[dict]] = None,
+    n_llm_repeats: int = 5,
+    arms: tuple[str, ...] = LLM_ARMS,
+    include_regex: bool = True,
+) -> pd.DataFrame:
+    """Three-arm extraction ablation over the challenge set (P1 9.6).
+
+    Arms: the Caveman Protocol prompt, an equivalent natural-language prompt, and
+    the regex fallback. The regex arm is deterministic, runs once, and is reported
+    separately — fallback output is never folded into LLM results.
+
+    Every LLM arm keeps the production `response_format={"type":"json_object"}`
+    setting, so `malformed` counts *schema* violations (missing/!parseable fields),
+    not JSON syntax errors. Retries are disabled so nondeterminism and transient
+    failure are visible rather than smoothed away.
+
+    All models are routed through OpenRouter, so a single OPENROUTER_API_KEY
+    covers every vendor in the sweep.
+    """
+    if challenge_set is None:
+        challenge_set = load_challenge_set()
+    if models is None:
+        models = _COST_LATENCY_PROVIDERS
+
+    have_key = bool(extractor.api_key or os.environ.get(extractor.env_var))
+    if not have_key and arms:
+        print("No OPENROUTER_API_KEY found — running the regex arm only.")
+        arms = ()
+
+    run_id = uuid.uuid4().hex[:12]
+    rows: list[dict] = []
+    total = len(challenge_set) * (
+        int(include_regex) + len(arms) * len(models) * n_llm_repeats
+    )
+    print(f"\n--- Extraction challenge: {len(challenge_set)} cases, "
+          f"{len(arms)} LLM arm(s) x {len(models)} model(s) x {n_llm_repeats} rep(s) "
+          f"=> {total} extractions ---")
+
+    for case in challenge_set:
+        base = {
+            "run_id": run_id,
+            "case_id": case["case_id"],
+            "category": case["category"],
+            "provenance": case["provenance"],
+            "source_id": case.get("source_id"),
+        }
+
+        if include_regex:
+            started = time.perf_counter()
+            variables, corrs = extractor._extract_with_regex(case["text"])
+            rows.append({
+                **base,
+                "arm": "regex",
+                "model": "none",
+                "rep": 0,
+                "latency_s": time.perf_counter() - started,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "cost_usd": 0.0,
+                "malformed": False,
+                "api_error": False,
+                "error_type": None,
+                "fence_stripped": False,
+                **_score_challenge_case(variables, corrs, case),
+            })
+
+        for arm in arms:
+            prompt = _prompt_for_arm(arm)
+            for provider in models:
+                for rep in range(n_llm_repeats):
+                    started = time.perf_counter()
+                    before = len(extractor.call_history)
+                    row = {
+                        **base,
+                        "arm": arm,
+                        "model": provider["model"],
+                        "rep": rep,
+                        "malformed": False,
+                        "api_error": False,
+                        "error_type": None,
+                    }
+                    try:
+                        data = extractor._extract_with_llm(
+                            case["text"],
+                            system_prompt=prompt,
+                            model=provider["model"],
+                            num_retries=0,
+                            purpose=f"challenge:{arm}",
+                        )
+                    except ValueError as e:
+                        # JSONDecodeError (a ValueError) and the empty-response
+                        # guard are the model's fault, not the transport's: they
+                        # are malformed output, not API errors. Conflating the two
+                        # would hide a prompt/provider quality signal inside an
+                        # infrastructure metric.
+                        usage = (extractor.call_history[before:] or [{}])[-1]
+                        row.update({
+                            "malformed": True,
+                            "error_type": type(e).__name__,
+                            "latency_s": usage.get("latency_seconds",
+                                                   time.perf_counter() - started),
+                            "prompt_tokens": usage.get("prompt_tokens"),
+                            "completion_tokens": usage.get("completion_tokens"),
+                            "cost_usd": usage.get("cost_usd"),
+                            "fence_stripped": bool(usage.get("fence_stripped", False)),
+                            **_score_challenge_case({}, {}, case),
+                        })
+                        row.update({"precision": 0.0, "recall": 0.0, "f1": 0.0})
+                        rows.append(row)
+                        continue
+                    except Exception as e:
+                        # Recorded, not dropped: silently discarding failures
+                        # biases every downstream rate downward.
+                        logger.warning("[%s/%s] %s rep %d failed: %s",
+                                       arm, provider["model"], case["case_id"], rep, e)
+                        row.update({
+                            "api_error": True,
+                            "error_type": type(e).__name__,
+                            "latency_s": time.perf_counter() - started,
+                            "prompt_tokens": np.nan,
+                            "completion_tokens": np.nan,
+                            "cost_usd": np.nan,
+                            "fence_stripped": False,
+                            **_score_challenge_case({}, {}, case),
+                        })
+                        row["precision"] = row["recall"] = row["f1"] = np.nan
+                        rows.append(row)
+                        continue
+
+                    usage = (extractor.call_history[before:] or [{}])[-1]
+                    row.update({
+                        "latency_s": usage.get("latency_seconds", time.perf_counter() - started),
+                        "prompt_tokens": usage.get("prompt_tokens"),
+                        "completion_tokens": usage.get("completion_tokens"),
+                        "cost_usd": usage.get("cost_usd"),
+                        "fence_stripped": bool(usage.get("fence_stripped", False)),
+                    })
+
+                    if not isinstance(data, dict) or not (
+                        "variables" in data or "correlations" in data
+                    ):
+                        row.update({"malformed": True, "error_type": "SchemaMissingKeys",
+                                    **_score_challenge_case({}, {}, case)})
+                        row.update({"precision": 0.0, "recall": 0.0, "f1": 0.0})
+                        rows.append(row)
+                        continue
+                    try:
+                        variables, corrs = extractor._parse_llm_result(data)
+                    except Exception as e:
+                        row.update({"malformed": True, "error_type": type(e).__name__,
+                                    **_score_challenge_case({}, {}, case)})
+                        row.update({"precision": 0.0, "recall": 0.0, "f1": 0.0})
+                        rows.append(row)
+                        continue
+
+                    row.update(_score_challenge_case(variables, corrs, case))
+                    rows.append(row)
+
+    df = pd.DataFrame(rows)
+    if df.empty:
+        print("No extraction results collected.")
+        return df
+
+    summary = df.groupby(["arm", "model"]).agg(
+        n=("f1", "size"),
+        f1=("f1", "mean"),
+        precision=("precision", "mean"),
+        recall=("recall", "mean"),
+        hallucination=("hallucination_rate", "mean"),
+        context_err=("context_error_rate", "mean"),
+        malformed=("malformed", "mean"),
+        fenced=("fence_stripped", "mean"),
+        api_error=("api_error", "mean"),
+        prompt_tok=("prompt_tokens", "mean"),
+        cost_usd=("cost_usd", "mean"),
+        latency_s=("latency_s", "mean"),
+    )
+    print("\n" + summary.to_string())
+
+    _report_prompt_comparison(df)
+    return df
+
+
+def _report_prompt_comparison(df: pd.DataFrame) -> None:
+    """Paired Caveman-vs-natural-language test on per-case mean F1, within model."""
+    llm = df[df["arm"].isin(LLM_ARMS) & ~df["api_error"]]
+    if llm.empty:
+        return
+    per_case = (
+        llm.groupby(["model", "case_id", "arm"])["f1"].mean().unstack("arm")
+    ).dropna()
+    if not {"caveman", "natural_language"}.issubset(per_case.columns) or len(per_case) < 3:
+        print("\nNot enough paired observations for a prompt comparison.")
+        return
+    diff = per_case["caveman"] - per_case["natural_language"]
+    print(f"\nCaveman - natural-language mean F1 difference: {diff.mean():+.4f} "
+          f"(n={len(per_case)} case x model pairs)")
+    if np.allclose(diff, 0):
+        print("The two prompts produced identical F1 on every paired observation "
+              "(Wilcoxon undefined).")
+        return
+    try:
+        stat, p_val = scipy_stats.wilcoxon(per_case["caveman"], per_case["natural_language"])
+        print(f"Paired Wilcoxon signed-rank: W={stat:.1f}, p={p_val:.4f}")
+    except ValueError as e:
+        logger.warning("Wilcoxon test unavailable: %s", e)
+
+    # Nondeterminism: spread of F1 across repetitions of an identical request.
+    spread = (
+        llm.groupby(["arm", "model", "case_id"])["f1"].std(ddof=1).groupby("arm").mean()
+    )
+    print("\nMean within-(case, model) F1 std across repetitions (nondeterminism):")
+    print(spread.to_string())
+
+
+def run_ablation_extraction_method(
+    extractor: Extractor,
+    n_llm_repeats: int = 3,
+    challenge_set: Optional[list[dict]] = None,
+    models: Optional[list[dict]] = None,
+) -> pd.DataFrame:
+    """Ablation A: extraction method comparison.
+
+    With `challenge_set` supplied (or a path resolved by the caller) this runs the
+    full P1 9.6 protocol via `run_extraction_challenge` — Caveman prompt vs
+    natural-language prompt vs regex, over several models and repetitions, scored
+    with precision/recall/F1, hallucination and abstention.
+
+    Without it, this keeps the original behaviour: LLM vs regex over the synthetic
+    ground-truth texts in `_build_ablation_texts`, so `run_ablation_study()` and
+    `results/ablation_extraction_method.csv` are unchanged.
+    """
+    if challenge_set is not None or models is not None:
+        return run_extraction_challenge(
+            extractor,
+            challenge_set=challenge_set,
+            models=models,
+            n_llm_repeats=n_llm_repeats,
+        )
+
     print("\n--- Ablation A: Extraction Method (LLM vs Regex) ---")
     texts = _build_ablation_texts()
     rows = []
@@ -684,31 +1183,11 @@ _COST_LATENCY_PROVIDERS = [
     {"name": "Google", "model": "openrouter/google/gemini-2.5-flash", "key_env": "OPENROUTER_API_KEY"},
 ]
 
-# A deliberately verbose, "naturally written" version of extractor.CAVEMAN_PROMPT,
-# used only to measure the real token savings of the compressed prompt.
-_VERBOSE_PROMPT = """
-You are an expert statistician with many years of experience analyzing research
-papers and extracting statistical information from them. Please carefully read
-through the following text and identify all of the statistical variables that
-are mentioned, along with their probability distributions (such as normal,
-uniform, or gamma), their means, and their standard deviations. Also, please
-identify any correlations that are described between pairs of variables,
-including the strength and direction (positive or negative) of each correlation.
-
-Please format your response as a JSON object that matches the following schema
-exactly:
-{
-  "variables": {
-    "<name>": {"distribution": "normal|uniform|gamma", "mean": 0.0, "std": 1.0, "min": null, "max": null}
-  },
-  "correlations": {
-    "<key>": {"var1": "<name>", "var2": "<name>", "correlation": 0.5, "direction": "positive|negative"}
-  }
-}
-
-Please make sure to only output the JSON object itself and nothing else - no
-introductory text, no explanations, and no markdown code fences.
-"""
+# The natural-language prompt now lives with the extractor, because it *is* the
+# production prompt (switched from CAVEMAN_PROMPT on the strength of the §9.6
+# ablation). This alias keeps the benchmark's vocabulary — "verbose" is the
+# baseline against which the Caveman compression is measured.
+_VERBOSE_PROMPT = NATURAL_LANGUAGE_PROMPT
 
 _SAMPLE_SOURCE_TEXT = _ABLATION_DOMAINS and """
 We observed a heart rate distribution with mean 72 and std 8.
@@ -734,7 +1213,9 @@ def run_cost_latency_analysis(n_repeats: int = 5):
                 response = completion(
                     model=p["model"],
                     messages=[
-                        {"role": "system", "content": CAVEMAN_PROMPT},
+                        # Measures the shipped pipeline, so it tracks whichever
+                        # prompt is in production rather than a fixed one.
+                        {"role": "system", "content": EXTRACTION_PROMPT},
                         {"role": "user", "content": f"Extract stats from this text:\n\n{_SAMPLE_SOURCE_TEXT}"},
                     ],
                     response_format={"type": "json_object"},
@@ -796,8 +1277,13 @@ def run_cost_latency_analysis(n_repeats: int = 5):
         except Exception as e:
             logger.warning("Token counting failed for %s: %s", p["name"], e)
 
-    _save_results(df, "cost_latency.csv")
-    _save_results(pd.DataFrame(caveman_rows), "caveman_token_savings.csv")
+    # results/cost_latency.csv and results/caveman_token_savings.csv are frozen
+    # pre-revision baselines (results/baseline_manifest.json: "New experiments
+    # write seed-level raw files and must not overwrite these files"). Current
+    # runs therefore write alongside them rather than over them, so the
+    # historical bytes stay comparable.
+    _save_results(df, "extraction_cost_latency.csv")
+    _save_results(pd.DataFrame(caveman_rows), "extraction_prompt_token_savings.csv")
     return df
 
 

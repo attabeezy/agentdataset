@@ -22,6 +22,15 @@ from agentdataset.models.schemas import (
 
 logger = logging.getLogger(__name__)
 
+# The Caveman Protocol: maximally compressed instructions. SUPERSEDED as the
+# production prompt — retained because the paper documents it and the §9.6
+# ablation still measures it (benchmark.run_extraction_challenge).
+#
+# The ablation found the compression is not free: over 930 extractions across
+# three models it scored F1 .710 against .778 for NATURAL_LANGUAGE_PROMPT below
+# (paired Wilcoxon p=.0001), losing precision to a hallucination rate of .154
+# against .098 — while saving only 3.5% of per-call cost, because completion
+# tokens dominate this workload. See results/extraction_challenge_summary.csv.
 CAVEMAN_PROMPT = """
 You are an expert statistician.
 Strip prose.
@@ -39,6 +48,44 @@ Output strict JSON matching this schema exactly:
 each category label to its probability, e.g. {"yes": 0.3, "no": 0.7}.
 No fluff. No greeting. Output JSON only.
 """
+
+# Requests exactly the same schema as CAVEMAN_PROMPT — same distributions
+# (including "categorical"), same "categories" field — differing only in prose
+# style. That parity is load-bearing for the §9.6 prompt ablation and is enforced
+# by tests/test_extraction_challenge.py::test_prompt_schema_parity. Do not edit
+# one prompt's field set without the other.
+NATURAL_LANGUAGE_PROMPT = """
+You are an expert statistician with many years of experience analyzing research
+papers and extracting statistical information from them. Please carefully read
+through the following text and identify all of the statistical variables that
+are mentioned, along with their probability distributions (such as normal,
+uniform, gamma, or categorical), their means, and their standard deviations.
+Also, please identify any correlations that are described between pairs of
+variables, including the strength and direction (positive or negative) of each
+correlation.
+
+Please format your response as a JSON object that matches the following schema
+exactly:
+{
+  "variables": {
+    "<name>": {"distribution": "normal|uniform|gamma|categorical", "mean": 0.0, "std": 1.0, "min": null, "max": null, "categories": null}
+  },
+  "correlations": {
+    "<key>": {"var1": "<name>", "var2": "<name>", "correlation": 0.5, "direction": "positive|negative"}
+  }
+}
+
+The "categories" field should only be used when the distribution is
+"categorical". In that case it should be an object that maps each category
+label to its probability, for example {"yes": 0.3, "no": 0.7}.
+
+Please make sure to only output the JSON object itself and nothing else - no
+introductory text, no explanations, and no markdown code fences.
+"""
+
+# The production system prompt. Switched from CAVEMAN_PROMPT to
+# NATURAL_LANGUAGE_PROMPT on the strength of the §9.6 ablation (see above).
+EXTRACTION_PROMPT = NATURAL_LANGUAGE_PROMPT
 
 # Separator between a keyword and its numeric value: "= 3.5", ": 3.5", "is 3.5", "of 3.5"
 _SEP = r"\s*(?:is|=|:|of)?\s*"
@@ -103,6 +150,21 @@ _PATTERN_CATEGORY_PAIR = re.compile(
 )
 
 
+# Some providers ignore response_format={"type": "json_object"} and wrap the
+# object in a markdown fence. Anthropic models via OpenRouter do this on every
+# call; OpenAI and Google honour the flag. Without this strip, json.loads fails
+# and extract_parameters silently falls back to regex for those providers — a
+# failure that looks like "the LLM could not extract anything" in the results.
+# Discovered by the P1 9.6 extraction ablation.
+_JSON_FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
+
+
+def strip_json_fence(content: str) -> str:
+    """Return `content` with a wrapping markdown code fence removed, if present."""
+    match = _JSON_FENCE.search(content or "")
+    return match.group(1) if match else content
+
+
 class Extractor:
     def __init__(
         self, model: str = "gpt-4o", api_key: str = "", env_var: str = "OPENAI_API_KEY"
@@ -112,7 +174,9 @@ class Extractor:
         self.env_var = env_var
         self.call_history: list[dict] = []
 
-    def _record_completion(self, response, started_at: float, purpose: str) -> None:
+    def _record_completion(
+        self, response, started_at: float, purpose: str, model: str | None = None
+    ) -> None:
         """Capture non-secret per-call usage for end-to-end accounting."""
         usage = getattr(response, "usage", None)
         try:
@@ -121,7 +185,7 @@ class Extractor:
             cost = float("nan")
         self.call_history.append({
             "purpose": purpose,
-            "model": self.model,
+            "model": model or self.model,
             "latency_seconds": time.perf_counter() - started_at,
             "prompt_tokens": getattr(usage, "prompt_tokens", None),
             "completion_tokens": getattr(usage, "completion_tokens", None),
@@ -139,28 +203,48 @@ class Extractor:
         doc.close()
         return "\n\n".join(sections)
 
-    def _extract_with_llm(self, text: str) -> Dict[str, Any]:
-        """Call litellm and return parsed JSON dict. Raises on any failure."""
+    def _extract_with_llm(
+        self,
+        text: str,
+        system_prompt: str | None = None,
+        model: str | None = None,
+        num_retries: int = 2,
+        purpose: str = "structured_extraction",
+    ) -> Dict[str, Any]:
+        """Call litellm and return parsed JSON dict. Raises on any failure.
+
+        `system_prompt` / `model` / `num_retries` default to production behaviour
+        (EXTRACTION_PROMPT, this extractor's model, two retries). The prompt
+        ablation in benchmark.py overrides them to compare prompt styles and models
+        without retries masking nondeterminism; `purpose` labels the resulting
+        call_history row so token/cost accounting is attributable to an arm.
+        """
         prompt = f"Extract stats from this text:\n\n{text[:10000]}"
         # Pass api_key directly rather than mutating os.environ (avoids cross-call
         # leakage); fall back to None so litellm reads the env var itself.
         api_key = self.api_key.strip() if self.api_key else None
         started_at = time.perf_counter()
         response = completion(
-            model=self.model,
+            model=model or self.model,
             messages=[
-                {"role": "system", "content": CAVEMAN_PROMPT},
+                {"role": "system", "content": system_prompt or EXTRACTION_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             response_format={"type": "json_object"},
             api_key=api_key,
             temperature=0,
-            num_retries=2,
+            num_retries=num_retries,
         )
-        self._record_completion(response, started_at, "structured_extraction")
+        self._record_completion(response, started_at, purpose, model=model)
         if not response.choices or response.choices[0].message.content is None:
             raise ValueError("LLM returned an empty response (no choices/content).")
-        return json.loads(response.choices[0].message.content)
+        content = response.choices[0].message.content
+        payload = strip_json_fence(content)
+        # Recorded so the ablation can report how often the production parser
+        # would have failed without the fence strip, per provider.
+        if self.call_history:
+            self.call_history[-1]["fence_stripped"] = payload != content
+        return json.loads(payload)
 
     def _parse_llm_result(self, data: Dict[str, Any]) -> tuple[Dict, Dict]:
         """Convert raw LLM JSON dict into (variables, correlations) dicts of Pydantic models."""

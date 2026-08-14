@@ -376,6 +376,15 @@ def run(mode: str, refresh_sources: set[str] | None = None) -> None:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Captured BEFORE any output is written. Recording provenance afterwards
+    # makes git_dirty structurally always True, because this run's own CSVs are
+    # sitting in the working tree by then.
+    provenance = collect_provenance(
+        f"python analysis/real_paper_eval.py --mode {mode}" +
+        "".join(f" --refresh-source {source}" for source in sorted(refresh_sources or set())),
+        SEEDS,
+    )
+
     extractor = Extractor(model=MODEL, env_var=ENV_VAR)
     if mode == "live":
         discovery = run_discovery_study(manifest, extractor)
@@ -427,11 +436,7 @@ def run(mode: str, refresh_sources: set[str] | None = None) -> None:
     if trace_frames:
         pd.concat(trace_frames, ignore_index=True).to_csv(RESULTS_DIR / "real_paper_optimization_traces.csv", index=False)
     write_json(RESULTS_DIR / "real_paper_run_manifest.json", {
-        **collect_provenance(
-            f"python analysis/real_paper_eval.py --mode {mode}" +
-            "".join(f" --refresh-source {source}" for source in sorted(refresh_sources or set())),
-            SEEDS,
-        ),
+        **provenance,
         "provider": "openrouter", "model": MODEL,
         "extraction_route": "llm and forced regex on identical parsed text",
         "llm_calls": extractor.call_history,

@@ -1,33 +1,16 @@
 source_id,condition,gold_id,error_category,detail
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,physical_activity_high_intensity_long_bout_rural:mean=42.5
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,physical_activity_high_intensity_long_bout_rural:std=6.2
-cdc_nhanes_rural_urban,llm,cdc_001,variable,physical_activity_high_intensity_long_bout_urban
-cdc_nhanes_rural_urban,llm,cdc_002,variable,physical_activity_high_intensity_long_bout_urban
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,physical_activity_low_intensity_rural:mean=0.0
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,physical_activity_low_intensity_rural:std=1.0
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,physical_activity_low_intensity_urban:mean=0.0
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,physical_activity_low_intensity_urban:std=1.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,high_intensity_long_bout_activity:mean=42.5
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,high_intensity_long_bout_activity:std=6.2
+cdc_nhanes_rural_urban,llm,cdc_001,variable,high_intensity_long_bout_activity_urban
+cdc_nhanes_rural_urban,llm,cdc_002,variable,high_intensity_long_bout_activity_urban
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,low_intensity_activity:mean=0.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,low_intensity_activity:std=1.0
 cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,total_physical_activity_rural:mean=438.3
 cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,total_physical_activity_rural:std=35.3
 cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,total_physical_activity_urban:mean=371.2
 cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,total_physical_activity_urban:std=12.5
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,household_physical_activity_rural:mean=0.0
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,household_physical_activity_rural:std=1.0
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,household_physical_activity_urban:mean=0.0
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,household_physical_activity_urban:std=1.0
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,leisure_physical_activity_rural:mean=0.0
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,leisure_physical_activity_rural:std=1.0
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,leisure_physical_activity_urban:mean=0.0
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,leisure_physical_activity_urban:std=1.0
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,transportation_physical_activity_rural:mean=0.0
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,transportation_physical_activity_rural:std=1.0
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,transportation_physical_activity_urban:mean=0.0
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,transportation_physical_activity_urban:std=1.0
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,urban_status:probability=0.5
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,urban_status:probability=0.25
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,urban_status:probability=0.25
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,physical_activity_high_intensity_long_bout_rural__physical_activity_high_intensity_long_bout_urban:correlation=-0.5
-cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,total_physical_activity_rural__total_physical_activity_urban:correlation=0.5
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,high_intensity_long_bout_activity__total_physical_activity_rural:correlation=0.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,high_intensity_long_bout_activity_urban__total_physical_activity_urban:correlation=0.0
 cdc_nhanes_rural_urban,llm,cdc_003,no_extraction,Physical activity in any bout length >=2020 CPM
 cdc_nhanes_rural_urban,llm,cdc_004,no_extraction,Physical activity in any bout length >=2020 CPM
 cdc_nhanes_rural_urban,llm,cdc_005,no_extraction,Age
@@ -58,6 +41,8 @@ calerie_rct,llm,,unsupported_or_out_of_scope,LDL-C:mean=98.0
 calerie_rct,llm,,unsupported_or_out_of_scope,LDL-C:std=26.5
 calerie_rct,llm,,unsupported_or_out_of_scope,Tg:mean=103.5
 calerie_rct,llm,,unsupported_or_out_of_scope,Tg:std=50.5
+calerie_rct,llm,,unsupported_or_out_of_scope,Weight Loss:mean=7.6
+calerie_rct,llm,,unsupported_or_out_of_scope,Weight Loss:std=0.3
 calerie_rct,llm,,unsupported_or_out_of_scope,BMI__WBC:correlation=0.14
 calerie_rct,llm,calerie_001,no_extraction,Age
 calerie_rct,llm,calerie_002,no_extraction,Age
@@ -92,9 +77,6 @@ student_mental_health,llm,,unsupported_or_out_of_scope,internet_addiction__sleep
 student_mental_health,llm,,unsupported_or_out_of_scope,internet_addiction__social_support:correlation=-0.25
 student_mental_health,llm,,unsupported_or_out_of_scope,smartphone_addiction__ehealth_literacy:correlation=0.21
 student_mental_health,llm,,unsupported_or_out_of_scope,smartphone_addiction__loneliness:correlation=0.16
-student_mental_health,llm,,unsupported_or_out_of_scope,social_support__depression:correlation=0.0
-student_mental_health,llm,,unsupported_or_out_of_scope,social_support__loneliness:correlation=0.0
-student_mental_health,llm,,unsupported_or_out_of_scope,social_support__sleep_quality:correlation=0.0
 student_mental_health,llm,student_009,no_extraction,SAS-SV with IAT-6
 student_mental_health,llm,student_011,no_extraction,UCLA-3 with PHQ-9
 student_mental_health,regex,student_001,no_extraction,SAS-SV

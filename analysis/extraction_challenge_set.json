@@ -1,0 +1,1440 @@
+{
+  "schema_version": 1,
+  "description": "Extraction challenge set for the P1 9.6 robustness and prompt ablation. Real cases are verbatim excerpts sliced from cached open-access sources; constructed cases are synthetic and labelled as such.",
+  "span_join": "\n[...]\n",
+  "categories": [
+    "negated_finding",
+    "multiple_populations",
+    "conflicting_sections",
+    "repeated_timepoints",
+    "units_mismatch",
+    "confidence_intervals",
+    "table_footnotes",
+    "scientific_notation",
+    "irrelevant_numbers",
+    "sd_vs_se"
+  ],
+  "cases": [
+    {
+      "case_id": "neg_001",
+      "category": "negated_finding",
+      "provenance": "real",
+      "source_id": "calerie_rct",
+      "source_sha256": "d4ed3ed5a772561e2f0f311eceb7d390e848d6d523c5a10151d2a5fce0309cf4",
+      "spans": [
+        {
+          "start": 8341,
+          "end": 8511
+        }
+      ],
+      "text": "There was a trend for a correlation \nbetween changes in BMI from baseline to 24 months \nand that of WBC number (r=0.14, p=0.07) when both \nCR and AL groups were combined.",
+      "gold_variables": [],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 0.14,
+          "reason": "correlation explicitly described as only a 'trend', not an established finding"
+        },
+        {
+          "value": 0.07,
+          "reason": "p-value, above the conventional 0.05 threshold"
+        }
+      ],
+      "notes": "Correct behaviour is abstention: a numeric r is present but the source declines to assert the correlation. Extracting r=0.14 is a context error."
+    },
+    {
+      "case_id": "neg_002",
+      "category": "negated_finding",
+      "provenance": "real",
+      "source_id": "cdc_nhanes_rural_urban",
+      "source_sha256": "fa3fc09a7629dc99c9e2c2f73e2f207a6239e08ebbd518a98eb1d9ab309fe97f",
+      "spans": [
+        {
+          "start": 1519,
+          "end": 1845
+        }
+      ],
+      "text": "Rural residents were less active than urban residents in high-intensity long bout (2,020 counts per minute threshold and 10 miniutes or longer bout length) accelerometer-measured physical activity (42.5 ± 6.2 min/wk vs 55.9 ± 2.8 min/wk) but the difference disappeared with a lower-intensity threshold (760 counts per minute).",
+      "gold_variables": [
+        {
+          "name": "activity_2020_bouts",
+          "aliases": [
+            "physical activity 2020 CPM",
+            "high-intensity long bout physical activity"
+          ],
+          "distribution": "normal",
+          "mean": 55.9,
+          "std": 2.8,
+          "units": "min/week",
+          "population": "urban",
+          "variant_group": "activity_2020_bouts"
+        },
+        {
+          "name": "activity_2020_bouts_rural",
+          "aliases": [
+            "physical activity 2020 CPM"
+          ],
+          "distribution": "normal",
+          "mean": 42.5,
+          "std": 6.2,
+          "units": "min/week",
+          "population": "rural",
+          "variant_group": "activity_2020_bouts"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 760,
+          "reason": "an accelerometer intensity threshold (counts per minute), not a measured variable"
+        },
+        {
+          "value": 2020,
+          "reason": "an accelerometer intensity threshold, not a measured variable"
+        },
+        {
+          "value": 10,
+          "reason": "a bout-length criterion in minutes, not a measured variable"
+        }
+      ],
+      "notes": "The clause 'but the difference disappeared' negates a comparison, and the sentence is dense with threshold constants that are not variables."
+    },
+    {
+      "case_id": "neg_003",
+      "category": "negated_finding",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed example, serum ferritin had a mean of 88.4 ng/mL (SD 21.7). There was no significant association between serum ferritin and fatigue score (r = 0.03, p = 0.62), and no difference between sites was detected.",
+      "gold_variables": [
+        {
+          "name": "serum_ferritin",
+          "aliases": [
+            "ferritin"
+          ],
+          "distribution": "normal",
+          "mean": 88.4,
+          "std": 21.7,
+          "units": "ng/mL",
+          "population": null,
+          "variant_group": "serum_ferritin"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 0.03,
+          "reason": "correlation explicitly reported as non-significant"
+        },
+        {
+          "value": 0.62,
+          "reason": "p-value"
+        }
+      ],
+      "notes": "Constructed. The mean/SD is genuine gold; the negated correlation is not."
+    },
+    {
+      "case_id": "pop_001",
+      "category": "multiple_populations",
+      "provenance": "real",
+      "source_id": "cdc_nhanes_rural_urban",
+      "source_sha256": "fa3fc09a7629dc99c9e2c2f73e2f207a6239e08ebbd518a98eb1d9ab309fe97f",
+      "spans": [
+        {
+          "start": 31849,
+          "end": 32045
+        },
+        {
+          "start": 32101,
+          "end": 32317
+        }
+      ],
+      "text": "| Variables | Urban (n = 3,828) | All Rural (n = 1,228) | Nonmicropolitan Rural (n = 624) | Micropolitan Rural (n = 604) |\n|---|---|---|---|---|\n| Mean (SD) | Mean (SD) | Mean (SD) | Mean (SD) | |\n[...]\n| Physical activity in ≥10 min bouts ≥2,020 CPM | 55.9 (2.8) | 42.5 (6.2)a | 52.6 (8.0) | 32.9 (4.6)a |\n| Physical activity in any bout length ≥2,020 CPM | 188.3 (4.3) | 162.4 (11.5)a | 179.9 (18.9) | 145.7 (12.0)a |",
+      "gold_variables": [
+        {
+          "name": "activity_2020_bouts",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 55.9,
+          "std": 2.8,
+          "units": "min/week",
+          "population": "urban",
+          "variant_group": "activity_2020_bouts"
+        },
+        {
+          "name": "activity_2020_bouts",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 42.5,
+          "std": 6.2,
+          "units": "min/week",
+          "population": "all rural",
+          "variant_group": "activity_2020_bouts"
+        },
+        {
+          "name": "activity_any_2020",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 188.3,
+          "std": 4.3,
+          "units": "min/week",
+          "population": "urban",
+          "variant_group": "activity_any_2020"
+        },
+        {
+          "name": "activity_any_2020",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 162.4,
+          "std": 11.5,
+          "units": "min/week",
+          "population": "all rural",
+          "variant_group": "activity_any_2020"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 3828,
+          "reason": "column-header sample size"
+        },
+        {
+          "value": 1228,
+          "reason": "column-header sample size"
+        },
+        {
+          "value": 624,
+          "reason": "column-header sample size"
+        },
+        {
+          "value": 604,
+          "reason": "column-header sample size"
+        }
+      ],
+      "notes": "Four population columns for the same variable. Reporting any one column is correct; mixing a mean from one column with an SD from another is a conflation error."
+    },
+    {
+      "case_id": "pop_002",
+      "category": "multiple_populations",
+      "provenance": "real",
+      "source_id": "calerie_rct",
+      "source_sha256": "d4ed3ed5a772561e2f0f311eceb7d390e848d6d523c5a10151d2a5fce0309cf4",
+      "spans": [
+        {
+          "start": 8661,
+          "end": 8915
+        }
+      ],
+      "text": "Calorie Restriction (n=143)† \nAd Libitum (n=75)† \nRace \n  \n  \n   White, n (%) \n111 (77.6%) \n57 (76%) \n   African American, n (%) \n15 (10.5%) \n11 (14.7%) \n   Other, n (%) \n17 (11.9%) \n7 (9.3%)   \nSex (F/M) \n99F/44M \n53F/22M \nAge, y \n38.0 (7.2) \n37.9 (6.9)",
+      "gold_variables": [
+        {
+          "name": "age",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 38.0,
+          "std": 7.2,
+          "units": "years",
+          "population": "calorie restriction arm",
+          "variant_group": "age"
+        },
+        {
+          "name": "age",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 37.9,
+          "std": 6.9,
+          "units": "years",
+          "population": "ad libitum arm",
+          "variant_group": "age"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 143,
+          "reason": "arm sample size"
+        },
+        {
+          "value": 75,
+          "reason": "arm sample size"
+        },
+        {
+          "value": 99,
+          "reason": "female count, not a distribution parameter"
+        },
+        {
+          "value": 44,
+          "reason": "male count, not a distribution parameter"
+        }
+      ],
+      "notes": "Two randomised arms side by side, plus categorical race/sex rows given as counts with percentages. Categorical variables are not value-scored in this version of the challenge set (see EXTRACTION_CHALLENGE_PROTOCOL.md); the race/sex counts here act as distractors for the numeric arms."
+    },
+    {
+      "case_id": "pop_003",
+      "category": "multiple_populations",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed three-arm trial, resting heart rate at baseline was 68.2 (SD 9.1) beats/min in the placebo arm, 67.5 (SD 8.7) in the low-dose arm, and 69.1 (SD 9.4) in the high-dose arm. Randomisation allocated 120 participants per arm.",
+      "gold_variables": [
+        {
+          "name": "resting_heart_rate",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 68.2,
+          "std": 9.1,
+          "units": "beats/min",
+          "population": "placebo",
+          "variant_group": "resting_heart_rate"
+        },
+        {
+          "name": "resting_heart_rate",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 67.5,
+          "std": 8.7,
+          "units": "beats/min",
+          "population": "low dose",
+          "variant_group": "resting_heart_rate"
+        },
+        {
+          "name": "resting_heart_rate",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 69.1,
+          "std": 9.4,
+          "units": "beats/min",
+          "population": "high dose",
+          "variant_group": "resting_heart_rate"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 120,
+          "reason": "per-arm sample size"
+        }
+      ],
+      "notes": "Constructed. Three near-identical means invite conflation."
+    },
+    {
+      "case_id": "conf_001",
+      "category": "conflicting_sections",
+      "provenance": "real",
+      "source_id": "student_mental_health",
+      "source_sha256": "0c906477097dc57967a3ad930e1b62c24407eeadc4e1232802741fa998f889e0",
+      "spans": [
+        {
+          "start": 17468,
+          "end": 17637
+        },
+        {
+          "start": 17939,
+          "end": 18049
+        }
+      ],
+      "text": "Table 2.\nDescriptive Statistics and Reliability of Study Scales\nScale\nMale (n = 164)\nFemale (n = 283)\nTotal (N = 447)\np\n-value\nCronbach’s α\nMean ± SD\nMean ± SD\nMean ± SD\n[...]\nDuke/UNC Functional Social Support Questionnaire (DUFSSQ-8)\n42.27 ± 8.56\n40.48 ± 8.46\n30.83 ± 7.03\n0.053\n0.909",
+      "gold_variables": [
+        {
+          "name": "social_support",
+          "aliases": [
+            "DUFSSQ-8",
+            "functional social support"
+          ],
+          "distribution": "normal",
+          "mean": 30.83,
+          "std": 7.03,
+          "units": "score",
+          "population": "total sample",
+          "variant_group": "social_support"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 42.27,
+          "reason": "male subgroup mean, not the total-sample value"
+        },
+        {
+          "value": 40.48,
+          "reason": "female subgroup mean, not the total-sample value"
+        },
+        {
+          "value": 0.053,
+          "reason": "p-value for the sex difference"
+        },
+        {
+          "value": 0.909,
+          "reason": "Cronbach's alpha reliability coefficient, not a distribution parameter"
+        },
+        {
+          "value": 164,
+          "reason": "column-header sample size"
+        },
+        {
+          "value": 283,
+          "reason": "column-header sample size"
+        },
+        {
+          "value": 447,
+          "reason": "column-header sample size"
+        }
+      ],
+      "notes": "Flagged in real_paper_manifest.csv as a source conflict: the reported total (30.83) lies outside both subgroup means (42.27, 40.48). Gold follows the adjudicated annotation, which retains the reported total."
+    },
+    {
+      "case_id": "conf_002",
+      "category": "conflicting_sections",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed example the abstract states that mean systolic blood pressure was 128.4 mmHg. Table 2, which reports the same cohort, gives a mean systolic blood pressure of 126.9 mmHg (SD 14.2). The table is the authoritative source.",
+      "gold_variables": [
+        {
+          "name": "systolic_blood_pressure",
+          "aliases": [
+            "SBP"
+          ],
+          "distribution": "normal",
+          "mean": 126.9,
+          "std": 14.2,
+          "units": "mmHg",
+          "population": null,
+          "variant_group": "systolic_blood_pressure"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 128.4,
+          "reason": "abstract value contradicted by the authoritative table"
+        }
+      ],
+      "notes": "Constructed. Tests whether the extractor honours a stated precedence rule."
+    },
+    {
+      "case_id": "conf_003",
+      "category": "conflicting_sections",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed example the results text reports a mean HbA1c of 7.4% (SD 1.1). The figure caption for the same panel reads: 'Mean HbA1c 7.8%'. The results text supersedes the caption, which was not updated after reanalysis.",
+      "gold_variables": [
+        {
+          "name": "hba1c",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 7.4,
+          "std": 1.1,
+          "units": "%",
+          "population": null,
+          "variant_group": "hba1c"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 7.8,
+          "reason": "stale figure-caption value superseded by the results text"
+        }
+      ],
+      "notes": "Constructed."
+    },
+    {
+      "case_id": "time_001",
+      "category": "repeated_timepoints",
+      "provenance": "real",
+      "source_id": "calerie_rct",
+      "source_sha256": "d4ed3ed5a772561e2f0f311eceb7d390e848d6d523c5a10151d2a5fce0309cf4",
+      "spans": [
+        {
+          "start": 8228,
+          "end": 8340
+        }
+      ],
+      "text": "compared to AL, CR significantly reduced the number \nof WBC at month 12 (p=0.03), and 24 (p=0.002) \n(Figure 2A).",
+      "gold_variables": [],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 12,
+          "reason": "a timepoint in months, not a measured value"
+        },
+        {
+          "value": 24,
+          "reason": "a timepoint in months, not a measured value"
+        },
+        {
+          "value": 0.03,
+          "reason": "p-value"
+        },
+        {
+          "value": 0.002,
+          "reason": "p-value"
+        }
+      ],
+      "notes": "Abstention case: a significant effect is described but no mean or SD is given. Any variable emitted here is fabricated or a context error."
+    },
+    {
+      "case_id": "time_002",
+      "category": "repeated_timepoints",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed cohort, fasting glucose was 5.4 mmol/L (SD 0.6) at baseline, 5.1 mmol/L (SD 0.5) at 6 months, and 5.2 mmol/L (SD 0.7) at 12 months. Follow-up was complete for 340 participants.",
+      "gold_variables": [
+        {
+          "name": "fasting_glucose",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 5.4,
+          "std": 0.6,
+          "units": "mmol/L",
+          "population": "baseline",
+          "variant_group": "fasting_glucose"
+        },
+        {
+          "name": "fasting_glucose",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 5.1,
+          "std": 0.5,
+          "units": "mmol/L",
+          "population": "6 months",
+          "variant_group": "fasting_glucose"
+        },
+        {
+          "name": "fasting_glucose",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 5.2,
+          "std": 0.7,
+          "units": "mmol/L",
+          "population": "12 months",
+          "variant_group": "fasting_glucose"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 6,
+          "reason": "a timepoint in months"
+        },
+        {
+          "value": 12,
+          "reason": "a timepoint in months"
+        },
+        {
+          "value": 340,
+          "reason": "sample size"
+        }
+      ],
+      "notes": "Constructed. The same variable three times; timepoint labels are numeric."
+    },
+    {
+      "case_id": "time_003",
+      "category": "repeated_timepoints",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed study, mean step count was 6,820 (SD 2,140) in week 1 and 7,050 (SD 2,265) in week 8. Change from week 1 to week 8 was 230 steps (SD 410).",
+      "gold_variables": [
+        {
+          "name": "step_count",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 6820.0,
+          "std": 2140.0,
+          "units": "steps/day",
+          "population": "week 1",
+          "variant_group": "step_count"
+        },
+        {
+          "name": "step_count",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 7050.0,
+          "std": 2265.0,
+          "units": "steps/day",
+          "population": "week 8",
+          "variant_group": "step_count"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 230,
+          "reason": "a change score, not a level; extracting it as the variable's mean is wrong"
+        },
+        {
+          "value": 1,
+          "reason": "a week label"
+        },
+        {
+          "value": 8,
+          "reason": "a week label"
+        }
+      ],
+      "notes": "Constructed. Tests level-vs-change confusion."
+    },
+    {
+      "case_id": "unit_001",
+      "category": "units_mismatch",
+      "provenance": "real",
+      "source_id": "cdc_nhanes_rural_urban",
+      "source_sha256": "fa3fc09a7629dc99c9e2c2f73e2f207a6239e08ebbd518a98eb1d9ab309fe97f",
+      "spans": [
+        {
+          "start": 1846,
+          "end": 1964
+        }
+      ],
+      "text": "Rural residents reported more total physical activity than urban residents (438.3 ± 35.3min/wk vs 371.2 ± 12.5 min/wk)",
+      "gold_variables": [
+        {
+          "name": "reported_total_activity",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 438.3,
+          "std": 35.3,
+          "units": "min/week",
+          "population": "rural",
+          "variant_group": "reported_total_activity"
+        },
+        {
+          "name": "reported_total_activity",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 371.2,
+          "std": 12.5,
+          "units": "min/week",
+          "population": "urban",
+          "variant_group": "reported_total_activity"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [],
+      "notes": "Note the missing space in '35.3min/wk' in the source — a tokenisation trap."
+    },
+    {
+      "case_id": "unit_002",
+      "category": "units_mismatch",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed example, total cholesterol averaged 5.2 mmol/L (SD 0.9), which corresponds to 201 mg/dL (SD 34.8). Report the value in mmol/L, the unit used throughout the paper.",
+      "gold_variables": [
+        {
+          "name": "total_cholesterol",
+          "aliases": [
+            "cholesterol"
+          ],
+          "distribution": "normal",
+          "mean": 5.2,
+          "std": 0.9,
+          "units": "mmol/L",
+          "population": null,
+          "variant_group": "total_cholesterol"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 201,
+          "reason": "the same quantity restated in mg/dL; extracting both double-counts"
+        },
+        {
+          "value": 34.8,
+          "reason": "SD in the secondary unit"
+        }
+      ],
+      "notes": "Constructed. One variable, two unit systems."
+    },
+    {
+      "case_id": "unit_003",
+      "category": "units_mismatch",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed example, participants slept a mean of 7.1 hours per night (SD 1.2), equivalent to 426 minutes (SD 72). Weekly exercise averaged 3.5 hours (SD 2.1).",
+      "gold_variables": [
+        {
+          "name": "sleep_duration",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 7.1,
+          "std": 1.2,
+          "units": "hours/night",
+          "population": null,
+          "variant_group": "sleep_duration"
+        },
+        {
+          "name": "weekly_exercise",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 3.5,
+          "std": 2.1,
+          "units": "hours/week",
+          "population": null,
+          "variant_group": "weekly_exercise"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 426,
+          "reason": "sleep duration restated in minutes"
+        },
+        {
+          "value": 72,
+          "reason": "sleep SD restated in minutes"
+        }
+      ],
+      "notes": "Constructed."
+    },
+    {
+      "case_id": "ci_001",
+      "category": "confidence_intervals",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed analysis, mean birth weight was 3,410 g (SD 480; 95% CI, 3,368 to 3,452). The confidence interval describes the precision of the mean, not the spread of the population.",
+      "gold_variables": [
+        {
+          "name": "birth_weight",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 3410.0,
+          "std": 480.0,
+          "units": "g",
+          "population": null,
+          "variant_group": "birth_weight"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 3368,
+          "reason": "lower confidence bound for the mean, not a population minimum"
+        },
+        {
+          "value": 3452,
+          "reason": "upper confidence bound for the mean, not a population maximum"
+        },
+        {
+          "value": 95,
+          "reason": "the confidence level"
+        }
+      ],
+      "notes": "Constructed. CI bounds must not become min/max."
+    },
+    {
+      "case_id": "ci_002",
+      "category": "confidence_intervals",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed study the adjusted odds ratio was 1.42 (95% CI 1.08-1.87). Mean waist circumference was 94.6 cm (SD 12.3).",
+      "gold_variables": [
+        {
+          "name": "waist_circumference",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 94.6,
+          "std": 12.3,
+          "units": "cm",
+          "population": null,
+          "variant_group": "waist_circumference"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 1.42,
+          "reason": "an odds ratio, not a distribution mean"
+        },
+        {
+          "value": 1.08,
+          "reason": "confidence bound on an odds ratio"
+        },
+        {
+          "value": 1.87,
+          "reason": "confidence bound on an odds ratio"
+        }
+      ],
+      "notes": "Constructed. An effect estimate sits next to a genuine mean/SD."
+    },
+    {
+      "case_id": "ci_003",
+      "category": "confidence_intervals",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed sample, the correlation between grip strength and lean mass was r = 0.58 (95% CI 0.49 to 0.66, p < 0.001). Grip strength averaged 32.7 kg (SD 8.4).",
+      "gold_variables": [
+        {
+          "name": "grip_strength",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 32.7,
+          "std": 8.4,
+          "units": "kg",
+          "population": null,
+          "variant_group": "grip_strength"
+        }
+      ],
+      "gold_correlations": [
+        {
+          "var1": "grip_strength",
+          "var2": "lean_mass",
+          "correlation": 0.58,
+          "variant_group": "grip_strength__lean_mass"
+        }
+      ],
+      "must_not_extract": [
+        {
+          "value": 0.49,
+          "reason": "confidence bound on the correlation, not the point estimate"
+        },
+        {
+          "value": 0.66,
+          "reason": "confidence bound on the correlation, not the point estimate"
+        },
+        {
+          "value": 0.001,
+          "reason": "p-value"
+        }
+      ],
+      "notes": "Constructed. A genuine correlation flanked by bounds that resemble it."
+    },
+    {
+      "case_id": "foot_001",
+      "category": "table_footnotes",
+      "provenance": "real",
+      "source_id": "cdc_nhanes_rural_urban",
+      "source_sha256": "fa3fc09a7629dc99c9e2c2f73e2f207a6239e08ebbd518a98eb1d9ab309fe97f",
+      "spans": [
+        {
+          "start": 31849,
+          "end": 32045
+        },
+        {
+          "start": 32769,
+          "end": 32952
+        }
+      ],
+      "text": "| Variables | Urban (n = 3,828) | All Rural (n = 1,228) | Nonmicropolitan Rural (n = 624) | Micropolitan Rural (n = 604) |\n|---|---|---|---|---|\n| Mean (SD) | Mean (SD) | Mean (SD) | Mean (SD) | |\n[...]\n| Household physical activity | 124.4 (8.8) | 201.6 (26.3)b | 236.5 (32.5)a | 168.2 (22.0)c |\n| Transportation physical activity | 40.5 (4.6) | 29.8 (4.9) | 35.2 (9.2) | 24.7 (4.7)b |",
+      "gold_variables": [
+        {
+          "name": "household_activity",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 124.4,
+          "std": 8.8,
+          "units": "min/week",
+          "population": "urban",
+          "variant_group": "household_activity"
+        },
+        {
+          "name": "household_activity",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 201.6,
+          "std": 26.3,
+          "units": "min/week",
+          "population": "all rural",
+          "variant_group": "household_activity"
+        },
+        {
+          "name": "transportation_activity",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 40.5,
+          "std": 4.6,
+          "units": "min/week",
+          "population": "urban",
+          "variant_group": "transportation_activity"
+        },
+        {
+          "name": "transportation_activity",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 29.8,
+          "std": 4.9,
+          "units": "min/week",
+          "population": "all rural",
+          "variant_group": "transportation_activity"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [],
+      "notes": "Values carry trailing significance markers (a/b/c) fused to the number, e.g. '201.6 (26.3)b'. The marker must not be absorbed into the value."
+    },
+    {
+      "case_id": "foot_002",
+      "category": "table_footnotes",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed table, mean serum sodium was 139.2 (3.1)*, where * denotes p < 0.05 versus control, and mean serum potassium was 4.1 (0.4)†, where † denotes measurements taken on 2 analysers.",
+      "gold_variables": [
+        {
+          "name": "serum_sodium",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 139.2,
+          "std": 3.1,
+          "units": "mmol/L",
+          "population": null,
+          "variant_group": "serum_sodium"
+        },
+        {
+          "name": "serum_potassium",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 4.1,
+          "std": 0.4,
+          "units": "mmol/L",
+          "population": null,
+          "variant_group": "serum_potassium"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 0.05,
+          "reason": "significance threshold in a footnote"
+        },
+        {
+          "value": 2,
+          "reason": "a count of analysers in a footnote"
+        }
+      ],
+      "notes": "Constructed. Footnote glosses introduce numbers that are not measurements."
+    },
+    {
+      "case_id": "foot_003",
+      "category": "table_footnotes",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed table, mean BMI was 27.3 (4.9)a and mean waist-to-hip ratio was 0.88 (0.07)b. Footnote a: adjusted for age. Footnote b: n = 812 because of 34 missing values.",
+      "gold_variables": [
+        {
+          "name": "bmi",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 27.3,
+          "std": 4.9,
+          "units": "kg/m2",
+          "population": null,
+          "variant_group": "bmi"
+        },
+        {
+          "name": "waist_to_hip_ratio",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 0.88,
+          "std": 0.07,
+          "units": null,
+          "population": null,
+          "variant_group": "waist_to_hip_ratio"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 812,
+          "reason": "footnote sample size"
+        },
+        {
+          "value": 34,
+          "reason": "footnote count of missing values"
+        }
+      ],
+      "notes": "Constructed."
+    },
+    {
+      "case_id": "sci_001",
+      "category": "scientific_notation",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed assay, mean analyte concentration was 1.2e-3 mol/L (SD 4.0e-4). The association reached p = 3.4e-8.",
+      "gold_variables": [
+        {
+          "name": "analyte_concentration",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 0.0012,
+          "std": 0.0004,
+          "units": "mol/L",
+          "population": null,
+          "variant_group": "analyte_concentration"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 3.4e-08,
+          "reason": "p-value in scientific notation"
+        }
+      ],
+      "notes": "Constructed. Values must be parsed from exponential notation, not truncated to the mantissa."
+    },
+    {
+      "case_id": "sci_002",
+      "category": "scientific_notation",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed experiment, mean particle count was 6.02 x 10^5 per mL (SD 1.15 x 10^5), and the detection limit was 1 x 10^2 per mL.",
+      "gold_variables": [
+        {
+          "name": "particle_count",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 602000.0,
+          "std": 115000.0,
+          "units": "per mL",
+          "population": null,
+          "variant_group": "particle_count"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 100,
+          "reason": "instrument detection limit, not a measured variable"
+        }
+      ],
+      "notes": "Constructed. Uses 'x 10^n' rather than 'e' notation."
+    },
+    {
+      "case_id": "sci_003",
+      "category": "scientific_notation",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed dataset, mean gene expression was 2.5E+04 counts (SD 8.0E+03) and the false discovery rate was held at 5.0E-02.",
+      "gold_variables": [
+        {
+          "name": "gene_expression",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 25000.0,
+          "std": 8000.0,
+          "units": "counts",
+          "population": null,
+          "variant_group": "gene_expression"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 0.05,
+          "reason": "false discovery rate threshold"
+        }
+      ],
+      "notes": "Constructed. Capital-E notation with explicit positive exponent."
+    },
+    {
+      "case_id": "irrel_001",
+      "category": "irrelevant_numbers",
+      "provenance": "real",
+      "source_id": "student_mental_health",
+      "source_sha256": "0c906477097dc57967a3ad930e1b62c24407eeadc4e1232802741fa998f889e0",
+      "spans": [
+        {
+          "start": 17468,
+          "end": 17637
+        },
+        {
+          "start": 18050,
+          "end": 18323
+        }
+      ],
+      "text": "Table 2.\nDescriptive Statistics and Reliability of Study Scales\nScale\nMale (n = 164)\nFemale (n = 283)\nTotal (N = 447)\np\n-value\nCronbach’s α\nMean ± SD\nMean ± SD\nMean ± SD\n[...]\nUCLA 3-Item Loneliness Scale (0–6)\n4.92 ± 1.78\n4.84 ± 1.58\n4.89 ± 1.66\n0.643\n0.836\nPatient Health Questionnaire (PHQ-9; 0–27)\n6.56 ± 6.33\n6.30 ± 5.69\n6.39 ± 5.97\n0.658\n0.900\nBrief Pittsburgh Sleep Quality Index (B-PSQI; 0–15)\n2.94 ± 2.96\n2.90 ± 2.85\n2.81 ± 2.83\n0.885\n0.815",
+      "gold_variables": [
+        {
+          "name": "loneliness",
+          "aliases": [
+            "UCLA-3",
+            "UCLA 3-Item Loneliness Scale"
+          ],
+          "distribution": "normal",
+          "mean": 4.89,
+          "std": 1.66,
+          "units": "score",
+          "population": "total sample",
+          "variant_group": "loneliness"
+        },
+        {
+          "name": "loneliness",
+          "aliases": [
+            "UCLA-3"
+          ],
+          "distribution": "normal",
+          "mean": 4.92,
+          "std": 1.78,
+          "units": "score",
+          "population": "male",
+          "variant_group": "loneliness"
+        },
+        {
+          "name": "loneliness",
+          "aliases": [
+            "UCLA-3"
+          ],
+          "distribution": "normal",
+          "mean": 4.84,
+          "std": 1.58,
+          "units": "score",
+          "population": "female",
+          "variant_group": "loneliness"
+        },
+        {
+          "name": "depression",
+          "aliases": [
+            "PHQ-9"
+          ],
+          "distribution": "normal",
+          "mean": 6.39,
+          "std": 5.97,
+          "units": "score",
+          "population": "total sample",
+          "variant_group": "depression"
+        },
+        {
+          "name": "depression",
+          "aliases": [
+            "PHQ-9"
+          ],
+          "distribution": "normal",
+          "mean": 6.56,
+          "std": 6.33,
+          "units": "score",
+          "population": "male",
+          "variant_group": "depression"
+        },
+        {
+          "name": "depression",
+          "aliases": [
+            "PHQ-9"
+          ],
+          "distribution": "normal",
+          "mean": 6.3,
+          "std": 5.69,
+          "units": "score",
+          "population": "female",
+          "variant_group": "depression"
+        },
+        {
+          "name": "sleep_quality",
+          "aliases": [
+            "B-PSQI"
+          ],
+          "distribution": "normal",
+          "mean": 2.81,
+          "std": 2.83,
+          "units": "score",
+          "population": "total sample",
+          "variant_group": "sleep_quality"
+        },
+        {
+          "name": "sleep_quality",
+          "aliases": [
+            "B-PSQI"
+          ],
+          "distribution": "normal",
+          "mean": 2.94,
+          "std": 2.96,
+          "units": "score",
+          "population": "male",
+          "variant_group": "sleep_quality"
+        },
+        {
+          "name": "sleep_quality",
+          "aliases": [
+            "B-PSQI"
+          ],
+          "distribution": "normal",
+          "mean": 2.9,
+          "std": 2.85,
+          "units": "score",
+          "population": "female",
+          "variant_group": "sleep_quality"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 0.643,
+          "reason": "p-value for the sex difference"
+        },
+        {
+          "value": 0.658,
+          "reason": "p-value for the sex difference"
+        },
+        {
+          "value": 0.885,
+          "reason": "p-value for the sex difference"
+        },
+        {
+          "value": 0.836,
+          "reason": "Cronbach's alpha"
+        },
+        {
+          "value": 0.9,
+          "reason": "Cronbach's alpha"
+        },
+        {
+          "value": 0.815,
+          "reason": "Cronbach's alpha"
+        },
+        {
+          "value": 27,
+          "reason": "upper bound of the PHQ-9 instrument range"
+        },
+        {
+          "value": 15,
+          "reason": "upper bound of the B-PSQI instrument range"
+        },
+        {
+          "value": 164,
+          "reason": "column-header sample size"
+        },
+        {
+          "value": 283,
+          "reason": "column-header sample size"
+        },
+        {
+          "value": 447,
+          "reason": "column-header sample size"
+        }
+      ],
+      "notes": "Instrument ranges, p-values and reliability coefficients sit in the same rows as the gold means and SDs."
+    },
+    {
+      "case_id": "irrel_002",
+      "category": "irrelevant_numbers",
+      "provenance": "real",
+      "source_id": "student_mental_health",
+      "source_sha256": "0c906477097dc57967a3ad930e1b62c24407eeadc4e1232802741fa998f889e0",
+      "spans": [
+        {
+          "start": 18396,
+          "end": 18751
+        }
+      ],
+      "text": "Smartphone addiction showed a strong positive correlation with internet addiction (r = 0.64, p < 0.05) and moderate positive correlations with loneliness (r = 0.28), depression (r = 0.23), and poorer sleep quality (r = 0.17). Internet addiction was positively correlated with loneliness (r = 0.31), depression (r = 0.40), and poor sleep quality (r = 0.31)",
+      "gold_variables": [],
+      "gold_correlations": [
+        {
+          "var1": "smartphone_addiction",
+          "var2": "internet_addiction",
+          "correlation": 0.64,
+          "variant_group": "smartphone_addiction__internet_addiction"
+        },
+        {
+          "var1": "smartphone_addiction",
+          "var2": "loneliness",
+          "correlation": 0.28,
+          "variant_group": "smartphone_addiction__loneliness"
+        },
+        {
+          "var1": "smartphone_addiction",
+          "var2": "depression",
+          "correlation": 0.23,
+          "variant_group": "smartphone_addiction__depression"
+        },
+        {
+          "var1": "smartphone_addiction",
+          "var2": "sleep_quality",
+          "correlation": 0.17,
+          "variant_group": "smartphone_addiction__sleep_quality"
+        },
+        {
+          "var1": "internet_addiction",
+          "var2": "loneliness",
+          "correlation": 0.31,
+          "variant_group": "internet_addiction__loneliness"
+        },
+        {
+          "var1": "internet_addiction",
+          "var2": "depression",
+          "correlation": 0.4,
+          "variant_group": "internet_addiction__depression"
+        }
+      ],
+      "must_not_extract": [
+        {
+          "value": 0.05,
+          "reason": "significance threshold from 'p < 0.05', not a correlation"
+        }
+      ],
+      "notes": "A correlation run where a p-threshold is numerically indistinguishable from a weak correlation."
+    },
+    {
+      "case_id": "irrel_003",
+      "category": "irrelevant_numbers",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed report (doi:10.1000/182, published 2019, pages 45-58, grant R01-HL120987), the 1,204 enrolled participants had a mean age of 52.6 years (SD 11.4). Response rate was 78%.",
+      "gold_variables": [
+        {
+          "name": "age",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 52.6,
+          "std": 11.4,
+          "units": "years",
+          "population": null,
+          "variant_group": "age"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 2019,
+          "reason": "publication year"
+        },
+        {
+          "value": 45,
+          "reason": "page number"
+        },
+        {
+          "value": 58,
+          "reason": "page number"
+        },
+        {
+          "value": 1204,
+          "reason": "sample size"
+        },
+        {
+          "value": 78,
+          "reason": "response rate percentage, not a distribution parameter"
+        },
+        {
+          "value": 182,
+          "reason": "DOI fragment"
+        }
+      ],
+      "notes": "Constructed. Bibliographic and administrative numbers crowd a single gold mean/SD."
+    },
+    {
+      "case_id": "sdse_001",
+      "category": "sd_vs_se",
+      "provenance": "real",
+      "source_id": "cdc_nhanes_rural_urban",
+      "source_sha256": "fa3fc09a7629dc99c9e2c2f73e2f207a6239e08ebbd518a98eb1d9ab309fe97f",
+      "spans": [
+        {
+          "start": 31849,
+          "end": 32045
+        },
+        {
+          "start": 33010,
+          "end": 33075
+        }
+      ],
+      "text": "| Variables | Urban (n = 3,828) | All Rural (n = 1,228) | Nonmicropolitan Rural (n = 624) | Micropolitan Rural (n = 604) |\n|---|---|---|---|---|\n| Mean (SD) | Mean (SD) | Mean (SD) | Mean (SD) | |\n[...]\n| Age, y | 43.4 (0.4) | 46.4 (0.8)a | 46.6 (0.8)a | 46.2 (1.1)b |",
+      "gold_variables": [
+        {
+          "name": "age",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 43.4,
+          "std": 0.4,
+          "units": "years",
+          "population": "urban",
+          "variant_group": "age"
+        },
+        {
+          "name": "age",
+          "aliases": [],
+          "distribution": "normal",
+          "mean": 46.4,
+          "std": 0.8,
+          "units": "years",
+          "population": "all rural",
+          "variant_group": "age"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [],
+      "notes": "The source labels the parenthesised value as SD, but 0.4 years for a population aged 20-75 is implausibly small and is almost certainly a standard error. Gold follows the adjudicated annotation (verbatim SD) so extraction is scored against what the source says, not against a reinterpretation. Flagged in real_paper_ground_truth.csv (cdc_006)."
+    },
+    {
+      "case_id": "sdse_002",
+      "category": "sd_vs_se",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed sample of 400 adults, mean systolic blood pressure was 131.5 mmHg (SEM 0.9). The corresponding standard deviation is 18.0 mmHg.",
+      "gold_variables": [
+        {
+          "name": "systolic_blood_pressure",
+          "aliases": [
+            "SBP"
+          ],
+          "distribution": "normal",
+          "mean": 131.5,
+          "std": 18.0,
+          "units": "mmHg",
+          "population": null,
+          "variant_group": "systolic_blood_pressure"
+        }
+      ],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 0.9,
+          "reason": "standard error of the mean, not the standard deviation"
+        },
+        {
+          "value": 400,
+          "reason": "sample size"
+        }
+      ],
+      "notes": "Constructed. Both SEM and SD are present; only the SD is the distribution parameter."
+    },
+    {
+      "case_id": "sdse_003",
+      "category": "sd_vs_se",
+      "provenance": "constructed",
+      "source_id": null,
+      "source_sha256": null,
+      "spans": [],
+      "text": "In this constructed cohort, mean forced vital capacity was 3.86 L (standard error 0.04). No standard deviation is reported.",
+      "gold_variables": [],
+      "gold_correlations": [],
+      "must_not_extract": [
+        {
+          "value": 0.04,
+          "reason": "standard error; the standard deviation is not recoverable without n"
+        }
+      ],
+      "notes": "Constructed abstention case: a mean is present but the spread parameter the schema needs is not, and the SE must not be substituted for it."
+    }
+  ]
+}

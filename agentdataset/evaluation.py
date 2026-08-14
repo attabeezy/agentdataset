@@ -30,6 +30,18 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def sha256_file_normalized(path: Path) -> str:
+    """sha256 of `path` with CRLF line endings normalized to LF.
+
+    Raw byte hashes of text files are not portable: git checks the same blob out
+    with CRLF on Windows and LF on Linux, so a hash recorded on one platform can
+    never match on the other. Use this for integrity checks that must hold across
+    machines (frozen result baselines); use `sha256_file` for genuinely binary
+    artifacts such as the dependency lock.
+    """
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
 def collect_provenance(command: str, seeds: Sequence[int] = ()) -> dict:
     """Collect safe, non-secret metadata for an experiment run."""
     def _git(*args: str) -> str:

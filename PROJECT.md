@@ -440,21 +440,153 @@ This is the reviewer's most important request and should be completed before opt
 
 ### 9.6 P1 — Extraction robustness and prompt ablations
 
-- [ ] **Build a messy/ambiguous extraction challenge set.**
+- [x] **Build a messy/ambiguous extraction challenge set.**
   - Include negated findings, multiple populations, conflicting values across sections, repeated variables at different time points, units, confidence intervals, table footnotes, scientific notation, and irrelevant nearby numbers.
   - Prefer real excerpts that can be legally quoted in short form; supplement with clearly labeled constructed examples.
   - Annotate expected output and “should not extract” values.
   - Keep challenge cases separate from development examples to reduce overfitting.
   - **Deliverables:** challenge-set fixture plus annotation metadata under `analysis/` or `tests/fixtures/`.
   - **Done when:** the benchmark distinguishes correct extraction, abstention, and context errors.
+  - **Done:** `analysis/extraction_challenge_set.json` — 30 cases, three per taxonomy
+    category, 11 real and 19 constructed. Real excerpts are *generated*, not typed:
+    `analysis/build_extraction_challenge_set.py` declares anchor pairs and slices the
+    cached sources verbatim, recording character offsets and the source sha256, so the
+    fixture cannot drift from the papers. Constructed cases all open with "In this
+    constructed …" and are never presented as real literature (enforced by test).
+  - Gold values reuse the dual-pass adjudicated `analysis/real_paper_ground_truth.csv`
+    rather than being re-annotated. Annotation rules, the scoring contract, and the
+    known limitations are in `analysis/EXTRACTION_CHALLENGE_PROTOCOL.md`.
+  - Abstention is a first-class outcome: `benchmark._score_challenge_case` gives
+    precision 1.0 for emitting nothing and recall 1.0 on a gold-empty case, so a case
+    whose correct answer is silence scores F1 = 1.0 and is penalised only for speaking.
+    Three cases (`neg_001`, `time_001`, `sdse_003`) have silence as the correct answer.
 
-- [ ] **Compare LLM, regex, and prompt styles on the same challenge set.**
+- [x] **Compare LLM, regex, and prompt styles on the same challenge set.**
   - Compare the Caveman Protocol with the natural-language prompt using identical model, temperature, documents, and repetitions.
   - Measure accuracy, precision/recall/F1, malformed-output rate, hallucination rate, input/output tokens, latency, and cost.
   - Use multiple LLM repetitions to expose nondeterminism.
   - Test the regex fallback separately rather than treating fallback outputs as LLM results.
   - **Likely file:** extend `run_ablation_extraction_method()` in `benchmark.py`.
   - **Done when:** the paper can state whether the 21.9% prompt-token reduction changes extraction quality.
+  - **Done:** `benchmark.run_extraction_challenge()` (dispatched from
+    `run_ablation_extraction_method()` when a challenge set is supplied, so the legacy
+    synthetic-text ablation and `results/ablation_extraction_method.csv` are unchanged),
+    driven by `analysis/extraction_ablation.py`. Three arms × 3 OpenRouter-routed models
+    × 5 repetitions; regex runs once and is reported separately.
+  - **Prompt-parity correction.** `_VERBOSE_PROMPT` omitted the `categorical`
+    distribution and the `categories` field, so the 21.9% figure was measured against a
+    baseline that requested strictly less than `CAVEMAN_PROMPT` — a strawman that
+    *understated* the saving. Against a schema-matched baseline the reduction is
+    **38.6%** (308 → 189 tokens). `test_prompt_schema_parity` now blocks the two prompts
+    from diverging again.
+  - Failures are recorded (`api_error=True`), not dropped, so they cannot bias the rates
+    downward. `response_format=json_object` is kept at its production setting, so the
+    malformed rate is schema-level only — stated as a limitation. Retries are disabled so
+    nondeterminism is visible.
+  - **Answer: the compression is not free.** Over 930 extractions (30 cases × 2 prompts ×
+    3 models × 5 reps, $2.17, zero API errors), the Caveman prompt reaches F1 .710
+    [.657,.760] against .778 [.729,.825] for the schema-matched natural-language prompt —
+    a paired deficit of −.069 (Wilcoxon p=.0001, n=90), in the same direction on all three
+    models. Recall is near-ceiling for both (.960 vs .989); the loss is precision
+    (.639 vs .720), driven by hallucination rising from .098 to .154 (paired p=.0088).
+    Meanwhile the 30.0% prompt-token saving yields only a 3.5% cost saving, because
+    completion tokens dominate. Recommendation: use the natural-language prompt for
+    extraction; the Caveman Protocol's value is schema discipline, not token count.
+  - Regex reaches F1 .156 — its patterns need literal "mean … std" phrasing and almost
+    never fire on real tables. Its precision of 1.000 is an artifact of near-total silence,
+    which also gives it the best abstention (3/3 silence cases correct, vs 11% for
+    natural-language and 0% for Caveman). Neither LLM arm reliably declines to answer.
+  - Real excerpts are much harder than constructed ones (F1 .550 vs .803, hallucination
+    .331 vs .052 for the Caveman arm) — direct evidence that synthetic evaluation text
+    overstates extraction quality. By category, table footnotes (.911) and scientific
+    notation (.852) are solved; negated findings (.463) and repeated timepoints (.575) are
+    not, and the failure is judgement, not parsing.
+  - **Acted on: production switched to the natural-language prompt.**
+    `agentdataset/core/extractor.py` now defines `NATURAL_LANGUAGE_PROMPT` and
+    `EXTRACTION_PROMPT = NATURAL_LANGUAGE_PROMPT`; `_extract_with_llm` defaults to it.
+    `CAVEMAN_PROMPT` is retained (the paper documents it, the ablation still measures
+    it) and marked superseded. `benchmark._VERBOSE_PROMPT` is now an alias of the
+    shared constant so the token-savings comparison cannot silently drift, and
+    `_prompt_for_arm` names both texts explicitly so the ablation stays reproducible
+    regardless of which is default. Current cost/latency under the shipped prompt is in
+    `results/extraction_cost_latency.csv`: Google $0.0006/2.15 s, OpenAI $0.0023/2.00 s,
+    Anthropic $0.0042/3.95 s.
+  - **Frozen-baseline invariant restored and now enforced.** `baseline_manifest.json`
+    states that new experiments "must not overwrite" the six pre-revision files, but
+    nothing checked it, and this revision regenerated `cost_latency.csv` and
+    `caveman_token_savings.csv` in place, destroying two historical baselines. Both are
+    restored to their manifest hashes; `run_cost_latency_analysis()` now writes
+    `extraction_cost_latency.csv` and `extraction_prompt_token_savings.csv` instead; and
+    `tests/test_baseline_manifest.py` verifies all six hashes and asserts the producer
+    no longer targets those filenames.
+  - Paper blocks staged in `analysis/extraction_ablation_paper_snippets.tex`.
+
+- [x] **Follow-up from the prompt switch — regenerate prompt-dependent artifacts.**
+  - Regenerated with `analysis/real_paper_eval.py --mode cached`, which reuses the
+    cached source text so the papers cannot shift underneath the comparison and only
+    the prompt changes. `p0_utility_*` and `adult_calibration_*` are unaffected — they
+    compute parameters from data frames, not from LLM extraction. Discovery is
+    untouched (it uses `llm_call`, which has no system prompt).
+  - **Integrity check passed:** the `gold` condition is bit-identical across all 18
+    summary metrics, confirming the seeded synthesis is deterministic and that only
+    extraction changed.
+  - **The P0 evaluation independently replicates the §9.6 finding.** Real-paper
+    extraction F1 rose .247 → .308 and precision .167 → .226, with recall unchanged at
+    .480 — the same precision-only signature the challenge set showed
+    (.639 → .720 precision, .960 → .989 recall). The mechanism is visible in the item
+    counts: false positives roughly halved (cdc 27 → 12, calerie 21 → 17) while true
+    positives were identical (2, 0, 10). The natural-language prompt wins by inventing
+    less, not by finding more. Two independent evaluations, same conclusion.
+  - Absolute numbers stay poor (F1 .308, unsupported/out-of-scope .801), consistent
+    with the challenge set's real-vs-constructed gap (F1 .550 vs .803). Real papers are
+    genuinely hard and the paper should not imply otherwise.
+  - **Downstream synthesis shifted, and not uniformly.** With roughly half as many
+    extracted variables, the `llm` condition synthesizes a smaller parameter set:
+    fidelity 97.6 → 95.8 (calerie) and 64.3 → 61.5 (cdc), cdc ks 11.3 → 4.4, calerie
+    correlation 96.7 → 91.1. These are not quality regressions in the extraction —
+    they measure how the synthesizer behaves on a different (smaller, more accurate)
+    parameter set.
+
+- [x] **Investigate new synthesizer fallback warnings on `calerie_rct` — did not reproduce.**
+  - `fallback_warning_count` was 0 → 3 for the `llm` condition on `calerie_rct` in the
+    first post-switch run. On an independent re-run it is **0.0 for all three sources**.
+  - So the warnings track the specific parameter set a given extraction happened to
+    produce — which varies run to run under LLM nondeterminism — not a structural
+    problem with parameter shape, as first suspected. Closed as transient rather than
+    left open on the strength of a single observation.
+  - Worth noting as a general lesson: a single run of an LLM-backed pipeline is not
+    enough to distinguish a systematic defect from sampling noise.
+
+- [x] **Regenerate §9.6 and P0 with clean provenance, and replicate.**
+  - **The regeneration was not needed for correctness.** An audit confirmed the fixture
+    sha256 still matched, both prompt texts were byte-identical across the move into
+    `extractor.py` (1286 and 624 chars), and `_score_challenge_case`, `_numbers_in_text`
+    and `run_extraction_challenge` had zero diff hunks since the sweep. `_prompt_for_arm`
+    pins both arms to fixed texts, so the ablation never depended on which prompt was
+    production.
+  - **It surfaced a real defect instead.** Every analysis entry point called
+    `collect_provenance()` *after* writing its CSVs, so `git_dirty: True` was structural —
+    the run's own outputs were in the tree by the time provenance was recorded, and no
+    run could ever report a clean checkout. Fixed in all four entry points; guarded by
+    `tests/test_baseline_manifest.py::test_provenance_is_captured_before_outputs_are_written`.
+    Both regenerated manifests now record `git_dirty: False` at a commit in history.
+  - **The ablation replicates.** Run 1 preserved as `extraction_challenge_raw_run1.csv`.
+    Caveman-minus-natural-language F1 gap: −.0686 (run 1) vs −.0629 (run 2), both
+    significant (Wilcoxon p=.0001, p=.0004). Pooled: caveman F1 .710 → .719, natural
+    .778 → .782; hallucination .154 → .154 and .098 → .094; recall near-ceiling in both.
+    The regex arm is bit-identical across runs (max |ΔF1| = 0.0), confirming the spread
+    is LLM-side. The fenced-JSON finding is exact: `fence_stripped` is 1.0 for all 255
+    successful Anthropic calls and 0.0 for all 600 OpenAI and Google calls.
+  - **P0 replicates.** Extraction F1 .247 (Caveman) → .308 (run 1) → .304 (run 2);
+    precision .167 → .226 → .222; recall flat at .480 in all three. Predicted items
+    fell 29 → 14 → 12 on cdc with true positives constant at 2. The `gold` condition is
+    bit-identical in both regenerations, confirming the seeded synthesis is deterministic.
+  - **One difference, reported not smoothed:** run 2 hit 45 `APIError` rows on Anthropic
+    (15% of its calls) where run 1 hit zero. Retries are disabled by design so provider
+    instability stays visible; the failures are recorded as rows, so they shrink the
+    paired sample to 85 rather than biasing the rates. Within-(case, model) F1 std
+    roughly doubled (.009 → .018 caveman, .007 → .012 natural), consistent with that.
+    Anthropic's usable-call rate was 85%.
 
 ### 9.7 P1 — Synthesis and optimization diagnostics
 
