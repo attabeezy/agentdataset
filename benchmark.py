@@ -18,7 +18,12 @@ from sklearn.preprocessing import LabelEncoder
 from ucimlrepo import fetch_ucirepo
 
 from agentdataset.core.orchestrator import Orchestrator
-from agentdataset.core.extractor import Extractor, CAVEMAN_PROMPT
+from agentdataset.core.extractor import (
+    Extractor,
+    CAVEMAN_PROMPT,
+    EXTRACTION_PROMPT,
+    NATURAL_LANGUAGE_PROMPT,
+)
 from agentdataset.core.synthesizer import Synthesizer
 from agentdataset.core.validator import Validator
 from agentdataset.models.schemas import Parameters, MetaParams, VariableParams, CorrelationParams
@@ -769,12 +774,16 @@ def load_challenge_set(
 
 
 def _prompt_for_arm(arm: str) -> Optional[str]:
-    """System prompt for an LLM arm. Resolved lazily because _VERBOSE_PROMPT is
-    defined further down the module."""
+    """System prompt for an LLM arm.
+
+    Both arms name a fixed text so the ablation stays reproducible regardless of
+    which one is currently the production default: `natural_language` is
+    NATURAL_LANGUAGE_PROMPT whether or not EXTRACTION_PROMPT points at it.
+    """
     if arm == "caveman":
         return CAVEMAN_PROMPT
     if arm == "natural_language":
-        return _VERBOSE_PROMPT
+        return NATURAL_LANGUAGE_PROMPT
     raise ValueError(f"Unknown LLM arm: {arm}")
 
 
@@ -1174,43 +1183,11 @@ _COST_LATENCY_PROVIDERS = [
     {"name": "Google", "model": "openrouter/google/gemini-2.5-flash", "key_env": "OPENROUTER_API_KEY"},
 ]
 
-# A deliberately verbose, "naturally written" version of extractor.CAVEMAN_PROMPT.
-# It serves two purposes: measuring the compressed prompt's real token savings, and
-# acting as the natural-language arm of the extraction prompt ablation.
-#
-# IMPORTANT: this prompt must request *exactly* the same schema and field set as
-# CAVEMAN_PROMPT — same distributions (including "categorical"), same "categories"
-# field. Only the prose style may differ. A verbose prompt that asks for less is a
-# strawman: it would inflate the measured token reduction and make any quality
-# comparison meaningless. tests/test_extraction_challenge.py enforces this parity.
-_VERBOSE_PROMPT = """
-You are an expert statistician with many years of experience analyzing research
-papers and extracting statistical information from them. Please carefully read
-through the following text and identify all of the statistical variables that
-are mentioned, along with their probability distributions (such as normal,
-uniform, gamma, or categorical), their means, and their standard deviations.
-Also, please identify any correlations that are described between pairs of
-variables, including the strength and direction (positive or negative) of each
-correlation.
-
-Please format your response as a JSON object that matches the following schema
-exactly:
-{
-  "variables": {
-    "<name>": {"distribution": "normal|uniform|gamma|categorical", "mean": 0.0, "std": 1.0, "min": null, "max": null, "categories": null}
-  },
-  "correlations": {
-    "<key>": {"var1": "<name>", "var2": "<name>", "correlation": 0.5, "direction": "positive|negative"}
-  }
-}
-
-The "categories" field should only be used when the distribution is
-"categorical". In that case it should be an object that maps each category
-label to its probability, for example {"yes": 0.3, "no": 0.7}.
-
-Please make sure to only output the JSON object itself and nothing else - no
-introductory text, no explanations, and no markdown code fences.
-"""
+# The natural-language prompt now lives with the extractor, because it *is* the
+# production prompt (switched from CAVEMAN_PROMPT on the strength of the §9.6
+# ablation). This alias keeps the benchmark's vocabulary — "verbose" is the
+# baseline against which the Caveman compression is measured.
+_VERBOSE_PROMPT = NATURAL_LANGUAGE_PROMPT
 
 _SAMPLE_SOURCE_TEXT = _ABLATION_DOMAINS and """
 We observed a heart rate distribution with mean 72 and std 8.
@@ -1236,7 +1213,9 @@ def run_cost_latency_analysis(n_repeats: int = 5):
                 response = completion(
                     model=p["model"],
                     messages=[
-                        {"role": "system", "content": CAVEMAN_PROMPT},
+                        # Measures the shipped pipeline, so it tracks whichever
+                        # prompt is in production rather than a fixed one.
+                        {"role": "system", "content": EXTRACTION_PROMPT},
                         {"role": "user", "content": f"Extract stats from this text:\n\n{_SAMPLE_SOURCE_TEXT}"},
                     ],
                     response_format={"type": "json_object"},

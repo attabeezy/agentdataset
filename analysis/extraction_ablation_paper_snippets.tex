@@ -12,14 +12,23 @@
 %            tokens (242~$\rightarrow$~189) on our extraction prompt."
 % Block 2 -> AuthorKit27/main.tex, new subsection in the ablation section, after the
 %            existing ablation reporting protocol paragraph.
+% Block 3 -> AuthorKit27/main.tex, replaces the body of Table~\ref{tab:cost}. The
+%            pipeline now ships the natural-language prompt, so the cost table must
+%            measure that prompt. Numbers from results/cost_latency.csv, 5 reps.
 % Optional -> AuthorKit27/main.tex, appendix, after \label{app:caveman}.
+%
+% NOTE: the Caveman Protocol is presented throughout the paper as a contribution.
+% Blocks 1-2 below retain it as a documented and measured design, but record that
+% the shipped pipeline now uses the natural-language prompt. Any remaining prose
+% that describes the Caveman Protocol as the production prompt needs revising to
+% match --- grep main.tex for "Caveman" before submitting.
 
 
 % ------------------------------------------- Block 1: corrected compression claim
 
 We separately measure the Caveman Protocol's prompt compression at a
 \textbf{38.6\%} reduction in system-prompt tokens (308~$\rightarrow$~189), or
-\textbf{30.0\%} of the prompt tokens actually billed on a challenge-set request
+$30.0\%$ of the prompt tokens actually billed on a challenge-set request
 ($404.6 \rightarrow 283.3$). An earlier version of this measurement reported
 $21.9\%$ against a natural-language baseline that omitted the categorical
 distribution and its \texttt{categories} field; that baseline requested strictly
@@ -28,7 +37,10 @@ The figures above use a baseline that requests an identical schema, differing on
 in prose style. Compression does not, however, translate into proportional
 savings: because completion tokens dominate this workload, the measured cost
 reduction is only $3.5\%$ ($\$0.0024$ vs.\ $\$0.0025$ per call, paired Wilcoxon
-$p=.0065$), and latency is unchanged ($2.57$\,s vs.\ $2.52$\,s).
+$p=.0065$), and latency is unchanged ($2.57$\,s vs.\ $2.52$\,s). Section~4.4
+shows that it also costs accuracy, and we therefore ship the natural-language
+prompt; the cost and latency reported in Table~\ref{tab:cost} are measured on
+that prompt.
 
 
 % --------------------------------- Block 2: extraction robustness ablation (body)
@@ -82,6 +94,12 @@ $11\%$ for the natural-language prompt and $0\%$ for the Caveman prompt. Neither
 LLM arm reliably declines to answer when a document supports no answer, which we
 regard as the most consequential remaining weakness of the extraction stage.
 
+On this evidence we changed the system: AgentDataset now issues the
+natural-language prompt for extraction. We retain the Caveman Protocol as a
+documented design and reproduce it in Appendix~\ref{app:caveman}, because the
+negative result is itself the contribution---prompt compression is widely assumed
+to be free when the schema is held fixed, and on messy source text it is not.
+
 Difficulty tracks provenance and category as one would hope. Real excerpts are
 markedly harder than constructed ones ($F_1$ $.550$ vs.\ $.803$ for the Caveman
 arm) and provoke six times the hallucination rate ($.331$ vs.\ $.052$), which is
@@ -90,6 +108,21 @@ extraction quality. By category, footnote-marked table cells ($.911$) and
 scientific notation ($.852$) are essentially solved, while negated findings
 ($.463$) and repeated timepoints ($.575$) are not: the failure is not parsing the
 number but deciding whether the document licenses asserting it.
+
+
+% --------------------------------------- Block 3: cost table, production prompt
+
+% Replaces the body of Table~\ref{tab:cost}. Re-measured with the natural-language
+% prompt now shipped (5 repetitions per provider, results/cost_latency.csv).
+% The accompanying prose claim "Gemini 2.5 Flash is both the cheapest and fastest;
+% Claude Sonnet 4.5 is the most expensive" still holds, but Gemini and GPT-4o are
+% now level on latency, so "fastest" should become "among the fastest".
+
+Provider  & Lat.\ (s) & Cost (\$) & Prompt & Compl. \\
+\midrule
+Google    & 1.95 & 0.0006 & 367 & 194 \\
+OpenAI    & 1.95 & 0.0023 & 363 & 140 \\
+Anthropic & 3.70 & 0.0042 & 379 & 202 \\
 
 
 % ------------------------------------------------ Optional: appendix + table

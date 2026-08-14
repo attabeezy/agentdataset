@@ -319,29 +319,42 @@ def test_prompt_schema_parity():
     A verbose baseline that asks for fewer fields is a strawman: it inflates the
     measured token reduction and invalidates the quality comparison.
     """
+    from agentdataset.core.extractor import NATURAL_LANGUAGE_PROMPT
     caveman = CAVEMAN_PROMPT.lower()
-    verbose = benchmark._VERBOSE_PROMPT.lower()
+    verbose = NATURAL_LANGUAGE_PROMPT.lower()
     for token in ["normal", "uniform", "gamma", "categorical", "categories",
                   "variables", "correlations", "var1", "var2", "correlation",
                   "direction", "positive", "negative", "mean", "std", "min", "max",
                   "distribution", "json"]:
         assert token in caveman, f"{token!r} missing from CAVEMAN_PROMPT"
-        assert token in verbose, f"{token!r} missing from _VERBOSE_PROMPT"
+        assert token in verbose, f"{token!r} missing from NATURAL_LANGUAGE_PROMPT"
 
 
 def test_caveman_prompt_is_shorter_than_the_natural_language_prompt():
-    assert len(CAVEMAN_PROMPT) < len(benchmark._VERBOSE_PROMPT)
+    from agentdataset.core.extractor import NATURAL_LANGUAGE_PROMPT
+    assert len(CAVEMAN_PROMPT) < len(NATURAL_LANGUAGE_PROMPT)
+    # The benchmark alias must keep pointing at the same text, or the recorded
+    # token-savings comparison silently changes meaning.
+    assert benchmark._VERBOSE_PROMPT is NATURAL_LANGUAGE_PROMPT
+
+
+def test_production_prompt_is_the_natural_language_one():
+    """Switched on the strength of the §9.6 ablation: the Caveman prompt scored
+    F1 .710 against .778 (paired p=.0001) for a 3.5% cost saving."""
+    from agentdataset.core.extractor import EXTRACTION_PROMPT, NATURAL_LANGUAGE_PROMPT
+    assert EXTRACTION_PROMPT is NATURAL_LANGUAGE_PROMPT
 
 
 @patch("agentdataset.core.extractor.completion")
-def test_extract_with_llm_defaults_to_the_caveman_prompt(mock_completion):
+def test_extract_with_llm_defaults_to_the_production_prompt(mock_completion):
+    from agentdataset.core.extractor import EXTRACTION_PROMPT
     response = MagicMock()
     response.choices[0].message.content = json.dumps({"variables": {}, "correlations": {}})
     mock_completion.return_value = response
 
     Extractor(model="m", api_key="sk-test")._extract_with_llm("text")
     messages = mock_completion.call_args.kwargs["messages"]
-    assert messages[0]["content"] == CAVEMAN_PROMPT
+    assert messages[0]["content"] == EXTRACTION_PROMPT
 
 
 @patch("agentdataset.core.extractor.completion")

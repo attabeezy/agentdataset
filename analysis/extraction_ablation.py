@@ -2,8 +2,9 @@
 
 Runs three arms over the same annotated challenge cases:
 
-  caveman           — the Caveman Protocol system prompt (production)
-  natural_language  — a verbose prompt requesting the identical schema
+  caveman           — the Caveman Protocol system prompt (compressed)
+  natural_language  — a verbose prompt requesting the identical schema; this is
+                      the production prompt as of the §9.6 ablation
   regex             — the regex fallback, run once and reported separately
 
 and reports accuracy, precision/recall/F1, malformed-output rate, hallucination

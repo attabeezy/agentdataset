@@ -10,7 +10,9 @@ by the corresponding function on every run:
 - `ablation_noise_pivot.csv` — `run_ablation_noise_pivot()`: fidelity score
   per iteration count / seed / source text.
 - `cost_latency.csv` — `run_cost_latency_analysis()`: per-call latency,
-  cost, and token usage per provider.
+  cost, and token usage per provider. Measures the *shipped* pipeline, so it
+  tracks `EXTRACTION_PROMPT`; regenerated when production switched from the
+  Caveman prompt to the natural-language prompt (see §9.6 below).
 - `caveman_token_savings.csv` — measured Caveman vs verbose prompt token
   counts per model. The verbose baseline was corrected in the P1 §9.6 work: it
   previously omitted the `categorical` distribution and the `categories` field,
@@ -85,6 +87,13 @@ cost reduction, because completion tokens dominate — and it costs quality. F1 
 natural-language prompt (paired Wilcoxon p=.0001, same direction on all three
 models). Recall is near-ceiling for both; the loss is precision, driven by
 hallucination rising from .098 to .154. Regex reaches F1 .156.
+
+**Acted on:** production now uses the natural-language prompt
+(`EXTRACTION_PROMPT` in `agentdataset/core/extractor.py`). `CAVEMAN_PROMPT` is
+retained and still measured by the ablation. Note that the extraction-backed
+artifacts here — `real_paper_*.csv`, `real_paper_pipeline_*.csv` — predate the
+switch and were produced with the Caveman prompt; see the follow-up item in
+PROJECT.md §9.6.
 
 A second finding is recorded in `fence_stripped`: Anthropic models via OpenRouter
 ignore `response_format=json_object` and wrap the object in a Markdown fence on

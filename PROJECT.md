@@ -501,7 +501,30 @@ This is the reviewer's most important request and should be completed before opt
     overstates extraction quality. By category, table footnotes (.911) and scientific
     notation (.852) are solved; negated findings (.463) and repeated timepoints (.575) are
     not, and the failure is judgement, not parsing.
+  - **Acted on: production switched to the natural-language prompt.**
+    `agentdataset/core/extractor.py` now defines `NATURAL_LANGUAGE_PROMPT` and
+    `EXTRACTION_PROMPT = NATURAL_LANGUAGE_PROMPT`; `_extract_with_llm` defaults to it.
+    `CAVEMAN_PROMPT` is retained (the paper documents it, the ablation still measures
+    it) and marked superseded. `benchmark._VERBOSE_PROMPT` is now an alias of the
+    shared constant so the token-savings comparison cannot silently drift, and
+    `_prompt_for_arm` names both texts explicitly so the ablation stays reproducible
+    regardless of which is default. `results/cost_latency.csv` was regenerated because
+    it measures the shipped pipeline: Google $0.0006/1.95 s, OpenAI $0.0023/1.95 s,
+    Anthropic $0.0042/3.70 s.
   - Paper blocks staged in `analysis/extraction_ablation_paper_snippets.tex`.
+
+- [ ] **Follow-up from the prompt switch — regenerate prompt-dependent artifacts.**
+  - Every extraction-backed artifact currently in `results/` was produced with the
+    Caveman prompt: `real_paper_*.csv` and `real_paper_pipeline_*.csv` (P0), and any
+    downstream synthesis that consumed those extracted parameters. They are not wrong,
+    but they no longer describe the shipped configuration.
+  - Not regenerated here deliberately: re-running `real_paper_eval.py` re-extracts and
+    then feeds a 30-seed synthesis study, so it can move P0 numbers the paper already
+    reports. That is a call to make deliberately, not a side effect of a prompt change.
+  - `p0_utility_*` and `adult_calibration_*` are unaffected — they compute parameters
+    from data frames, not from LLM extraction.
+  - **Done when:** either the artifacts are regenerated under the natural-language
+    prompt, or the paper states explicitly which prompt each result was measured with.
 
 ### 9.7 P1 — Synthesis and optimization diagnostics
 
