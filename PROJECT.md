@@ -508,23 +508,53 @@ This is the reviewer's most important request and should be completed before opt
     it) and marked superseded. `benchmark._VERBOSE_PROMPT` is now an alias of the
     shared constant so the token-savings comparison cannot silently drift, and
     `_prompt_for_arm` names both texts explicitly so the ablation stays reproducible
-    regardless of which is default. `results/cost_latency.csv` was regenerated because
-    it measures the shipped pipeline: Google $0.0006/1.95 s, OpenAI $0.0023/1.95 s,
-    Anthropic $0.0042/3.70 s.
+    regardless of which is default. Current cost/latency under the shipped prompt is in
+    `results/extraction_cost_latency.csv`: Google $0.0006/2.15 s, OpenAI $0.0023/2.00 s,
+    Anthropic $0.0042/3.95 s.
+  - **Frozen-baseline invariant restored and now enforced.** `baseline_manifest.json`
+    states that new experiments "must not overwrite" the six pre-revision files, but
+    nothing checked it, and this revision regenerated `cost_latency.csv` and
+    `caveman_token_savings.csv` in place, destroying two historical baselines. Both are
+    restored to their manifest hashes; `run_cost_latency_analysis()` now writes
+    `extraction_cost_latency.csv` and `extraction_prompt_token_savings.csv` instead; and
+    `tests/test_baseline_manifest.py` verifies all six hashes and asserts the producer
+    no longer targets those filenames.
   - Paper blocks staged in `analysis/extraction_ablation_paper_snippets.tex`.
 
-- [ ] **Follow-up from the prompt switch — regenerate prompt-dependent artifacts.**
-  - Every extraction-backed artifact currently in `results/` was produced with the
-    Caveman prompt: `real_paper_*.csv` and `real_paper_pipeline_*.csv` (P0), and any
-    downstream synthesis that consumed those extracted parameters. They are not wrong,
-    but they no longer describe the shipped configuration.
-  - Not regenerated here deliberately: re-running `real_paper_eval.py` re-extracts and
-    then feeds a 30-seed synthesis study, so it can move P0 numbers the paper already
-    reports. That is a call to make deliberately, not a side effect of a prompt change.
-  - `p0_utility_*` and `adult_calibration_*` are unaffected — they compute parameters
-    from data frames, not from LLM extraction.
-  - **Done when:** either the artifacts are regenerated under the natural-language
-    prompt, or the paper states explicitly which prompt each result was measured with.
+- [x] **Follow-up from the prompt switch — regenerate prompt-dependent artifacts.**
+  - Regenerated with `analysis/real_paper_eval.py --mode cached`, which reuses the
+    cached source text so the papers cannot shift underneath the comparison and only
+    the prompt changes. `p0_utility_*` and `adult_calibration_*` are unaffected — they
+    compute parameters from data frames, not from LLM extraction. Discovery is
+    untouched (it uses `llm_call`, which has no system prompt).
+  - **Integrity check passed:** the `gold` condition is bit-identical across all 18
+    summary metrics, confirming the seeded synthesis is deterministic and that only
+    extraction changed.
+  - **The P0 evaluation independently replicates the §9.6 finding.** Real-paper
+    extraction F1 rose .247 → .308 and precision .167 → .226, with recall unchanged at
+    .480 — the same precision-only signature the challenge set showed
+    (.639 → .720 precision, .960 → .989 recall). The mechanism is visible in the item
+    counts: false positives roughly halved (cdc 27 → 12, calerie 21 → 17) while true
+    positives were identical (2, 0, 10). The natural-language prompt wins by inventing
+    less, not by finding more. Two independent evaluations, same conclusion.
+  - Absolute numbers stay poor (F1 .308, unsupported/out-of-scope .801), consistent
+    with the challenge set's real-vs-constructed gap (F1 .550 vs .803). Real papers are
+    genuinely hard and the paper should not imply otherwise.
+  - **Downstream synthesis shifted, and not uniformly.** With roughly half as many
+    extracted variables, the `llm` condition synthesizes a smaller parameter set:
+    fidelity 97.6 → 95.8 (calerie) and 64.3 → 61.5 (cdc), cdc ks 11.3 → 4.4, calerie
+    correlation 96.7 → 91.1. These are not quality regressions in the extraction —
+    they measure how the synthesizer behaves on a different (smaller, more accurate)
+    parameter set.
+
+- [ ] **Investigate new synthesizer fallback warnings on `calerie_rct`.**
+  - `fallback_warning_count` went 0 → 3 for the `llm` condition on `calerie_rct` after
+    the prompt switch; the other two sources still report 0.
+  - The synthesizer is falling back on a parameter set that is *more* accurate than the
+    one it handled cleanly before, which suggests the fallback is triggered by
+    parameter shape (count, type, or a categorical) rather than by parameter quality.
+  - **Done when:** the trigger is identified and either fixed or documented as expected
+    for that parameter shape.
 
 ### 9.7 P1 — Synthesis and optimization diagnostics
 

@@ -100,6 +100,16 @@ documented design and reproduce it in Appendix~\ref{app:caveman}, because the
 negative result is itself the contribution---prompt compression is widely assumed
 to be free when the schema is held fixed, and on messy source text it is not.
 
+The real-paper evaluation of Section~\ref{sec:realpapers}, re-run under the new
+prompt on identical cached source text, replicates this independently: extraction
+$F_1$ rises from $.247$ to $.308$ and precision from $.167$ to $.226$, while
+recall is unchanged at $.480$. The item counts show the mechanism directly---false
+positives roughly halve ($27 \rightarrow 12$ and $21 \rightarrow 17$ on the two
+affected sources) while true positives are identical. The natural-language prompt
+wins by inventing less, not by finding more, which is the same signature the
+challenge set produces. Absolute performance on real papers remains low, and we
+do not claim otherwise.
+
 Difficulty tracks provenance and category as one would hope. Real excerpts are
 markedly harder than constructed ones ($F_1$ $.550$ vs.\ $.803$ for the Caveman
 arm) and provoke six times the hallucination rate ($.331$ vs.\ $.052$), which is
@@ -113,16 +123,21 @@ number but deciding whether the document licenses asserting it.
 % --------------------------------------- Block 3: cost table, production prompt
 
 % Replaces the body of Table~\ref{tab:cost}. Re-measured with the natural-language
-% prompt now shipped (5 repetitions per provider, results/cost_latency.csv).
+% prompt now shipped (5 repetitions per provider,
+% results/extraction_cost_latency.csv). The historical Caveman-prompt measurement
+% is preserved unmodified in results/cost_latency.csv.
+%
 % The accompanying prose claim "Gemini 2.5 Flash is both the cheapest and fastest;
-% Claude Sonnet 4.5 is the most expensive" still holds, but Gemini and GPT-4o are
-% now level on latency, so "fastest" should become "among the fastest".
+% Claude Sonnet 4.5 is the most expensive" needs one edit: Gemini remains cheapest
+% but GPT-4o is now marginally faster, so "fastest" should become "among the
+% fastest". Latency differences at this scale are within run-to-run variation
+% (std 0.53-0.56 s) and should not be over-read.
 
 Provider  & Lat.\ (s) & Cost (\$) & Prompt & Compl. \\
 \midrule
-Google    & 1.95 & 0.0006 & 367 & 194 \\
-OpenAI    & 1.95 & 0.0023 & 363 & 140 \\
-Anthropic & 3.70 & 0.0042 & 379 & 202 \\
+Google    & 2.15 & 0.0006 & 367 & 194 \\
+OpenAI    & 2.00 & 0.0023 & 363 & 140 \\
+Anthropic & 3.95 & 0.0042 & 379 & 201 \\
 
 
 % ------------------------------------------------ Optional: appendix + table

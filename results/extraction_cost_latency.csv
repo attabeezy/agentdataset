@@ -1,0 +1,16 @@
+provider,model,rep,latency_s,cost_usd,prompt_tokens,completion_tokens
+OpenAI,openrouter/openai/gpt-4o,0,2.184425100000226,0.0022975,363,139
+OpenAI,openrouter/openai/gpt-4o,1,1.5661234999988665,0.0023075000000000005,363,140
+OpenAI,openrouter/openai/gpt-4o,2,2.846537099998386,0.0023175,363,141
+OpenAI,openrouter/openai/gpt-4o,3,1.793070900001112,0.0023175,363,141
+OpenAI,openrouter/openai/gpt-4o,4,1.6188357999999425,0.0023075000000000005,363,140
+Anthropic,openrouter/anthropic/claude-sonnet-4.5,0,4.4096019999997225,0.004062,379,195
+Anthropic,openrouter/anthropic/claude-sonnet-4.5,1,4.13026710000122,0.004182,379,203
+Anthropic,openrouter/anthropic/claude-sonnet-4.5,2,3.4974548000009236,0.004182,379,203
+Anthropic,openrouter/anthropic/claude-sonnet-4.5,3,3.8832128000012744,0.004182,379,203
+Anthropic,openrouter/anthropic/claude-sonnet-4.5,4,3.8423796000006405,0.004182,379,203
+Google,openrouter/google/gemini-2.5-flash,0,2.2643421000011585,0.0005951,367,194
+Google,openrouter/google/gemini-2.5-flash,1,2.60762479999903,0.0005951,367,194
+Google,openrouter/google/gemini-2.5-flash,2,1.1866473999998561,0.0005951,367,194
+Google,openrouter/google/gemini-2.5-flash,3,2.2171567999994295,0.0005951,367,194
+Google,openrouter/google/gemini-2.5-flash,4,2.497503600001437,0.0005951,367,194

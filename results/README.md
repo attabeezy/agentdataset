@@ -9,18 +9,28 @@ by the corresponding function on every run:
   per-domain LLM vs regex extraction scores.
 - `ablation_noise_pivot.csv` — `run_ablation_noise_pivot()`: fidelity score
   per iteration count / seed / source text.
-- `cost_latency.csv` — `run_cost_latency_analysis()`: per-call latency,
-  cost, and token usage per provider. Measures the *shipped* pipeline, so it
-  tracks `EXTRACTION_PROMPT`; regenerated when production switched from the
-  Caveman prompt to the natural-language prompt (see §9.6 below).
-- `caveman_token_savings.csv` — measured Caveman vs verbose prompt token
-  counts per model. The verbose baseline was corrected in the P1 §9.6 work: it
-  previously omitted the `categorical` distribution and the `categories` field,
-  so it requested strictly less than `CAVEMAN_PROMPT` and *understated* the
-  saving. Against a schema-matched baseline the reduction is **38.6%**
-  (308 → 189 tokens), not the previously reported 21.9% (242 → 189).
+- `cost_latency.csv` — historical per-call latency, cost, and token usage per
+  provider, measured with the Caveman prompt. **Frozen** (see
+  `baseline_manifest.json`); `run_cost_latency_analysis()` now writes current
+  measurements to `extraction_cost_latency.csv` instead.
+- `caveman_token_savings.csv` — historical Caveman vs verbose prompt token
+  counts (21.9%, 242 → 189). **Frozen**; superseded but not overwritten.
+  That verbose baseline omitted the `categorical` distribution and the
+  `categories` field, so it requested strictly less than `CAVEMAN_PROMPT` and
+  *understated* the saving.
+- `extraction_prompt_token_savings.csv` — the corrected, schema-matched
+  measurement: **38.6%** (308 → 189 tokens).
   `tests/test_extraction_challenge.py::test_prompt_schema_parity` prevents the
   two prompts from drifting apart again.
+- `extraction_cost_latency.csv` — current per-call latency, cost, and token
+  usage per provider, measured on whichever prompt is in production
+  (`EXTRACTION_PROMPT`). Regenerated after the switch to the natural-language
+  prompt: Google $0.0006/2.15 s, OpenAI $0.0023/2.00 s, Anthropic $0.0042/3.95 s.
+
+**The six files listed in `baseline_manifest.json` are frozen historical bytes
+and must never be regenerated in place.** `tests/test_baseline_manifest.py`
+enforces this by hash and also asserts that `run_cost_latency_analysis()` does
+not target their filenames.
 
 Files are only written for functions that ran and produced at least one row.
 
@@ -90,10 +100,22 @@ hallucination rising from .098 to .154. Regex reaches F1 .156.
 
 **Acted on:** production now uses the natural-language prompt
 (`EXTRACTION_PROMPT` in `agentdataset/core/extractor.py`). `CAVEMAN_PROMPT` is
-retained and still measured by the ablation. Note that the extraction-backed
-artifacts here — `real_paper_*.csv`, `real_paper_pipeline_*.csv` — predate the
-switch and were produced with the Caveman prompt; see the follow-up item in
-PROJECT.md §9.6.
+retained and still measured by the ablation.
+
+The extraction-backed artifacts — `analysis/real_paper_*.csv` and
+`real_paper_pipeline_*.csv` — were regenerated under the new prompt with
+`real_paper_eval.py --mode cached` (cached text, so only the prompt changed).
+The `gold` condition is bit-identical across all 18 summary metrics, confirming
+only extraction moved. That evaluation independently replicates the §9.6 result:
+extraction F1 .247 → .308 and precision .167 → .226 with **recall unchanged** at
+.480, because false positives roughly halved (cdc 27 → 12, calerie 21 → 17)
+while true positives were identical. The natural-language prompt wins by
+inventing less, not by finding more.
+
+Downstream synthesis shifted accordingly — a smaller parameter set gives
+fidelity 97.6 → 95.8 (calerie), 64.3 → 61.5 (cdc) — and `calerie_rct` now
+reports 3 synthesizer fallback warnings where it previously reported none. That
+is an open item in PROJECT.md §9.6, not a settled result.
 
 A second finding is recorded in `fence_stripped`: Anthropic models via OpenRouter
 ignore `response_format=json_object` and wrap the object in a Markdown fence on

@@ -1277,8 +1277,13 @@ def run_cost_latency_analysis(n_repeats: int = 5):
         except Exception as e:
             logger.warning("Token counting failed for %s: %s", p["name"], e)
 
-    _save_results(df, "cost_latency.csv")
-    _save_results(pd.DataFrame(caveman_rows), "caveman_token_savings.csv")
+    # results/cost_latency.csv and results/caveman_token_savings.csv are frozen
+    # pre-revision baselines (results/baseline_manifest.json: "New experiments
+    # write seed-level raw files and must not overwrite these files"). Current
+    # runs therefore write alongside them rather than over them, so the
+    # historical bytes stay comparable.
+    _save_results(df, "extraction_cost_latency.csv")
+    _save_results(pd.DataFrame(caveman_rows), "extraction_prompt_token_savings.csv")
     return df
 
 

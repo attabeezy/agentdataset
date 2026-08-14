@@ -1,6 +1,6 @@
 {
-  "recorded_at_utc": "2026-08-02T16:12:58.116512+00:00",
-  "git_commit": "08852c2cfe6c68bb46cc45aad95e58a8f26b54c4",
+  "recorded_at_utc": "2026-08-14T00:54:37.561689+00:00",
+  "git_commit": "aa96bedb3e3e7dc5158104ef3bb92cdf8c2bde37",
   "git_dirty": true,
   "python_version": "3.13.5",
   "platform": "Windows-11-10.0.26200-SP0",
@@ -46,29 +46,29 @@
     {
       "purpose": "structured_extraction",
       "model": "openrouter/openai/gpt-4o",
-      "latency_seconds": 6.430612500000279,
+      "latency_seconds": 3.6359188000005815,
       "prompt_tokens": 2210,
-      "completion_tokens": 700,
-      "total_tokens": 2910,
-      "cost_usd": 0.012525000000000001
+      "completion_tokens": 379,
+      "total_tokens": 2589,
+      "cost_usd": 0.009315
     },
     {
       "purpose": "structured_extraction",
       "model": "openrouter/openai/gpt-4o",
-      "latency_seconds": 5.5024379000024055,
+      "latency_seconds": 4.466704099999333,
       "prompt_tokens": 3507,
-      "completion_tokens": 458,
-      "total_tokens": 3965,
-      "cost_usd": 0.013347500000000002
+      "completion_tokens": 470,
+      "total_tokens": 3977,
+      "cost_usd": 0.0134675
     },
     {
       "purpose": "structured_extraction",
       "model": "openrouter/openai/gpt-4o",
-      "latency_seconds": 3.561140300000261,
+      "latency_seconds": 3.9030489999986457,
       "prompt_tokens": 2482,
       "completion_tokens": 593,
       "total_tokens": 3075,
-      "cost_usd": 0.0060550000000000005
+      "cost_usd": 0.012135
     }
   ]
 }
