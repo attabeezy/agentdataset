@@ -1,212 +1,258 @@
-% Paper text for the extraction robustness and prompt ablation (PROJECT.md 9.6).
+% Paper blocks for the extraction robustness and prompt ablation (PROJECT.md 9.6).
 %
-% AuthorKit27/ is git-ignored, so these blocks are kept here under version control
-% and pasted into the paper. Every number below is transcribed from
-% results/extraction_challenge_summary.csv and results/extraction_challenge_raw.csv
-% (30 challenge cases x 2 prompt arms x 3 OpenRouter-routed models x 5 repetitions
-% = 930 extractions, plus 30 regex extractions; 10,000-resample bootstrap intervals).
+% AuthorKit27/ is git-ignored, so the paper cannot travel through a branch or PR.
+% These blocks are version-controlled here and applied by
+% `analysis/apply_extraction_snippets.py`, which is idempotent and writes a .bak.
 %
-% Block 1 -> AuthorKit27/main.tex, replaces the sentence in the cost/latency
-%            paragraph that currently reads "We separately measure the Caveman
-%            Protocol's prompt compression at a \textbf{21.9\%} reduction in prompt
-%            tokens (242~$\rightarrow$~189) on our extraction prompt."
-% Block 2 -> AuthorKit27/main.tex, new subsection in the ablation section, after the
-%            existing ablation reporting protocol paragraph.
-% Block 3 -> AuthorKit27/main.tex, replaces the body of Table~\ref{tab:cost}. The
-%            pipeline now ships the natural-language prompt, so the cost table must
-%            measure that prompt. Numbers from results/cost_latency.csv, 5 reps.
-% Optional -> AuthorKit27/main.tex, appendix, after \label{app:caveman}.
+% Every number is transcribed from results/extraction_challenge_summary.csv,
+% results/extraction_challenge_raw.csv (+ _run1), results/extraction_cost_latency.csv
+% and analysis/real_paper_extraction_summary.csv.
 %
-% NOTE: the Caveman Protocol is presented throughout the paper as a contribution.
-% Blocks 1-2 below retain it as a documented and measured design, but record that
-% the shipped pipeline now uses the natural-language prompt. Any remaining prose
-% that describes the Caveman Protocol as the production prompt needs revising to
-% match --- grep main.tex for "Caveman" before submitting.
+% Anchors were checked against main.tex at the time of writing: Q1 is the
+% real-paper evaluation, Q3 is LLM vs. regex, Q5 is cost/latency, and the new
+% material lands as Q6 immediately after the Q5 cost table.
 
 
-% ------------------------------------------- Block 1: corrected compression claim
+% ==================================================== BLOCK: contribution-bullet
+% REPLACES the third contribution bullet in the introduction. The old text
+% promised token/cost/latency effects only; the measurement also covers quality,
+% and it changed which prompt ships.
 
-We separately measure the Caveman Protocol's prompt compression at a
-\textbf{38.6\%} reduction in system-prompt tokens (308~$\rightarrow$~189), or
-$30.0\%$ of the prompt tokens actually billed on a challenge-set request
-($404.6 \rightarrow 283.3$). An earlier version of this measurement reported
-$21.9\%$ against a natural-language baseline that omitted the categorical
-distribution and its \texttt{categories} field; that baseline requested strictly
-less than the Caveman prompt and therefore \emph{understated} the compression.
-The figures above use a baseline that requests an identical schema, differing only
-in prose style. Compression does not, however, translate into proportional
-savings: because completion tokens dominate this workload, the measured cost
-reduction is only $3.5\%$ ($\$0.0024$ vs.\ $\$0.0025$ per call, paired Wilcoxon
-$p=.0065$), and latency is unchanged ($2.57$\,s vs.\ $2.52$\,s). Section~4.4
-shows that it also costs accuracy, and we therefore ship the natural-language
-prompt; the cost and latency reported in Table~\ref{tab:cost} are measured on
-that prompt.
+    \item \textbf{Cost-aware agentic prompting, measured and revised.}
+    Autonomous loops make many LLM calls. We measure a compressed prompting
+    scheme (the ``Caveman Protocol'') against a schema-matched natural-language
+    prompt on token count, cost, latency \emph{and} extraction quality across
+    three commercial providers, and report a negative result: the compression
+    costs accuracy for negligible saving, so the deployed system does not use it.
 
 
-% --------------------------------- Block 2: extraction robustness ablation (body)
+% ==================================================== BLOCK: cost-aware-prompting
+% REPLACES the "Cost-Aware Prompting" subsection body in the Approach section.
+% The old text asserted that the extraction prompt *uses* the Caveman Protocol
+% (no longer true) and cross-referenced Q4 (cost/latency is Q5).
 
-\subsection{Q4: Does Prompt Compression Cost Extraction Quality?}
-
-The compression result above is only meaningful alongside its effect on what is
-extracted. We therefore built a 30-case challenge set of deliberately messy
-source text---negated findings, several populations reported for one variable,
-values that conflict between abstract and table, repeated timepoints, mixed
-units, confidence intervals, footnote-marked table cells, scientific notation,
-irrelevant nearby numbers, and standard errors presented where the schema wants a
-standard deviation---three cases per category. Eleven cases are verbatim excerpts
-from the open-access sources of Section~\ref{sec:realpapers}, sliced
-programmatically at recorded character offsets so the fixture cannot drift from
-its sources; nineteen are constructed and labelled as such. Gold values reuse the
-dual-pass adjudicated annotations rather than being re-derived. Crucially, each
-case also annotates the values that must \emph{not} be extracted---p-values,
-sample sizes, instrument ranges, thresholds, reliability coefficients---which is
-what makes context errors and hallucinations countable rather than invisible.
-
-Scoring separates three outcomes. A match is by value, not by name, so the regex
-fallback's generic identifiers are not penalised for a reason unrelated to
-reading the numbers. False positives are split into \emph{context errors} (a
-value present in the document but annotated as not a distribution parameter) and
-\emph{hallucinations} (a value appearing nowhere in the source text). Abstention
-is rewarded rather than punished: emitting nothing yields no false positives, so
-the three cases whose correct answer is silence score $F_1 = 1$ for an extractor
-that stays silent.
-
-The compression is not free. Averaged over three models and five repetitions
-(Table~\ref{tab:extraction-ablation}), the Caveman prompt reaches
-$F_1 = .710$ $[.657, .760]$ against $.778$ $[.729, .825]$ for the
-schema-matched natural-language prompt---a paired deficit of $-.069$
-(Wilcoxon $p = .0001$, $n = 90$ case\,$\times$\,model pairs) that holds in the
-same direction for all three models. The loss is precision, not coverage: recall
-is near-ceiling for both ($.960$ vs.\ $.989$), while precision falls from $.720$
-to $.639$. The mechanism is hallucination, which rises from $.098$ $[.062,.137]$
-to $.154$ $[.112,.200]$ (paired $p = .0088$). Stripping the prose that tells the
-model what \emph{not} to do makes it invent more numbers. Against a $3.5\%$ cost
-saving, that is a poor trade, and we now recommend the natural-language prompt
-for extraction; the Caveman Protocol's value lies in schema discipline, not in
-token count.
-
-Both prompts remain far ahead of the regex fallback, which attains $F_1 = .156$
-on this material: its patterns require literal ``mean\,\ldots\,std'' phrasing and
-so fire almost never on real tables. Its precision is $1.000$ only because it
-almost never speaks---and that same silence gives it the best abstention
-behaviour of the three arms, answering all three silence cases correctly against
-$11\%$ for the natural-language prompt and $0\%$ for the Caveman prompt. Neither
-LLM arm reliably declines to answer when a document supports no answer, which we
-regard as the most consequential remaining weakness of the extraction stage.
-
-On this evidence we changed the system: AgentDataset now issues the
-natural-language prompt for extraction. We retain the Caveman Protocol as a
-documented design and reproduce it in Appendix~\ref{app:caveman}, because the
-negative result is itself the contribution---prompt compression is widely assumed
-to be free when the schema is held fixed, and on messy source text it is not.
-
-The real-paper evaluation of Section~\ref{sec:realpapers}, re-run under the new
-prompt on identical cached source text, replicates this independently: extraction
-$F_1$ rises from $.247$ to $.308$ and precision from $.167$ to $.226$, while
-recall is unchanged at $.480$. The item counts show the mechanism directly---false
-positives fall sharply on the affected sources ($27 \rightarrow 12$ then $10$ on
-the first) while true positives are unchanged. The natural-language prompt wins
-by inventing less, not by finding more, which is the same signature the challenge
-set produces. This too was run twice: $F_1$ $.247 \rightarrow .308 \rightarrow
-.304$ and precision $.167 \rightarrow .226 \rightarrow .222$ across the Caveman
-baseline and two natural-language runs, with recall constant at $.480$
-throughout. Absolute performance on real papers remains low, and we do not claim
-otherwise.
-
-Difficulty tracks provenance and category as one would hope. Real excerpts are
-markedly harder than constructed ones ($F_1$ $.550$ vs.\ $.803$ for the Caveman
-arm) and provoke six times the hallucination rate ($.331$ vs.\ $.052$), which is
-the clearest evidence we have that synthetic evaluation text overstates
-extraction quality. By category, footnote-marked table cells ($.911$) and
-scientific notation ($.852$) are essentially solved, while negated findings
-($.463$) and repeated timepoints ($.575$) are not: the failure is not parsing the
-number but deciding whether the document licenses asserting it.
+The extraction system prompt was originally written in a compressed, filler-free
+style (the ``Caveman Protocol'': no articles, pleasantries, or hedging), applied
+only to internal prompts while user-facing output remained in natural language.
+We measure its effect rather than assert it (Q5 and Q6). Because that measurement
+showed a quality cost that outweighed the saving, the deployed extractor now uses
+the natural-language prompt; we keep the compressed variant documented and
+measured in Appendix~\ref{app:caveman}.
 
 
-% --------------------------------------- Block 3: cost table, production prompt
+% ==================================================== BLOCK: q3-pointer
+% APPENDED to the end of the Q3 (LLM vs. regex) paragraph. Q3 asserts that the
+% LLM's value is robustness on messy prose; Q6 is where that is actually measured.
 
-% Replaces the body of Table~\ref{tab:cost}. Re-measured with the natural-language
-% prompt now shipped (5 repetitions per provider,
-% results/extraction_cost_latency.csv). The historical Caveman-prompt measurement
-% is preserved unmodified in results/cost_latency.csv.
-%
-% The accompanying prose claim "Gemini 2.5 Flash is both the cheapest and fastest;
-% Claude Sonnet 4.5 is the most expensive" needs one edit: Gemini remains cheapest
-% but GPT-4o is now marginally faster, so "fastest" should become "among the
-% fastest". Latency differences at this scale are within run-to-run variation
-% (std 0.53-0.56 s) and should not be over-read.
+Q6 tests that claim directly on deliberately messy text, where the gap is stark
+rather than absent.
 
-Provider  & Lat.\ (s) & Cost (\$) & Prompt & Compl. \\
-\midrule
+
+% ==================================================== BLOCK: q5-paragraph
+% REPLACES the tail of the Q5 paragraph, from "Google's Gemini" to the end. Fixes
+% the superseded latency claim and the 21.9% figure in one edit.
+
+Google's Gemini~2.5~Flash is the cheapest ($\$0.0006$/call) and among the fastest
+($2.15$\,s, level with GPT-4o at $2.00$\,s); Anthropic's Claude Sonnet~4.5 is the
+most expensive ($\$0.0042$/call) and slowest ($3.95$\,s). We separately measure
+the Caveman Protocol's prompt compression at a \textbf{38.6\%} reduction in
+system-prompt tokens ($308 \rightarrow 189$), or $30.0\%$ of the prompt tokens
+actually billed on a challenge-set request. An earlier version of this
+measurement reported $21.9\%$ against a natural-language baseline that omitted
+the categorical distribution and its \texttt{categories} field; that baseline
+requested strictly less than the Caveman prompt and so \emph{understated} the
+compression. Compression does not translate into proportional saving: because
+completion tokens dominate this workload, the measured cost reduction is only
+$3.5\%$ (paired Wilcoxon $p=.0065$) and latency is unchanged. Q6 shows that it
+also costs accuracy.
+
+
+% ==================================================== BLOCK: cost-table-rows
+% REPLACES the three data rows of Table~\ref{tab:cost}. Re-measured on the
+% natural-language prompt now shipped (results/extraction_cost_latency.csv, 5 reps).
+% The historical Caveman-prompt measurement is preserved in results/cost_latency.csv.
+
 Google    & 2.15 & 0.0006 & 367 & 194 \\
 OpenAI    & 2.00 & 0.0023 & 363 & 140 \\
 Anthropic & 3.95 & 0.0042 & 379 & 201 \\
 
 
-% ------------------------------------------------ Optional: appendix + table
+% ==================================================== BLOCK: q6-subsection
+% INSERTED after the Q5 cost table, before the "Disclosure-risk threat model"
+% subsection.
 
-\paragraph{Replication.} We ran the full sweep twice, independently, at identical
-settings. The Caveman deficit is $-.069$ in the first run and $-.063$ in the
-second (Wilcoxon $p=.0001$ and $p=.0004$); pooled arm means agree to within $.010$
-$F_1$ ($.710$ vs.\ $.719$ Caveman, $.778$ vs.\ $.782$ natural-language), and the
-hallucination gap is present in both ($.154$ vs.\ $.098$, and $.154$ vs.\ $.094$).
-The regex arm is bit-identical between runs, confirming that the observed spread
-is model-side rather than harness-side. The second run additionally lost $15\%$
-of its Anthropic calls to transient \texttt{APIError}s; because retries are
-disabled and failures are recorded as rows rather than dropped, this shrinks the
-paired sample from 90 to 85 without biasing the reported rates. Both runs are
-released.
+\subsection{Q6: Does Prompt Compression Cost Extraction Quality?}
+The compression in Q5 is only meaningful alongside its effect on what is
+extracted. We built a 30-case challenge set of deliberately messy source text
+spanning ten failure modes: negated findings, several populations reported for
+one variable, values that conflict between abstract and table, repeated
+timepoints, mixed units, confidence intervals, footnote-marked table cells,
+scientific notation, irrelevant nearby numbers, and standard errors presented
+where the schema wants a standard deviation. Eleven cases are verbatim excerpts
+from the sources of Q1, sliced programmatically at recorded character offsets so
+the fixture cannot drift from its sources; nineteen are constructed and labelled
+as such. Each case also annotates the values that must \emph{not} be extracted
+(p-values, sample sizes, instrument ranges, thresholds), which is what makes
+context errors and hallucinations countable rather than invisible. Abstention is
+rewarded rather than punished: emitting nothing yields no false positives, so the
+three cases whose correct answer is silence score $F_1{=}1$ for an extractor that
+stays silent.
 
-\paragraph{Extraction challenge protocol.} All arms run at temperature $0$ with
-\texttt{response\_format} set to \texttt{json\_object}, the production setting,
-and with retries disabled so that nondeterminism and transient failure remain
-visible. Repetition-level variance is negligible under these settings (mean
-within-(case, model) $F_1$ standard deviation $.009$ for the Caveman arm and
-$.007$ for the natural-language arm), so the reported differences are not
-sampling noise. API failures are recorded as rows rather than discarded; the
-sweep completed $930$ extractions with zero API errors at a total measured cost
-of $\$2.17$.
+The compression is not free (Table~\ref{tab:extraction}). Averaged over three
+models and five repetitions, the Caveman prompt reaches $F_1=.710$ against $.778$
+for the schema-matched natural-language prompt, a paired deficit of $-.069$
+(Wilcoxon $p=.0001$, $n=90$ case\,$\times$\,model pairs) that holds in the same
+direction for all three models. The loss is precision, not coverage: recall is
+near-ceiling for both ($.960$ vs.\ $.989$) while precision falls from $.720$ to
+$.639$, and the hallucination rate rises from $.098$ to $.154$. Stripping the
+prose that tells the model what \emph{not} to do makes it invent more numbers.
+Against a $3.5\%$ cost saving that is a poor trade, so AgentDataset now ships the
+natural-language prompt; we retain the Caveman Protocol as a documented, measured
+design because the negative result is itself the contribution---prompt
+compression is widely assumed to be free when the schema is held fixed, and on
+messy source text it is not.
 
-Two caveats follow from the production setting. First, because
-\texttt{json\_object} is requested, the malformed-output rate we report counts
-schema violations---missing or unparseable fields---rather than invalid JSON;
-it is $1.3\%$ for the Caveman arm and $0\%$ for the natural-language arm. Second,
-we found that Anthropic models routed through OpenRouter ignore the
-\texttt{json\_object} flag and wrap the object in a Markdown code fence on
-$100\%$ of calls. A strict \texttt{json.loads} therefore fails on every such
-response, and an extraction pipeline with a regex fallback will silently degrade
-to that fallback for one of three providers while appearing to succeed. We strip
-the fence before parsing and report the incidence rather than hiding it; we note
-it here because the failure is invisible in any evaluation that does not separate
-fallback output from LLM output.
+Both prompts remain far ahead of the regex fallback ($F_1=.156$), whose patterns
+require literal ``mean\,\ldots\,std'' phrasing and so rarely fire on real tables;
+its precision of $1.000$ reflects near-total silence, which also gives it the best
+abstention behaviour of the three arms ($3/3$ silence cases, against $11\%$ for
+the natural-language prompt and $0\%$ for the Caveman prompt). Neither LLM arm
+reliably declines to answer when a document supports no answer, which we regard
+as the most consequential remaining weakness of the extraction stage. Real
+excerpts are markedly harder than constructed ones ($F_1$ $.550$ vs.\ $.803$ for
+the Caveman arm), the clearest evidence we have that synthetic evaluation text
+overstates extraction quality. Appendix~\ref{app:extraction} reports a full
+independent replication and the effect of the prompt change on Q1.
 
 \begin{table}[t]
 \centering
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{lrrr}
 \toprule
-& Caveman & Natural lang. & Regex \\
+& Caveman & Natural & Regex \\
 \midrule
 $F_1$                & .710 & \textbf{.778} & .156 \\
 Precision            & .639 & \textbf{.720} & 1.000 \\
 Recall               & .960 & \textbf{.989} & .150 \\
 Hallucination rate   & .154 & \textbf{.098} & .000 \\
 Context-error rate   & .115 & \textbf{.101} & .000 \\
-Malformed rate       & .013 & \textbf{.000} & .000 \\
 Correct abstention   & .000 & .111 & \textbf{1.000} \\
 \midrule
-Prompt tokens        & \textbf{283.3} & 404.6 & 0 \\
-Completion tokens    & 191.4 & \textbf{182.3} & 0 \\
-Cost (\$/call)       & \textbf{.0024} & .0025 & .0000 \\
-Latency (s)          & 2.57 & \textbf{2.52} & $<.001$ \\
+Prompt tokens        & \textbf{283} & 405 & 0 \\
+Cost (\$/call)       & \textbf{.0024} & .0025 & 0 \\
 \bottomrule
 \end{tabular}
 \caption{Extraction over the 30-case challenge set, averaged over three
-OpenRouter-routed models (GPT-4o, Claude Sonnet~4.5, Gemini~2.5~Flash) and five
-repetitions: 930 LLM extractions and 30 regex extractions. The Caveman prompt
-buys a $30.0\%$ prompt-token reduction for $-.069$ $F_1$ (paired Wilcoxon
-$p=.0001$) and a $57\%$ relative increase in hallucination, while saving only
-$3.5\%$ of cost. ``Correct abstention'' is measured on the three cases whose
-correct answer is to extract nothing.}
-\label{tab:extraction-ablation}
+OpenRouter-routed models and five repetitions (930 LLM extractions, 30 regex).
+The Caveman prompt buys a $30\%$ prompt-token reduction for $-.069$ $F_1$
+(paired Wilcoxon $p=.0001$) and a $57\%$ relative increase in hallucination,
+while saving $3.5\%$ of cost. ``Correct abstention'' is measured on the three
+cases whose correct answer is to extract nothing.}
+\label{tab:extraction}
 \end{table}
+
+
+% ==================================================== BLOCK: appendix-caveman-intro
+% REPLACES the two sentences under \label{app:caveman}. The old text described the
+% compressed prompt as the extraction prompt and claimed the baseline had
+% "identical semantics", which was not true of the baseline then in use.
+
+The compressed extraction system prompt is reproduced below. It is no longer the
+deployed prompt: Q6 shows that it costs $-.069$ $F_1$ against the natural-language
+prompt for a $3.5\%$ cost saving, so the shipped extractor uses the latter. Both
+prompts are included in the released code and request an identical schema, which
+the earlier baseline did not---it omitted the categorical distribution and the
+\texttt{categories} field, and a regression test now enforces field-set parity
+between the two.
+
+
+% ==================================================== BLOCK: appendix-extraction
+% INSERTED after the Caveman verbatim block in the appendix (unlimited length).
+
+\section{Extraction Challenge Set and Replication}
+\label{app:extraction}
+
+\paragraph{Protocol.} All arms run at temperature $0$ with
+\texttt{response\_format} set to \texttt{json\_object}, the production setting,
+and with retries disabled so nondeterminism and transient failure stay visible.
+The regex fallback is deterministic, runs once, and is reported as its own arm;
+fallback output is never folded into LLM results. Matching is by value rather
+than by name, because the regex fallback emits generic identifiers and would
+otherwise be penalised for a reason unrelated to reading the numbers correctly.
+False positives are separated into context errors (a value present in the
+document but annotated as not a distribution parameter) and hallucinations (a
+value appearing nowhere in the source text), the latter grounded in an
+enumeration of every numeric literal the excerpt contains.
+
+\paragraph{Replication.} We ran the full sweep twice, independently, at identical
+settings; both runs are released. The Caveman deficit is $-.069$ in the first and
+$-.063$ in the second (Wilcoxon $p=.0001$ and $p=.0004$); pooled arm means agree
+to within $.010$ $F_1$ ($.710$ vs.\ $.719$ Caveman, $.778$ vs.\ $.782$
+natural-language), and the hallucination gap is present in both. The regex arm is
+bit-identical between runs, confirming the observed spread is model-side rather
+than harness-side. The second run additionally lost $15\%$ of its Anthropic calls
+to transient API errors; because retries are disabled and failures are recorded
+as rows rather than dropped, this shrinks the paired sample from 90 to 85 without
+biasing the reported rates.
+
+\paragraph{Effect on Q1.} Re-running the real-paper evaluation under the new
+prompt on identical cached source text replicates the finding independently:
+extraction $F_1$ rises from $.247$ to $.308$ and precision from $.167$ to $.226$,
+while recall is unchanged at $.480$. The item counts show the mechanism directly:
+false positives fall sharply ($27 \rightarrow 12$ on one source) while true
+positives are identical. The natural-language prompt wins by inventing less, not
+by finding more. This too was run twice ($F_1$ $.308$ then $.304$). Absolute
+performance on real papers remains low, and we do not claim otherwise.
+
+\paragraph{Two measurement caveats.} First, because \texttt{json\_object} is
+requested, the malformed-output rate we report counts schema violations rather
+than invalid JSON; it is $1.3\%$ for the Caveman arm and $0\%$ for the
+natural-language arm. Second, Anthropic models routed through OpenRouter ignore
+the \texttt{json\_object} flag and wrap the object in a Markdown code fence on
+$100\%$ of successful calls (255/255, against 0/600 for the other two providers).
+A strict JSON parse therefore fails on every such response, and a pipeline with a
+regex fallback will silently degrade to that fallback for one of three providers
+while appearing to succeed. We strip the fence before parsing and report the
+incidence rather than hiding it, because the failure is invisible to any
+evaluation that does not separate fallback output from LLM output.
+
+\paragraph{The natural-language prompt.} The deployed extraction prompt, which
+requests the identical schema to the compressed prompt above:
+
+\begin{quote}\begin{scriptsize}\begin{verbatim}
+You are an expert statistician with many years
+of experience analyzing research papers and
+extracting statistical information from them.
+Please carefully read through the following
+text and identify all of the statistical
+variables that are mentioned, along with their
+probability distributions (such as normal,
+uniform, gamma, or categorical), their means,
+and their standard deviations. Also, please
+identify any correlations that are described
+between pairs of variables, including the
+strength and direction (positive or negative)
+of each correlation.
+
+Please format your response as a JSON object
+that matches the following schema exactly:
+{ "variables": {
+    "<name>": {"distribution":
+      "normal|uniform|gamma|categorical",
+      "mean": 0.0, "std": 1.0, "min": null,
+      "max": null, "categories": null} },
+  "correlations": {
+    "<key>": {"var1": "<name>", "var2": "<name>",
+      "correlation": 0.5,
+      "direction": "positive|negative"} } }
+
+The "categories" field should only be used when
+the distribution is "categorical". In that case
+it should be an object that maps each category
+label to its probability, for example
+{"yes": 0.3, "no": 0.7}.
+
+Please make sure to only output the JSON object
+itself and nothing else - no introductory text,
+no explanations, and no markdown code fences.
+\end{verbatim}\end{scriptsize}\end{quote}
