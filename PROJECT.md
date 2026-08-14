@@ -435,8 +435,8 @@ This is the reviewer's most important request and should be completed before opt
       validation arrays. `tests/test_adult_calibration.py` asserts that flipping every real test
       label leaves all non-oracle thresholds and predicted-positive rates unchanged while the
       oracle threshold moves, so the guard cannot pass vacuously.
-    - Paper text and the appendix table are staged in `analysis/adult_calibration_paper_snippets.tex`
-      (AuthorKit27/ is git-ignored, so paper blocks are version-controlled here and pasted in).
+    - Paper text and the appendix table are applied to the draft; the blocks and their
+      applier now live in `AuthorKit27/` alongside the paper (see "Paper material" below).
 
 ### 9.6 P1 — Extraction robustness and prompt ablations
 
@@ -519,7 +519,26 @@ This is the reviewer's most important request and should be completed before opt
     `extraction_cost_latency.csv` and `extraction_prompt_token_savings.csv` instead; and
     `tests/test_baseline_manifest.py` verifies all six hashes and asserts the producer
     no longer targets those filenames.
-  - Paper blocks staged in `analysis/extraction_ablation_paper_snippets.tex`.
+  - Paper blocks applied to the draft; they now live in `AuthorKit27/` (see below).
+
+### Paper material lives outside this repository
+
+The paper is unpublished, so its prose is not stored here. `AuthorKit27/` is
+git-ignored and versioned as its own separate repository, and it holds:
+
+- `main.tex` and the rest of the draft,
+- `extraction_ablation_paper_snippets.tex` and `adult_calibration_paper_snippets.tex`
+  (the version-controlled paper blocks),
+- `apply_extraction_snippets.py` and `apply_paper_snippets.py`, which apply those
+  blocks to `main.tex`. Both are idempotent, insist that every anchor match exactly
+  once, and write a `.bak` before changing anything.
+
+These four files previously lived under `analysis/`. They were moved because they
+carry verbatim draft prose, which does not belong beside the public code. Both
+snippet sets are already applied to the current draft; rerunning either applier
+reports "Already applied" and changes nothing.
+
+Numbers quoted in the paper are transcribed from `results/`, which stays here.
 
 - [x] **Follow-up from the prompt switch — regenerate prompt-dependent artifacts.**
   - Regenerated with `analysis/real_paper_eval.py --mode cached`, which reuses the
