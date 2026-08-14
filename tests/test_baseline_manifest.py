@@ -13,11 +13,12 @@ If a baseline legitimately needs to change, the manifest hash and its
 the reason stated -- that is a deliberate act, not a side effect of a rerun.
 """
 
-import hashlib
 import json
 from pathlib import Path
 
 import pytest
+
+from agentdataset.evaluation import sha256_file_normalized
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "results" / "baseline_manifest.json"
@@ -34,16 +35,44 @@ def test_manifest_exists_and_lists_files():
     assert payload.get("git_commit")
 
 
-@pytest.mark.parametrize("filename", sorted(_manifest()["files"]))
+@pytest.mark.parametrize("filename", sorted(_manifest()["files_sha256_lf"]))
 def test_frozen_baseline_is_unmodified(filename):
-    expected = _manifest()["files"][filename]
+    """Checked against line-ending-normalized hashes so this holds on every platform.
+
+    The manifest's original `files` map holds raw-byte hashes recorded on Windows
+    (CRLF). Those can never match on Linux, because git checks the same blob out
+    with LF there — so a raw-byte check passes locally and fails in CI while the
+    content is byte-for-byte identical. `files_sha256_lf` normalizes that away
+    without weakening the check: any real change to a value still changes it.
+    """
+    expected = _manifest()["files_sha256_lf"][filename]
     path = ROOT / "results" / filename
     assert path.exists(), f"frozen baseline {filename} is missing"
-    actual = hashlib.sha256(path.read_bytes()).hexdigest()
+    actual = sha256_file_normalized(path)
     assert actual == expected, (
         f"{filename} no longer matches its frozen hash. A current run overwrote a "
         f"historical baseline. Restore it (git checkout master -- results/{filename}) "
         f"and write the new measurement to a new filename instead."
+    )
+
+
+def test_normalized_hash_ignores_line_endings_but_not_content(tmp_path):
+    """The portability fix must not weaken the guard into uselessness."""
+    crlf = tmp_path / "crlf.csv"
+    crlf.write_bytes(b"metric,value\r\nf1,0.710\r\n")
+    lf = tmp_path / "lf.csv"
+    lf.write_bytes(b"metric,value\nf1,0.710\n")
+    changed = tmp_path / "changed.csv"
+    changed.write_bytes(b"metric,value\nf1,0.711\n")
+
+    assert sha256_file_normalized(crlf) == sha256_file_normalized(lf)
+    assert sha256_file_normalized(changed) != sha256_file_normalized(lf)
+
+
+def test_both_hash_maps_cover_the_same_files():
+    payload = _manifest()
+    assert set(payload["files"]) == set(payload["files_sha256_lf"]), (
+        "the historical and portable hash maps must describe the same file set"
     )
 
 

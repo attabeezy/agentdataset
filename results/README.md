@@ -32,6 +32,15 @@ and must never be regenerated in place.** `tests/test_baseline_manifest.py`
 enforces this by hash and also asserts that `run_cost_latency_analysis()` does
 not target their filenames.
 
+The manifest carries two hash maps. `files` holds the original raw-byte hashes
+as recorded on Windows and is kept as the historical record; it is **not**
+portable, because git checks the same blob out with CRLF on Windows and LF on
+Linux, so those hashes can never match in CI. `files_sha256_lf` holds
+line-ending-normalized hashes of the identical content and is the map the test
+enforces. Normalization does not weaken the check — any change to a value still
+changes the hash, which `test_normalized_hash_ignores_line_endings_but_not_content`
+verifies directly.
+
 Files are only written for functions that ran and produced at least one row.
 
 ## P0 reviewer-revision artifacts

@@ -2,7 +2,10 @@
   "snapshot": "pre_july_2026_reviewer_revision",
   "recorded_at": "2026-08-02",
   "git_commit": "08852c2cfe6c68bb46cc45aad95e58a8f26b54c4",
-  "git_dirty_only": [".gitignore", "PROJECT.md"],
+  "git_dirty_only": [
+    ".gitignore",
+    "PROJECT.md"
+  ],
   "python_version": "3.13.5",
   "uv_version": "0.11.26",
   "uv_lock_sha256": "5ac40da015af432f039e096ad94c70714a353f8f24133f5eec51bcef98a1ea3c",
@@ -14,5 +17,13 @@
     "cost_latency.csv": "0f30437cc46af6ce41a155692bbed3c166dde55e685fbac879fd42e4d790822c",
     "empirical_benchmark.csv": "0c4b2a492cbe8e43771d87e9c8f26b3403384f2fba30f1bccc6e40625bfa4b20"
   },
-  "note": "Hashes freeze the exact historical result bytes without duplicating them. New experiments write seed-level raw files and must not overwrite these files."
+  "note": "Hashes freeze the exact historical result bytes without duplicating them. New experiments write seed-level raw files and must not overwrite these files. The files map holds raw-byte hashes as recorded on Windows (CRLF) and is kept as the historical record; it is NOT portable, because git checks the same blob out with CRLF on Windows and LF on Linux. files_sha256_lf holds line-ending-normalized hashes of the same content and is the check enforced by tests/test_baseline_manifest.py, which passes on every platform.",
+  "files_sha256_lf": {
+    "ablation_extraction_method.csv": "f2d1fd531e959e614af9f0aaf864ce4f2ff50e053eaa9e477d4ba34a953c2d9d",
+    "ablation_noise_pivot.csv": "e2e053bc97b13fb88e7133f75acb1bdb59103e561c8837a2a192863da518b4bb",
+    "adult_f1_gap.csv": "f6738e61ceab237a4c67a3ce1cb19ae1ff99aa979af8935cf1c7d1a000416f16",
+    "caveman_token_savings.csv": "5ed92b7e0553035f88e1fcc6552b74ca3fd2bf2ed35af4fb43b3302256512c6d",
+    "cost_latency.csv": "c468789d1522957ff80fe32e682cf42541f8439e79922ffd9d883db098170a2e",
+    "empirical_benchmark.csv": "948a484b450cd6569bd4104279a238c7bb2ccb435939ab2dc7b6705250192a97"
+  }
 }
