@@ -78,6 +78,20 @@ Files are only written for functions that ran and produced at least one row.
   set sha256, real/constructed split, per-call token and cost history, and the
   API error count.
 
+Headline from the committed 930-extraction sweep: the Caveman prompt buys a
+30.0% prompt-token reduction (404.6 → 283.3 tokens per request) but only a 3.5%
+cost reduction, because completion tokens dominate — and it costs quality. F1 is
+.710 [.657,.760] against .778 [.729,.825] for the schema-matched
+natural-language prompt (paired Wilcoxon p=.0001, same direction on all three
+models). Recall is near-ceiling for both; the loss is precision, driven by
+hallucination rising from .098 to .154. Regex reaches F1 .156.
+
+A second finding is recorded in `fence_stripped`: Anthropic models via OpenRouter
+ignore `response_format=json_object` and wrap the object in a Markdown fence on
+100% of calls, so a strict `json.loads` fails on every one. `strip_json_fence` in
+`agentdataset/core/extractor.py` handles this; without it the pipeline silently
+falls back to regex for that provider while appearing to succeed.
+
 API failures are recorded as rows with `api_error=True` rather than dropped, so
 they cannot bias the reported rates downward. All arms keep the production
 `response_format={"type": "json_object"}` setting, so the malformed rate is

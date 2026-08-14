@@ -1,0 +1,149 @@
+% Paper text for the extraction robustness and prompt ablation (PROJECT.md 9.6).
+%
+% AuthorKit27/ is git-ignored, so these blocks are kept here under version control
+% and pasted into the paper. Every number below is transcribed from
+% results/extraction_challenge_summary.csv and results/extraction_challenge_raw.csv
+% (30 challenge cases x 2 prompt arms x 3 OpenRouter-routed models x 5 repetitions
+% = 930 extractions, plus 30 regex extractions; 10,000-resample bootstrap intervals).
+%
+% Block 1 -> AuthorKit27/main.tex, replaces the sentence in the cost/latency
+%            paragraph that currently reads "We separately measure the Caveman
+%            Protocol's prompt compression at a \textbf{21.9\%} reduction in prompt
+%            tokens (242~$\rightarrow$~189) on our extraction prompt."
+% Block 2 -> AuthorKit27/main.tex, new subsection in the ablation section, after the
+%            existing ablation reporting protocol paragraph.
+% Optional -> AuthorKit27/main.tex, appendix, after \label{app:caveman}.
+
+
+% ------------------------------------------- Block 1: corrected compression claim
+
+We separately measure the Caveman Protocol's prompt compression at a
+\textbf{38.6\%} reduction in system-prompt tokens (308~$\rightarrow$~189), or
+\textbf{30.0\%} of the prompt tokens actually billed on a challenge-set request
+($404.6 \rightarrow 283.3$). An earlier version of this measurement reported
+$21.9\%$ against a natural-language baseline that omitted the categorical
+distribution and its \texttt{categories} field; that baseline requested strictly
+less than the Caveman prompt and therefore \emph{understated} the compression.
+The figures above use a baseline that requests an identical schema, differing only
+in prose style. Compression does not, however, translate into proportional
+savings: because completion tokens dominate this workload, the measured cost
+reduction is only $3.5\%$ ($\$0.0024$ vs.\ $\$0.0025$ per call, paired Wilcoxon
+$p=.0065$), and latency is unchanged ($2.57$\,s vs.\ $2.52$\,s).
+
+
+% --------------------------------- Block 2: extraction robustness ablation (body)
+
+\subsection{Q4: Does Prompt Compression Cost Extraction Quality?}
+
+The compression result above is only meaningful alongside its effect on what is
+extracted. We therefore built a 30-case challenge set of deliberately messy
+source text---negated findings, several populations reported for one variable,
+values that conflict between abstract and table, repeated timepoints, mixed
+units, confidence intervals, footnote-marked table cells, scientific notation,
+irrelevant nearby numbers, and standard errors presented where the schema wants a
+standard deviation---three cases per category. Eleven cases are verbatim excerpts
+from the open-access sources of Section~\ref{sec:realpapers}, sliced
+programmatically at recorded character offsets so the fixture cannot drift from
+its sources; nineteen are constructed and labelled as such. Gold values reuse the
+dual-pass adjudicated annotations rather than being re-derived. Crucially, each
+case also annotates the values that must \emph{not} be extracted---p-values,
+sample sizes, instrument ranges, thresholds, reliability coefficients---which is
+what makes context errors and hallucinations countable rather than invisible.
+
+Scoring separates three outcomes. A match is by value, not by name, so the regex
+fallback's generic identifiers are not penalised for a reason unrelated to
+reading the numbers. False positives are split into \emph{context errors} (a
+value present in the document but annotated as not a distribution parameter) and
+\emph{hallucinations} (a value appearing nowhere in the source text). Abstention
+is rewarded rather than punished: emitting nothing yields no false positives, so
+the three cases whose correct answer is silence score $F_1 = 1$ for an extractor
+that stays silent.
+
+The compression is not free. Averaged over three models and five repetitions
+(Table~\ref{tab:extraction-ablation}), the Caveman prompt reaches
+$F_1 = .710$ $[.657, .760]$ against $.778$ $[.729, .825]$ for the
+schema-matched natural-language prompt---a paired deficit of $-.069$
+(Wilcoxon $p = .0001$, $n = 90$ case\,$\times$\,model pairs) that holds in the
+same direction for all three models. The loss is precision, not coverage: recall
+is near-ceiling for both ($.960$ vs.\ $.989$), while precision falls from $.720$
+to $.639$. The mechanism is hallucination, which rises from $.098$ $[.062,.137]$
+to $.154$ $[.112,.200]$ (paired $p = .0088$). Stripping the prose that tells the
+model what \emph{not} to do makes it invent more numbers. Against a $3.5\%$ cost
+saving, that is a poor trade, and we now recommend the natural-language prompt
+for extraction; the Caveman Protocol's value lies in schema discipline, not in
+token count.
+
+Both prompts remain far ahead of the regex fallback, which attains $F_1 = .156$
+on this material: its patterns require literal ``mean\,\ldots\,std'' phrasing and
+so fire almost never on real tables. Its precision is $1.000$ only because it
+almost never speaks---and that same silence gives it the best abstention
+behaviour of the three arms, answering all three silence cases correctly against
+$11\%$ for the natural-language prompt and $0\%$ for the Caveman prompt. Neither
+LLM arm reliably declines to answer when a document supports no answer, which we
+regard as the most consequential remaining weakness of the extraction stage.
+
+Difficulty tracks provenance and category as one would hope. Real excerpts are
+markedly harder than constructed ones ($F_1$ $.550$ vs.\ $.803$ for the Caveman
+arm) and provoke six times the hallucination rate ($.331$ vs.\ $.052$), which is
+the clearest evidence we have that synthetic evaluation text overstates
+extraction quality. By category, footnote-marked table cells ($.911$) and
+scientific notation ($.852$) are essentially solved, while negated findings
+($.463$) and repeated timepoints ($.575$) are not: the failure is not parsing the
+number but deciding whether the document licenses asserting it.
+
+
+% ------------------------------------------------ Optional: appendix + table
+
+\paragraph{Extraction challenge protocol.} All arms run at temperature $0$ with
+\texttt{response\_format} set to \texttt{json\_object}, the production setting,
+and with retries disabled so that nondeterminism and transient failure remain
+visible. Repetition-level variance is negligible under these settings (mean
+within-(case, model) $F_1$ standard deviation $.009$ for the Caveman arm and
+$.007$ for the natural-language arm), so the reported differences are not
+sampling noise. API failures are recorded as rows rather than discarded; the
+sweep completed $930$ extractions with zero API errors at a total measured cost
+of $\$2.17$.
+
+Two caveats follow from the production setting. First, because
+\texttt{json\_object} is requested, the malformed-output rate we report counts
+schema violations---missing or unparseable fields---rather than invalid JSON;
+it is $1.3\%$ for the Caveman arm and $0\%$ for the natural-language arm. Second,
+we found that Anthropic models routed through OpenRouter ignore the
+\texttt{json\_object} flag and wrap the object in a Markdown code fence on
+$100\%$ of calls. A strict \texttt{json.loads} therefore fails on every such
+response, and an extraction pipeline with a regex fallback will silently degrade
+to that fallback for one of three providers while appearing to succeed. We strip
+the fence before parsing and report the incidence rather than hiding it; we note
+it here because the failure is invisible in any evaluation that does not separate
+fallback output from LLM output.
+
+\begin{table}[t]
+\centering
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrr}
+\toprule
+& Caveman & Natural lang. & Regex \\
+\midrule
+$F_1$                & .710 & \textbf{.778} & .156 \\
+Precision            & .639 & \textbf{.720} & 1.000 \\
+Recall               & .960 & \textbf{.989} & .150 \\
+Hallucination rate   & .154 & \textbf{.098} & .000 \\
+Context-error rate   & .115 & \textbf{.101} & .000 \\
+Malformed rate       & .013 & \textbf{.000} & .000 \\
+Correct abstention   & .000 & .111 & \textbf{1.000} \\
+\midrule
+Prompt tokens        & \textbf{283.3} & 404.6 & 0 \\
+Completion tokens    & 191.4 & \textbf{182.3} & 0 \\
+Cost (\$/call)       & \textbf{.0024} & .0025 & .0000 \\
+Latency (s)          & 2.57 & \textbf{2.52} & $<.001$ \\
+\bottomrule
+\end{tabular}
+\caption{Extraction over the 30-case challenge set, averaged over three
+OpenRouter-routed models (GPT-4o, Claude Sonnet~4.5, Gemini~2.5~Flash) and five
+repetitions: 930 LLM extractions and 30 regex extractions. The Caveman prompt
+buys a $30.0\%$ prompt-token reduction for $-.069$ $F_1$ (paired Wilcoxon
+$p=.0001$) and a $57\%$ relative increase in hallucination, while saving only
+$3.5\%$ of cost. ``Correct abstention'' is measured on the three cases whose
+correct answer is to extract nothing.}
+\label{tab:extraction-ablation}
+\end{table}

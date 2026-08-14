@@ -483,6 +483,25 @@ This is the reviewer's most important request and should be completed before opt
     downward. `response_format=json_object` is kept at its production setting, so the
     malformed rate is schema-level only — stated as a limitation. Retries are disabled so
     nondeterminism is visible.
+  - **Answer: the compression is not free.** Over 930 extractions (30 cases × 2 prompts ×
+    3 models × 5 reps, $2.17, zero API errors), the Caveman prompt reaches F1 .710
+    [.657,.760] against .778 [.729,.825] for the schema-matched natural-language prompt —
+    a paired deficit of −.069 (Wilcoxon p=.0001, n=90), in the same direction on all three
+    models. Recall is near-ceiling for both (.960 vs .989); the loss is precision
+    (.639 vs .720), driven by hallucination rising from .098 to .154 (paired p=.0088).
+    Meanwhile the 30.0% prompt-token saving yields only a 3.5% cost saving, because
+    completion tokens dominate. Recommendation: use the natural-language prompt for
+    extraction; the Caveman Protocol's value is schema discipline, not token count.
+  - Regex reaches F1 .156 — its patterns need literal "mean … std" phrasing and almost
+    never fire on real tables. Its precision of 1.000 is an artifact of near-total silence,
+    which also gives it the best abstention (3/3 silence cases correct, vs 11% for
+    natural-language and 0% for Caveman). Neither LLM arm reliably declines to answer.
+  - Real excerpts are much harder than constructed ones (F1 .550 vs .803, hallucination
+    .331 vs .052 for the Caveman arm) — direct evidence that synthetic evaluation text
+    overstates extraction quality. By category, table footnotes (.911) and scientific
+    notation (.852) are solved; negated findings (.463) and repeated timepoints (.575) are
+    not, and the failure is judgement, not parsing.
+  - Paper blocks staged in `analysis/extraction_ablation_paper_snippets.tex`.
 
 ### 9.7 P1 — Synthesis and optimization diagnostics
 
