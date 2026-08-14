@@ -47,6 +47,29 @@ def test_frozen_baseline_is_unmodified(filename):
     )
 
 
+@pytest.mark.parametrize("script", [
+    "analysis/extraction_ablation.py",
+    "analysis/real_paper_eval.py",
+    "analysis/p0_utility_benchmark.py",
+    "analysis/adult_calibration.py",
+])
+def test_provenance_is_captured_before_outputs_are_written(script):
+    """collect_provenance() must run before the first write, not after.
+
+    Called afterwards, git_dirty is structurally always True: the run's own CSVs
+    are sitting in the working tree by the time provenance is recorded, so the
+    manifest can never report a clean tree however clean the checkout was.
+    """
+    source = (ROOT / script).read_text(encoding="utf-8")
+    call = source.index("collect_provenance(")
+    writes = [source.index(m) for m in ("to_csv(", "write_json(") if m in source]
+    assert writes, f"{script} writes no outputs; test assumption is wrong"
+    assert call < min(writes), (
+        f"{script} calls collect_provenance() after its first output write, "
+        f"which forces git_dirty=True in the manifest"
+    )
+
+
 def test_current_runs_do_not_target_frozen_filenames():
     """The producers must write alongside the baselines, never over them."""
     import benchmark

@@ -443,6 +443,12 @@ def run_calibration_study(n_seeds: int = 30, dataset: dict | None = None) -> pd.
 
 def main(n_seeds: int) -> None:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    # Captured before any output is written: recording provenance afterwards
+    # makes git_dirty structurally always True, because this run's own CSVs are
+    # in the working tree by then.
+    provenance = collect_provenance(
+        f"python analysis/adult_calibration.py --seeds {n_seeds}", range(n_seeds)
+    )
     raw = run_calibration_study(n_seeds=n_seeds)
     raw.to_csv(RESULTS_DIR / "adult_calibration_raw.csv", index=False)
     summary = summarize_long_results(
@@ -454,7 +460,7 @@ def main(n_seeds: int) -> None:
     )
     summary.to_csv(RESULTS_DIR / "adult_calibration.csv", index=False)
     write_json(RESULTS_DIR / "adult_calibration_run_manifest.json", {
-        **collect_provenance(f"python analysis/adult_calibration.py --seeds {n_seeds}", range(n_seeds)),
+        **provenance,
         "primary_metrics": {"classification": ["minority_f1", "roc_auc", "pred_pos_rate"]},
         "bootstrap_resamples": 10_000,
         "summary_parameter_scope": "training split only",

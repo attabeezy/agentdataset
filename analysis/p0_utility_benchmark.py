@@ -271,6 +271,12 @@ def run_utility_benchmark(n_seeds: int = 30, datasets: list[dict] | None = None)
 
 def main(n_seeds: int) -> None:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    # Captured before any output is written: recording provenance afterwards
+    # makes git_dirty structurally always True, because this run's own CSVs are
+    # in the working tree by then.
+    provenance = collect_provenance(
+        f"python analysis/p0_utility_benchmark.py --seeds {n_seeds}", range(n_seeds)
+    )
     raw = run_utility_benchmark(n_seeds=n_seeds)
     raw.to_csv(RESULTS_DIR / "p0_utility_raw.csv", index=False)
     summary = summarize_long_results(
@@ -278,7 +284,7 @@ def main(n_seeds: int) -> None:
     )
     summary.to_csv(RESULTS_DIR / "p0_utility_summary.csv", index=False)
     write_json(RESULTS_DIR / "p0_utility_run_manifest.json", {
-        **collect_provenance(f"python analysis/p0_utility_benchmark.py --seeds {n_seeds}", range(n_seeds)),
+        **provenance,
         "primary_metrics": {
             "classification": ["minority_f1", "roc_auc"],
             "regression": ["rmse", "r2"],

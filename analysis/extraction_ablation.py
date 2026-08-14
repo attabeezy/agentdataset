@@ -114,6 +114,15 @@ def main(reps: int, model_names: list[str] | None, categories: list[str] | None,
     cases = benchmark.load_challenge_set(CHALLENGE_SET, categories=categories)
     extractor = Extractor(model=providers[0]["model"], env_var=ENV_VAR)
 
+    # Captured BEFORE any output is written. Recording provenance afterwards
+    # makes git_dirty structurally always True, because this run's own CSVs are
+    # sitting in the working tree by then. Provenance must describe the code
+    # state that produced the results, not the tree state after writing them.
+    provenance = collect_provenance(
+        "python analysis/extraction_ablation.py " + " ".join(sys.argv[1:]),
+        seeds=list(range(reps)),
+    )
+
     raw = benchmark.run_extraction_challenge(
         extractor,
         challenge_set=cases,
@@ -140,9 +149,8 @@ def main(reps: int, model_names: list[str] | None, categories: list[str] | None,
     category_path = RESULTS_DIR / "extraction_challenge_by_category.csv"
     by_category.to_csv(category_path, index=False)
 
-    command = "python analysis/extraction_ablation.py " + " ".join(sys.argv[1:])
     manifest = {
-        "provenance": collect_provenance(command, seeds=list(range(reps))),
+        "provenance": provenance,
         "challenge_set": {
             "path": str(CHALLENGE_SET.relative_to(ROOT)),
             "sha256": sha256_file(CHALLENGE_SET),
