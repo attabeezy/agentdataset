@@ -24,8 +24,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 RESULTS_DIR = ROOT / "results"
-RAW = RESULTS_DIR / "noise_pivot_ablation_raw.csv"
-TRACES = RESULTS_DIR / "noise_pivot_traces.csv"
+RAW = RESULTS_DIR / "noise_pivot_ablation_raw.csv.gz"
+TRACES = RESULTS_DIR / "noise_pivot_traces.csv.gz"
 
 PRIMARY_METRIC = "best_score"
 

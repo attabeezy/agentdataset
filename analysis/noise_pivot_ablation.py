@@ -412,7 +412,10 @@ def main(seeds: int, quick: bool) -> None:
     validate_raw_results(raw)
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    raw.to_csv(RESULTS_DIR / f"{EXPERIMENT_ID}_raw.csv", index=False)
+    # The grid produces ~209k raw rows and ~125k trace rows; uncompressed these
+    # are ~62 MB and ~12 MB, an order of magnitude past anything else in
+    # results/. pandas reads .csv.gz transparently, so store them compressed.
+    raw.to_csv(RESULTS_DIR / f"{EXPERIMENT_ID}_raw.csv.gz", index=False)
 
     summary = summarize_long_results(
         raw, ["condition", "family", "factor", "level", "iterations", "split"]
@@ -420,7 +423,7 @@ def main(seeds: int, quick: bool) -> None:
     summary.to_csv(RESULTS_DIR / f"{EXPERIMENT_ID}_summary.csv", index=False)
 
     traces = pd.DataFrame(trace_rows)
-    traces.to_csv(RESULTS_DIR / "noise_pivot_traces.csv", index=False)
+    traces.to_csv(RESULTS_DIR / "noise_pivot_traces.csv.gz", index=False)
 
     write_json(
         RESULTS_DIR / f"{EXPERIMENT_ID}_run_manifest.json",

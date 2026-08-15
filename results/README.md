@@ -169,6 +169,91 @@ is routed through OpenRouter, so one `OPENROUTER_API_KEY` covers the sweep. See
 `analysis/EXTRACTION_CHALLENGE_PROTOCOL.md` for the annotation rules and
 limitations.
 
+### Synthesis and optimization diagnostics (§9.7)
+
+**Headline: the advertised copula path is almost never bypassed for the reason
+we assumed, and very often bypassed for a reason we had not measured.**
+Positive-definiteness is not the binding constraint on real inputs — every
+templated, gold, and auto-extracted matrix in the sweep is positive-definite.
+What actually destroys dependence is *name resolution*: a declared correlation
+whose variables are absent from the extracted variable dictionary is discarded
+silently, leaving an identity matrix that passes every validity check and
+imposes nothing.
+
+- `corr_validity_per_matrix.csv` — one row per correlation matrix the pipeline
+  builds, with `min_eigenvalue`, `condition_number`, `is_pd`, `action`
+  (`cholesky_ok` / `dropped_all` / `repaired_psd` / `no_correlations`),
+  `n_pairs_declared`, `n_pairs_applied`, `n_pairs_skipped_unknown_var`,
+  `n_pairs_overwritten`, and the `corr_score` obtained under both the shipped
+  drop-all fallback and the nearest-PSD repair.
+- `corr_validity_raw.csv` / `_summary.csv` — the same observations in the shared
+  long schema, grouped by input class. Key metrics: `is_pd`, `dropped_all`,
+  `vacuous_matrix` (no pair resolved), `pairs_applied_rate`, and
+  `effective_copula` (positive-definite *and* at least one pair applied).
+- Effective copula rate by input class: **auto-extracted 0/8 pairs applied
+  (0%)**, templated 11/20 (55%), gold 3/4 (75%). The regex extractor names
+  variables positionally (`var_1`, `var_2`, …) while emitting correlations under
+  the names found in the text, so no regex-extracted pair can ever resolve. This
+  is a plausible partial explanation for the Q3 LLM-vs-regex fidelity gap and is
+  guarded by `tests/test_corr_validity_audit.py::test_regex_extraction_produces_vacuous_matrices`.
+- Non-positive-definite matrices appear only in the constructed `stress` class
+  (4/5), which exists precisely so the 100% PD rate on natural inputs is a
+  measured result rather than an untested assumption.
+- The nearest-PSD repair (eigenvalue clipping with diagonal renormalisation,
+  Higham's first iterate) is **opt-in**: `Synthesizer(corr_repair="psd")`. The
+  default remains `"drop"`, so every frozen baseline in `baseline_manifest.json`
+  stays valid. On the slightly-invalid stress case the repair recovers
+  correlation fidelity that dropping destroys.
+- `noise_pivot_ablation_raw.csv.gz` / `_summary.csv` — the sensitivity grid over
+  `patience`, `initial_noise`, `explore_mult`, `exploit_factor`,
+  `reset_multiple`, and iteration budget, with fixed-noise, random-search, and
+  no-loop baselines matched on synthesize+validate call count. Extra columns:
+  `family`, `factor`, `level`, `iterations`, `split`.
+- `noise_pivot_traces.csv.gz` — per-iteration noise level, score, and pivot
+  `phase`, which is what makes the reset frequency and the budget-dependent
+  variance measurable rather than asserted.
+- `noise_pivot_tests.csv` / `_budget.csv` / `_variance.csv` — produced by
+  `analysis/noise_pivot_report.py` from the raw grid: paired Wilcoxon tests
+  against the shipped configuration with Holm–Bonferroni correction inside each
+  factor family, score and runtime by budget, and the variance decomposition.
+- Sources are split into a **tune** set and a held-out **report** set, declared
+  in code before any result was inspected and recorded in the run manifest, so
+  the question "were these hyperparameters tuned on the data you report on?" has
+  a checkable answer. Every finding below replicates on the held-out split with
+  near-identical effect sizes.
+
+**Headline: the shipped noise-pivot defaults are not empirically justified.**
+The fidelity landscape is monotone decreasing in noise with a cliff between
+0.05 and 0.1 (mean per-iteration score 97.8 at noise 0.01, 93.2 at 0.05, 70.8
+at 0.1, 62.0 at ≥0.2), and the shipped `initial_noise=0.1` sits on the wrong
+side of it. At the shipped 5-iteration budget the adaptive schedule scores
+88.50 (across-seed SD 10.0) against **99.88 (SD 0.07) for a fixed noise of
+0.01** — Δ +11.47, paired Cohen's *d* 1.09, Holm-adjusted Wilcoxon
+*p* = 3.9e-16. Budget-matched random search also wins (99.49). Zero iterations
+at noise 0.01 beats the incumbent's five-iteration run by +10.09. The loop is
+largely compensating for a bad default starting noise. The defaults are left
+unchanged here: that is a behaviour change and its own decision.
+
+**The 10-iteration variance is explained.** Outcomes are a two-point mixture —
+a run either accumulates enough halving steps to cross the noise cliff
+(scoring ~100) or does not (~60), with nothing in between; the frozen
+`ablation_noise_pivot.csv` spans [59.94, 100.00] at 10 iterations with 21
+distinct values in 40 cells. Across-run SD is therefore the spread of a
+Bernoulli mixture, maximal at the budget where about half the runs have
+crossed. That midpoint is 10 iterations in the paper's configuration (SD
+17.31) and ~5 here (43.6% reach ≥95 at 5 iterations, 95.5% at 10), so in this
+study SD *falls* monotonically with budget: 12.0 → 10.7 → 3.7 → 0.69 for
+budgets 0 → 5 → 10 → 20. It is a deterministic descent crossing a threshold,
+not the schedule getting lucky.
+
+**Caveat on the frozen `ablation_noise_pivot.csv`.** `run_ablation_noise_pivot`
+calls `np.random.seed(seed)`, which seeds the legacy global RNG, while
+`Synthesizer` draws from an instance-scoped `default_rng` — verified: changing
+the global seed leaves synthesis byte-identical. Since that function shares one
+`Synthesizer` across all cells, its `seed` column is a label rather than a
+control and the variation is the shared stream's position. The file stays
+frozen; the new study seeds a fresh `Synthesizer` per trial.
+
 Reproduce the new studies with:
 
 ```powershell
@@ -182,6 +267,12 @@ Reproduce the new studies with:
 .venv\Scripts\python.exe analysis\extraction_ablation.py --dry-run          # regex only, no API key
 .venv\Scripts\python.exe analysis\extraction_ablation.py --models openai --reps 1 --cases negated_finding
 .venv\Scripts\python.exe analysis\extraction_ablation.py --reps 5           # full 3-model sweep
+
+# Synthesis and optimization diagnostics (§9.7) — no API key required
+.venv\Scripts\python.exe analysis\corr_validity_audit.py
+.venv\Scripts\python.exe analysis\noise_pivot_ablation.py --quick          # smoke grid
+.venv\Scripts\python.exe analysis\noise_pivot_ablation.py --seeds 20       # full grid
+.venv\Scripts\python.exe analysis\noise_pivot_report.py                    # tests and tables
 ```
 
 The utility benchmark computes parameters from each training fold only. Raw

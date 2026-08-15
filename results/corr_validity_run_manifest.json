@@ -1,0 +1,63 @@
+{
+  "recorded_at_utc": "2026-08-14T23:49:11.066243+00:00",
+  "git_commit": "a411ea1387420fefcae7570f6c04ae0bad4b62e9",
+  "git_dirty": true,
+  "python_version": "3.13.5",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "dependency_lock": "uv.lock",
+  "dependency_lock_sha256": "5ac40da015af432f039e096ad94c70714a353f8f24133f5eec51bcef98a1ea3c",
+  "command": "uv run python analysis/corr_validity_audit.py",
+  "seeds": [
+    42
+  ],
+  "n_specs": 26,
+  "n_rows_per_dataset": 2000,
+  "source_classes": [
+    {
+      "source_class": "auto_extracted",
+      "n": 8,
+      "pd_rate": 1.0,
+      "dropped_rate": 0.0,
+      "vacuous_rate": 1.0,
+      "pairs_applied_rate": 0,
+      "pairs_declared": 8,
+      "mean_min_eigenvalue": 1.0,
+      "effective_copula_rate": 0.0
+    },
+    {
+      "source_class": "gold",
+      "n": 2,
+      "pd_rate": 1.0,
+      "dropped_rate": 0.0,
+      "vacuous_rate": 0.5,
+      "pairs_applied_rate": 3,
+      "pairs_declared": 4,
+      "mean_min_eigenvalue": 0.5758701893145445,
+      "effective_copula_rate": 0.75
+    },
+    {
+      "source_class": "stress",
+      "n": 5,
+      "pd_rate": 0.2,
+      "dropped_rate": 0.8,
+      "vacuous_rate": 0.0,
+      "pairs_applied_rate": 16,
+      "pairs_declared": 16,
+      "mean_min_eigenvalue": -0.2579514539176082,
+      "effective_copula_rate": 1.0
+    },
+    {
+      "source_class": "templated",
+      "n": 11,
+      "pd_rate": 1.0,
+      "dropped_rate": 0.0,
+      "vacuous_rate": 0.09090909090909091,
+      "pairs_applied_rate": 11,
+      "pairs_declared": 20,
+      "mean_min_eigenvalue": 0.6263161404490525,
+      "effective_copula_rate": 0.55
+    }
+  ],
+  "overall_pd_rate": 0.8461538461538461,
+  "collection_notes": []
+}

@@ -54,6 +54,8 @@ Central controller. Key responsibilities:
 - Builds correlation structure via Cholesky decomposition on the correlation matrix; applies it via rank transform.
 - Uses `np.random.default_rng(seed)` — instance-scoped, does not mutate global NumPy state.
 - Emits a `RuntimeWarning` if the correlation matrix is not positive-definite (falls back to independent synthesis).
+- Records a `CorrDiagnostics` per call on `last_diagnostics` / `diagnostics`: minimum eigenvalue, condition number, PD status, action taken, and pairs declared vs applied vs skipped. Positive-definiteness is measured with `eigvalsh`, not inferred from a Cholesky exception. **A pair naming a variable that was not extracted is skipped silently** — the resulting identity matrix is valid but imposes nothing, which §9.7 found to be the dominant way dependence is lost.
+- `corr_repair` selects the invalid-matrix policy: `"drop"` (default, discard all correlations), `"psd"` (project onto the nearest PSD correlation matrix), or `"none"`. The valid path keeps using the Cholesky factor; the repaired path uses an eigendecomposition factor, which also succeeds on semidefinite matrices.
 
 ### 2.5 Validator (`core/validator.py`)
 
@@ -88,6 +90,8 @@ otherwise                   → explore:  noise *= 1.1  (cap MAX_NOISE = 2.0)
 (Checked in that order; "otherwise" = any streak not divisible by `PATIENCE`.)
 
 `PATIENCE = 2` — so the cycle is: explore → exploit → explore → reset.
+
+All six knobs are exposed as `NoisePivotConfig` (with `next_noise()` as a pure transition function); the defaults reproduce the constants above exactly. **§9.7 measured them and they are not optimal**: the fidelity landscape falls off sharply above noise 0.05, so the shipped `initial_noise = 0.1` starts on the wrong side of the cliff and a fixed noise of 0.01 beats the schedule at equal budget. The defaults are retained so published results stay reproducible — see §9.7 before treating them as tuned.
 
 ---
 
@@ -177,7 +181,7 @@ supersedes it with 30-seed linear/nonlinear classification and regression.
 ### 8.1 Draft location & build
 The paper lives in `AuthorKit27/` (git-ignored — build artifacts excluded from the repo):
 
-- `AuthorKit27/main.tex` — canonical paper source. Compiles clean via MiKTeX `pdflatex` + `bibtex` to 9 pages: **main content ends on page 4** (within the limit), references pp. 5–6, technical appendix + reproducibility checklist pp. 7–9. (The `AnonymousSubmission2027.tex`/`CameraReady2027.tex` files in the kit are unused AAAI template boilerplate.)
+- `AuthorKit27/main.tex` — canonical paper source. Compiles clean via MiKTeX `pdflatex` + `bibtex`. After the §9.6 blocks landed this is **11 pages: main content now runs to ~page 6, i.e. at the limit rather than under it**, references p. 7, technical appendix + reproducibility checklist pp. 8–11. New main-text prose has essentially no headroom — put §9.7 and later material in the appendix (unlimited) with short pointers from the main text. (The `AnonymousSubmission2027.tex`/`CameraReady2027.tex` files in the kit are unused AAAI template boilerplate.)
 - `AuthorKit27/references.bib` — 35 references, including the three real-paper sources and disclosure-control literature.
 - `AuthorKit27/Figures/architecture.tex` → `architecture.pdf` — TikZ pipeline diagram (standalone-compiled to vector PDF, included via `\includegraphics`).
 - `AuthorKit27/ReproducibilityChecklist.tex` — filled in, `\input` at end of paper.
@@ -609,7 +613,7 @@ Numbers quoted in the paper are transcribed from `results/`, which stays here.
 
 ### 9.7 P1 — Synthesis and optimization diagnostics
 
-- [ ] **Analyze noise-pivot sensitivity.**
+- [x] **Analyze noise-pivot sensitivity.**
   - Vary `PATIENCE`, initial noise, exploration multiplier, exploitation factor, reset interval, and iteration budget using a predeclared grid or efficient design.
   - Report best score, final score, convergence rate, variance, runtime, and frequency of resets.
   - Compare the existing schedule with simple fixed-noise and/or random-search baselines.
@@ -617,21 +621,39 @@ Numbers quoted in the paper are transcribed from `results/`, which stays here.
   - Convert the current “use 5+ iterations” observation into a supported operational recommendation.
   - **Likely files:** `benchmark.py`, `agentdataset/core/orchestrator.py` if configuration is exposed, and optimizer tests.
   - **Done when:** the chosen defaults are justified empirically and the high 10-iteration variance is explained.
+  - **Result.** Schedule exposed as `NoisePivotConfig` + a pure `next_noise()` in `agentdataset/core/orchestrator.py`; defaults reproduce the shipped constants bit-for-bit. `analysis/noise_pivot_ablation.py` ran 20,900 trials (95 conditions × 11 sources × 20 seeds, 124,960 synthesize+validate steps) → `results/noise_pivot_ablation_raw.csv`, `noise_pivot_traces.csv`; `analysis/noise_pivot_report.py` → `noise_pivot_tests.csv`, `_budget.csv`, `_variance.csv`. Sources carry a predeclared tune/report split; **every conclusion below replicates on the held-out report split with near-identical effect sizes**, so the defaults were not chosen on the reporting data.
+  - **The defaults are not justified — the data says the opposite.** The fidelity landscape is monotone decreasing in noise with a cliff between 0.05 and 0.1 (mean per-iteration score: 97.8 at noise 0.01, 93.2 at 0.05, 70.8 at 0.1, 62.0 at ≥0.2). The shipped `initial_noise=0.1` sits on the wrong side of that cliff, and the incumbent spends 890 of 1,100 logged iterations in the (0.09, 0.11] band scoring ~69.
+  - **A fixed low noise beats the adaptive schedule outright.** At the shipped 5-iteration budget: incumbent 88.50 (across-seed SD 10.0) vs `fixed_noise=0.01` **99.88 (SD 0.07)**, Δ +11.47, paired Cohen's d 1.09, Wilcoxon Holm-adjusted p 3.9e-16 (tune) / 3.5e-19 (report). Budget-matched random search also beats it (99.49, Δ +11.23). Even **zero** iterations at noise 0.01 beats the incumbent's five-iteration run by +10.09. The loop is largely compensating for a bad default starting noise.
+  - Of the single-factor changes, only `initial_noise=0.05` (+11.44, d 1.09), `patience=1` (+7.57), and `exploit_factor=0.25` (+1.67) help; `explore_mult` and `reset_multiple` changes are not significant. All point the same way: get to low noise faster, and stop exploring upward.
+  - **The 10-iteration variance is explained, and it is not instability.** Outcomes are a two-point mixture: a run either accumulates enough exploit (halving) steps within its budget to cross the noise cliff, scoring ~100, or it does not, scoring ~60. Nothing lands in between — the frozen `results/ablation_noise_pivot.csv` at 10 iterations ranges [59.94, 100.00] with 21 distinct values in 40 cells. Across-run SD is therefore the spread of a Bernoulli mixture, **maximal at the budget where about half the runs have crossed** and collapsing on either side. In the paper's configuration that midpoint is 10 iterations (hence SD 17.31); in this study's configuration it is ~5 (share reaching ≥95: 43.6% at 5 iterations, 95.5% at 10), and SD falls monotonically 12.0 → 10.7 → 3.7 → 0.69 across budgets 0 → 5 → 10 → 20. The old draft's reading — "the schedule occasionally discovers a much better noise regime" — attributes to luck what is a deterministic descent crossing a threshold.
+  - **Why the original ablation looked stochastic at all.** `benchmark.run_ablation_noise_pivot` calls `np.random.seed(seed)`, which seeds the legacy global RNG, while `Synthesizer` draws from an instance-scoped `np.random.default_rng`. Verified empirically: changing the global seed leaves synthesis byte-identical. Because that function shares one `Synthesizer` across every cell, the `seed` column is a label rather than a control, and the observed variation is the shared generator's stream position — which advances by different amounts depending on the iteration count of the preceding cells. `results/ablation_noise_pivot.csv` stays frozen; the new study seeds a fresh `Synthesizer` per trial.
+  - **Operational recommendation, replacing "use 5+ iterations":** lower the initial noise to ≤0.05 (or expose it), where a 1–3 iteration budget already reaches ~99.8. Iteration budget is a weak and expensive substitute for a correct starting noise; keep 5 only as a safety margin if the initial noise stays at 0.1.
+  - **Not changed:** the shipped defaults are left untouched in this change so the frozen baselines and every published number stay valid. Changing `initial_noise` is a behaviour change that should be its own decision, taken with the paper's numbers regenerated.
 
-- [ ] **Measure correlation-matrix validity and fallback behavior.**
+- [x] **Measure correlation-matrix validity and fallback behavior.**
   - Log the minimum eigenvalue, positive-definite status, repair/fallback action, and source of every correlation matrix.
   - Report frequency by templated inputs, real-paper gold statistics, and automatic extraction.
   - Evaluate a documented nearest-positive-semidefinite repair instead of immediately dropping all correlations, but retain the current behavior as a baseline.
   - Add unit tests for slightly invalid, severely invalid, incomplete, and contradictory matrices.
   - **Likely files:** `agentdataset/core/synthesizer.py`, `tests/test_synthesizer.py`, benchmark outputs.
   - **Done when:** the paper quantifies how often the advertised copula path is actually used.
+  - **Result.** `Synthesizer` now records `CorrDiagnostics` per matrix (minimum eigenvalue, condition number, PD status, action, pairs declared/applied/skipped/overwritten) and measures positive-definiteness with `eigvalsh` instead of inferring it from a Cholesky exception. `analysis/corr_validity_audit.py` sweeps 26 correlation-bearing specs across templated, gold, auto-extracted, and constructed stress inputs → `results/corr_validity_per_matrix.csv`, `_raw.csv`, `_summary.csv`, `_run_manifest.json`.
+  - **The premise of this item turned out to be wrong, in a way worth reporting.** Non-positive-definiteness is *not* how the copula path gets bypassed on real inputs: every templated, gold, and auto-extracted matrix in the sweep is positive-definite (PD rate 100%; non-PD occurs only in the 5 constructed stress cases, 4/5). The actual mechanism is **name resolution**. A declared correlation whose variables are absent from the extracted variable dictionary is dropped silently at `synthesizer.py`, leaving an identity matrix that passes every validity check and imposes nothing.
+  - **Effective copula rate** (pairs actually applied / pairs declared): **auto-extracted 0/8 = 0%**, templated 11/20 = 55%, gold 3/4 = 75%. The regex extractor names variables positionally (`var_1`, `var_2`, …) while emitting correlations under the names found in the text, so no regex-extracted pair can ever resolve. This is a plausible partial explanation for the Q3 LLM-vs-regex gap and is pinned by `tests/test_corr_validity_audit.py::test_regex_extraction_produces_vacuous_matrices`, which will fail if the extractor is fixed — at which point these numbers must be regenerated.
+  - Nearest-PSD repair (eigenvalue clipping + diagonal renormalisation, Higham's first iterate) added as **opt-in** `Synthesizer(corr_repair="psd")`; drop-all remains the default so the six frozen hashes in `results/baseline_manifest.json` stay valid. On the slightly-invalid stress case the repair recovers correlation fidelity that dropping destroys. The valid path deliberately keeps the Cholesky factor: the eigendecomposition factor is equally correct but produces different samples, which would silently invalidate every frozen baseline.
+  - Unit tests added for all four required cases in `tests/test_synthesizer.py` (slightly invalid r=(.9,.9,.61), severely invalid (.9,.9,−.9), incomplete with implicit zeros, contradictory with an unknown variable and a duplicate pair), plus an exactly-singular case and a regression test reconstructing the pre-change code path.
+  - `analysis/real_paper_eval.py` no longer string-matches the RuntimeWarning text; it reads the structured diagnostics and additionally reports `vacuous_matrix_count`.
 
-- [ ] **Clarify dependence-model limitations.**
+- [x] **Clarify dependence-model limitations.**
   - Explain why Pearson correlation is currently used.
   - Discuss categorical encoding, nonlinear dependence, higher-order interactions, Spearman/Kendall alternatives, and vine-copula feasibility.
   - Avoid promising recovery of relationships not represented in the published statistics.
   - An implementation change to vine copulas is optional; a precise operating envelope is required.
   - **Done when:** the Adult results are connected to the pairwise-dependence limitation in the method and discussion.
+  - **Result.** Written as the `method-envelope` and `discussion-dependence` blocks in `AuthorKit27/noise_pivot_paper_snippets.tex`. The stated envelope: AgentDataset reproduces per-variable marginals and *pairwise monotone* association, and nothing beyond that.
+  - **Why Pearson:** it is the only dependence statistic reliably present in published aggregate statistics. Spearman/Kendall would be nearly free given the rank transform already in the pipeline (`synthesizer.py` reorders each marginal by the latent's ranks, so the imposed dependence is closer to a rank correlation than to Pearson's — worth stating precisely rather than claiming Pearson fidelity). Vine copulas need joint data or far richer reported statistics and are therefore outside the literature-only operating envelope; not implemented, and the paper says so rather than promising it.
+  - **Categorical encoding is a hard limit, not a footnote.** Categorical variables are drawn as integer category codes and rank-transformed, so a correlation involving a categorical is a correlation against an arbitrary label ordering. This is now stated in Method.
+  - **Connected to the Adult results (the acceptance criterion):** §9.5 showed an oracle threshold fitted on real test labels still leaves HGB −.025 below TRTR — exactly its ROC-AUC loss — and independent marginals −.192 at AUC .509. The residual *is* the ranking deficit: thresholding cannot restore dependence that was never synthesized. §9.7's audit supplies the mechanism from the other end — for auto-extracted specs, 0% of declared correlations are ever applied, so those datasets are independent marginals in all but name.
 
 ### 9.8 P1 — Baselines and cost accounting
 
