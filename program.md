@@ -62,6 +62,39 @@ Each iteration:
 
 ---
 
+## What Each Phase Costs
+
+Measured end to end over three real papers (GPT-4o via OpenRouter, 3 synthesis
+seeds, 3 refinement iterations) by `analysis/end_to_end_cost.py`. Means per
+finished dataset:
+
+| Phase | Stage | API ($) | API (s) | Local (s) |
+|-------|-------|--------:|--------:|----------:|
+| 0 | Query expansion (LLM) | .0009 | 2.31 | 0.00 |
+| 0 | Web search | — | — | 31.60 |
+| 1 | Fetch | — | — | 6.15 |
+| 1 | Parse | — | — | 0.05 |
+| 1 | Extraction (LLM) | .0113 | 3.74 | 0.00 |
+| 2 | Synthesis | — | — | 0.03 |
+| 3 | Validation | — | — | 0.12 |
+| 2&3 | Refinement overhead | — | — | 0.06 |
+| | **One dataset** | **.0122** | **6.05** | **38.01** |
+
+Two things worth knowing before optimizing anything:
+
+- **Phase 0 search dominates wall time** — roughly 31 s of the 44 s total. The
+  synthesis-validation loop that this document mostly describes accounts for
+  under 0.25 s.
+- **Extraction cost scales with document length.** Real papers fill the
+  `text[:10000]` input budget and cost ~$0.0113 per call at ~2,856 prompt
+  tokens, about 5× the figure measured on short benchmark snippets. Budget per
+  document, not per call.
+
+Raw data: `results/end_to_end_cost_latency.csv`. Per-call token, cost, latency,
+and failure rows are recorded on `Extractor.call_history` for any run.
+
+---
+
 ## Output Artifacts
 
 Written to `.agentdataset_cache/sessions/<run_id>/` on each improvement:

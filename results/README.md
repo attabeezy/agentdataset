@@ -335,6 +335,9 @@ changed. The self-refinement contribution bullet became an audit of the
 internal objective, and System Overview, Q1, Discussion, and the scoring
 appendix now state the score's scope.
 
+Every claim in the paper is traced to the artifact that backs it, with a
+re-derivation recipe, in `analysis/EVIDENCE_TO_CLAIM_MAP.md`.
+
 ### End-to-end cost and latency (§9.8)
 
 **Headline: one finished dataset costs about $0.012 and 44 seconds, and neither

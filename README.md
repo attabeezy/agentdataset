@@ -36,6 +36,29 @@ Query → Discovery → Extraction → Synthesis ⇄ Validation → data.csv + D
 
 ---
 
+## What It Costs
+
+Producing **one finished dataset** from a real paper costs about **$0.0122 in
+API spend and 44 seconds**, measured end to end over three real papers with
+GPT-4o via OpenRouter:
+
+| | API ($) | API (s) | Local (s) |
+|---|--------:|--------:|----------:|
+| Discovery (query expansion + search) | .0009 | 2.31 | 31.60 |
+| Extraction (fetch + parse + LLM) | .0113 | 3.74 | 6.20 |
+| Synthesis, validation, refinement | — | — | 0.21 |
+| **Total** | **.0122** | **6.05** | **38.01** |
+
+Wall time is dominated by web search, not by the LLM or the optimization loop.
+Extraction cost scales with document length — full-length papers cost roughly 5×
+the per-call figure measured on short benchmark snippets.
+
+Per-stage breakdown: `results/end_to_end_cost_latency.csv`. Reproduce with
+`uv run python analysis/end_to_end_cost.py` (add `--dry-run` to run without an
+API key).
+
+---
+
 ## Supported API Providers
 
 Select in the sidebar on app load. The correct env var is pre-filled automatically.
@@ -86,7 +109,9 @@ agentdataset/
 │   │   └── validator.py      # Fidelity + row-dispersion diagnostics
 │   └── models/
 │       └── schemas.py        # Pydantic data models
-├── tests/                    # 58 unit tests plus opt-in live e2e
+├── analysis/                 # Reviewer-revision studies, protocols, evidence map
+├── results/                  # Released result CSVs and run manifests
+├── tests/                    # 216 unit tests plus opt-in live e2e
 └── .agentdataset_cache/      # Ignored runtime output, reports, sessions, artifacts
 ```
 

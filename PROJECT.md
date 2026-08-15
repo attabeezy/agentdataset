@@ -244,6 +244,7 @@ The work below is ordered by submission impact. A checkbox should be marked comp
   - For each abstract, introduction, and conclusion claim, identify the experiment or analysis that supports it.
   - Downgrade claims that are supported only by templated inputs, data-access baselines, or descriptive evidence.
   - **Done when:** there are no claims of demonstrated autonomous web-to-dataset performance unless the real-paper study succeeds.
+  - **Deliverable:** `analysis/EVIDENCE_TO_CLAIM_MAP.md` — one row per claim with its location in `main.tex`, the backing artifact, and how to re-derive the number. Written out when §9.8 landed; the §9.8 rows are exhaustive and verified against the released artifacts, earlier sections point at the records they produced. It also documents the one deliberate divergence between the paper and a released artifact (abstract/Q1 quote the pre-prompt-switch extraction F1 of .247 to match the frozen Table 1, while `analysis/real_paper_extraction_summary.csv` holds .3038 and the appendix states the rise explicitly).
 
 ### 9.2 P0 — Real-paper end-to-end study
 
