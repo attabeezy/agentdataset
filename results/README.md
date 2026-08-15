@@ -254,6 +254,38 @@ the global seed leaves synthesis byte-identical. Since that function shares one
 control and the variation is the shared stream's position. The file stays
 frozen; the new study seeds a fresh `Synthesizer` per trial.
 
+### What the fidelity score certifies (§9.7 follow-up)
+
+**The reported fidelity score is exactly invariant to errors in the extracted
+parameters.** `fidelity_validity_probe_raw.csv` builds parameters from three
+real UCI datasets, corrupts them, synthesizes from the corrupted parameters,
+and records both what the system reports (`reported_*`, scored against the
+parameters it believes) and how far the output actually is from the real data
+(`external_*`). Within every (dataset, seed) cell the reported score takes a
+**single value across all 14 corruption conditions**, while the external
+two-sample KS distance rises 0.126 → 0.967 and the mean error reaches 141.9
+standard deviations. Attaching each variable's statistics to a different
+variable changes the reported score by zero.
+
+This is invariance by construction. The KS term (weight .40) compares each
+column against the same parameterized CDF, with the same mean and standard
+deviation, that the synthesizer drew it from; the bias term (.20) compares the
+sample mean against that same declared mean. Any location–scale error in the
+parameters moves the data and the reference together and cancels. The
+correlation term (.40) is the exception and does carry signal — it detects a
+dropped or unresolved matrix (52–67 against 80–100 repaired) — but it too
+reproduces a wrong *declared* correlation faithfully.
+
+Net: the score measures whether the synthesizer did what it was told, never
+whether it was told the right thing. That is the common cause behind high
+intrinsic fidelity coexisting with weak TSTR/HGB utility, and behind extraction
+quality never surfacing in fidelity.
+
+**Acted on:** the paper was reframed rather than renumbered — no reported value
+changed. The self-refinement contribution bullet became an audit of the
+internal objective, and System Overview, Q1, Discussion, and the scoring
+appendix now state the score's scope.
+
 Reproduce the new studies with:
 
 ```powershell
@@ -273,6 +305,7 @@ Reproduce the new studies with:
 .venv\Scripts\python.exe analysis\noise_pivot_ablation.py --quick          # smoke grid
 .venv\Scripts\python.exe analysis\noise_pivot_ablation.py --seeds 20       # full grid
 .venv\Scripts\python.exe analysis\noise_pivot_report.py                    # tests and tables
+.venv\Scripts\python.exe analysis\fidelity_validity_probe.py --seeds 5     # what the score certifies
 ```
 
 The utility benchmark computes parameters from each training fold only. Raw
