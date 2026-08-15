@@ -312,3 +312,101 @@ def test_regex_categorical_name_is_normalized_for_matching():
     assert variables["sex"].categories == {"Female": 0.4, "Male": 0.6}
     corr = list(correlations.values())[0]
     assert corr.var1 in variables and corr.var2 in variables
+
+
+# --- LLM path: fallback-only correlation name resolution ----------------------
+
+
+def _llm_payload(variables, correlations):
+    return {"variables": variables, "correlations": correlations}
+
+
+def test_llm_exact_names_pass_through_unchanged():
+    """The guarantee that makes this change safe: exact matches are untouched.
+
+    If this breaks, previously reported extraction numbers could move.
+    """
+    ext = Extractor()
+    data = _llm_payload(
+        {
+            "heart_rate": {"distribution": "normal", "mean": 72.0, "std": 8.0},
+            "blood_pressure": {"distribution": "normal", "mean": 120.0, "std": 15.0},
+        },
+        {"c1": {"var1": "heart_rate", "var2": "blood_pressure", "correlation": 0.35}},
+    )
+    _, correlations = ext._parse_llm_result(data)
+    corr = correlations["c1"]
+    assert corr.var1 == "heart_rate"
+    assert corr.var2 == "blood_pressure"
+
+
+def test_llm_correlation_name_resolves_by_normalization():
+    """A response that spells the variable differently in its correlations."""
+    ext = Extractor()
+    data = _llm_payload(
+        {
+            "heart_rate": {"distribution": "normal", "mean": 72.0, "std": 8.0},
+            "blood_pressure": {"distribution": "normal", "mean": 120.0, "std": 15.0},
+        },
+        {"c1": {"var1": "Heart Rate", "var2": "blood pressure", "correlation": 0.35}},
+    )
+    variables, correlations = ext._parse_llm_result(data)
+    corr = correlations["c1"]
+    assert corr.var1 == "heart_rate"
+    assert corr.var2 == "blood_pressure"
+    assert corr.var1 in variables and corr.var2 in variables
+
+
+def test_llm_ambiguous_name_is_left_unresolved():
+    """Two variables differing only by case are ambiguous; guessing would merge them."""
+    ext = Extractor()
+    data = _llm_payload(
+        {
+            "BMI": {"distribution": "normal", "mean": 27.0, "std": 5.0},
+            "bmi": {"distribution": "normal", "mean": 31.0, "std": 6.0},
+            "age": {"distribution": "normal", "mean": 40.0, "std": 10.0},
+        },
+        {"c1": {"var1": "b m i", "var2": "age", "correlation": 0.2}},
+    )
+    variables, correlations = ext._parse_llm_result(data)
+    corr = correlations["c1"]
+    # Left exactly as the model wrote it, so the synthesizer counts it as skipped
+    # rather than silently attaching it to whichever variable sorted first.
+    assert corr.var1 == "b m i"
+    assert corr.var1 not in variables
+
+
+def test_llm_unmatched_variable_is_preserved_not_dropped():
+    """A correlation naming an unreported variable stays visible in diagnostics."""
+    ext = Extractor()
+    data = _llm_payload(
+        {"age": {"distribution": "normal", "mean": 40.0, "std": 10.0}},
+        {"c1": {"var1": "age", "var2": "income", "correlation": 0.3}},
+    )
+    variables, correlations = ext._parse_llm_result(data)
+    corr = correlations["c1"]
+    assert corr.var2 == "income"
+    assert corr.var2 not in variables
+
+
+def test_llm_resolution_makes_correlation_apply_in_synthesis():
+    """End to end: the resolved pair actually reaches the correlation matrix."""
+    from agentdataset.core.synthesizer import Synthesizer
+    from agentdataset.models.schemas import MetaParams, Parameters
+
+    ext = Extractor()
+    variables, correlations = ext._parse_llm_result(_llm_payload(
+        {
+            "heart_rate": {"distribution": "normal", "mean": 72.0, "std": 8.0},
+            "blood_pressure": {"distribution": "normal", "mean": 120.0, "std": 15.0},
+        },
+        {"c1": {"var1": "Heart Rate", "var2": "Blood Pressure", "correlation": 0.6}},
+    ))
+    params = Parameters(
+        variables=variables, correlations=correlations,
+        meta=MetaParams(source="s", extracted_at="n"),
+    )
+    synth = Synthesizer(n_rows=2000, seed=0)
+    synth.synthesize(params)
+    assert synth.last_diagnostics.n_pairs_applied == 1
+    assert synth.last_diagnostics.n_pairs_skipped_unknown_var == 0

@@ -195,6 +195,33 @@ _PATTERN_NAME_BEFORE_STAT = re.compile(
 )
 
 
+def _resolve_correlation_name(
+    name: str, variables: Dict[str, Any], by_normalized: Dict[str, list]
+) -> str:
+    """Map a correlation's variable name onto a declared variable, if it can be.
+
+    Strictly a fallback. An exact hit is returned untouched, so a response whose
+    correlations already reference declared variables is passed through
+    unchanged and no previously reported number can move. Only when the literal
+    name matches nothing do we retry on the normalized form, and only when that
+    normalized form identifies exactly one declared variable -- two variables
+    that differ solely by case or punctuation are genuinely ambiguous, and
+    guessing between them would silently merge distinct columns.
+
+    An unresolvable name is returned as given rather than dropped: the
+    synthesizer then records it in `n_pairs_skipped_unknown_var`, which is how a
+    correlation whose variable was never extracted stays visible instead of
+    vanishing. That case is legitimate -- papers often report a correlation
+    without reporting both marginals.
+    """
+    if name in variables:
+        return name
+    candidates = by_normalized.get(_normalize_variable_name(name), [])
+    if len(candidates) == 1:
+        return candidates[0]
+    return name
+
+
 def _normalize_variable_name(name: str) -> str:
     """Canonical form used to match correlation pairs against variables.
 
@@ -326,11 +353,18 @@ class Extractor:
                 categories=categories,
             )
 
+        # Names are resolved against the declared variables only when the literal
+        # name does not already match, so a self-consistent response is passed
+        # through byte-for-byte. See _resolve_correlation_name.
+        by_normalized: Dict[str, list] = {}
+        for declared in variables:
+            by_normalized.setdefault(_normalize_variable_name(declared), []).append(declared)
+
         correlations: Dict[str, CorrelationParams] = {}
         for key, c in data.get("correlations", {}).items():
             correlations[key] = CorrelationParams(
-                var1=c["var1"],
-                var2=c["var2"],
+                var1=_resolve_correlation_name(c["var1"], variables, by_normalized),
+                var2=_resolve_correlation_name(c["var2"], variables, by_normalized),
                 correlation=float(c.get("correlation") if c.get("correlation") is not None else 0.0),
                 direction=c.get("direction", "positive"),
             )

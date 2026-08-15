@@ -212,7 +212,16 @@ imposes nothing.
   by nearest mean rather than by name, so §9.6/Q3 extraction F1 is unchanged,
   and `real_paper_pipeline_raw.csv` holds only the `gold` and `llm` conditions
   (regex extracted no target items from the real papers), so Q1 is unchanged.
-  The LLM parse path is deliberately untouched.
+- The LLM parse path had the same structural gap and now carries a
+  **fallback-only** resolution: a correlation name is remapped only when the
+  literal name matches no declared variable, and only when its normalized form
+  identifies exactly one. Exact matches pass through byte-for-byte, so a
+  self-consistent LLM response is unaffected and no reported number can move.
+  Ambiguous names (`BMI` vs `bmi`) are left unresolved rather than guessed, and
+  unresolvable names are preserved so `n_pairs_skipped_unknown_var` still counts
+  them — the common, legitimate case of a paper reporting a correlation whose
+  marginals it never reports. The prompt is deliberately unchanged; requiring
+  `var1`/`var2` to be declared keys would regenerate Q3 and Q6.
 - Non-positive-definite matrices appear only in the constructed `stress` class
   (4/5), which exists precisely so the 100% PD rate on natural inputs is a
   measured result rather than an untested assumption.
