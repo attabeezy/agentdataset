@@ -190,12 +190,29 @@ imposes nothing.
   long schema, grouped by input class. Key metrics: `is_pd`, `dropped_all`,
   `vacuous_matrix` (no pair resolved), `pairs_applied_rate`, and
   `effective_copula` (positive-definite *and* at least one pair applied).
-- Effective copula rate by input class: **auto-extracted 0/8 pairs applied
-  (0%)**, templated 11/20 (55%), gold 3/4 (75%). The regex extractor names
-  variables positionally (`var_1`, `var_2`, …) while emitting correlations under
-  the names found in the text, so no regex-extracted pair can ever resolve. This
-  is a plausible partial explanation for the Q3 LLM-vs-regex fidelity gap and is
-  guarded by `tests/test_corr_validity_audit.py::test_regex_extraction_produces_vacuous_matrices`.
+- Effective copula rate **as first measured**: auto-extracted 0/8 pairs applied
+  (0%), templated 11/20 (55%), gold 3/4 (75%). The regex extractor named
+  continuous variables positionally (`var_1`, `var_2`, …) while emitting
+  correlations under the names found in the text, so no regex-extracted pair
+  could ever resolve.
+- **This was a real defect and has been fixed.** `_extract_with_regex` now
+  recovers the variable name from the prose immediately preceding a mean/std
+  hit and normalizes names on both sides, so `heart rate` in the prose matches
+  `heart_rate` in the correlation clause. After the fix: auto-extracted **8/8
+  (100%)**, templated **20/20 (100%)**, gold unchanged at 3/4 — that remaining
+  pair names a variable the source genuinely never reports, which is correct.
+  On the eight templated domains the correlation score rises **77.3 → 99.3**
+  and overall fidelity **50.9 → 59.7**, consistent across all eight.
+- Where the prose supplies no confident name the positional `var_N` fallback is
+  kept on purpose: a *wrong* name mismatches silently, which is worse than a
+  visibly unresolved one. Guarded by
+  `tests/test_corr_validity_audit.py::test_regex_correlations_resolve_against_extracted_variables`
+  and eight naming tests in `tests/test_extractor.py`.
+- The fix does **not** move other reported numbers. `_score_extraction` matches
+  by nearest mean rather than by name, so §9.6/Q3 extraction F1 is unchanged,
+  and `real_paper_pipeline_raw.csv` holds only the `gold` and `llm` conditions
+  (regex extracted no target items from the real papers), so Q1 is unchanged.
+  The LLM parse path is deliberately untouched.
 - Non-positive-definite matrices appear only in the constructed `stress` class
   (4/5), which exists precisely so the 100% PD rate on natural inputs is a
   measured result rather than an untested assumption.

@@ -61,14 +61,17 @@ def test_singular_matrix_is_classified_invalid_not_borderline():
     assert diag["is_pd"] is False
 
 
-def test_regex_extraction_produces_vacuous_matrices():
-    """Regression guard on the §9.7 headline finding.
+def test_regex_correlations_resolve_against_extracted_variables():
+    """Regression guard on the §9.7 fix.
 
-    The regex extractor names variables positionally (var_1, var_2, ...) but
-    emits correlations under the names found in the text, so no declared pair
-    can ever resolve. Every regex correlation is silently discarded before the
-    positive-definiteness question is even reached. If this test starts failing,
-    the extractor was fixed and the paper's numbers must be regenerated.
+    The regex extractor used to name continuous variables positionally
+    (var_1, var_2, ...) while emitting correlations under the names found in the
+    text, so no declared pair could ever resolve: every regex correlation was
+    discarded before positive-definiteness was even considered, leaving a valid
+    but vacuous identity matrix. Names are now recovered from the surrounding
+    prose and normalized on both sides.
+
+    If this fails, dependence is being silently dropped again.
     """
     import benchmark
     from agentdataset.core.extractor import Extractor
@@ -80,20 +83,31 @@ def test_regex_extraction_produces_vacuous_matrices():
 
     assert params.correlations, "the text does declare a correlation"
     declared_vars = set(params.variables)
-    named = {
-        name
-        for corr in params.correlations.values()
-        for name in (corr.var1, corr.var2)
-    }
-    assert not (named & declared_vars), "no correlation variable resolves"
+    for corr in params.correlations.values():
+        assert corr.var1 in declared_vars, f"{corr.var1} does not resolve"
+        assert corr.var2 in declared_vars, f"{corr.var2} does not resolve"
 
     spec = cva._spec("regex_probe", "auto_extracted", params, "regex")
     diag, _ = cva.audit_spec(spec)
-    assert diag["n_pairs_applied"] == 0
-    assert diag["n_pairs_skipped_unknown_var"] == len(params.correlations)
-    # The matrix is the identity, so it passes the PD check while imposing nothing.
-    assert diag["is_pd"] is True
-    assert diag["min_eigenvalue"] == pytest.approx(1.0)
+    assert diag["n_pairs_applied"] == len(params.correlations)
+    assert diag["n_pairs_skipped_unknown_var"] == 0
+    # A matrix that actually carries a correlation is no longer the identity.
+    assert diag["min_eigenvalue"] < 1.0
+    assert diag["action"] == "cholesky_ok"
+
+
+def test_unnamed_statistics_still_fall_back_to_positional_names():
+    """The fix must not invent names when the prose does not supply one.
+
+    A wrong name is worse than no name: it mismatches silently, where var_N is
+    at least visibly unresolved.
+    """
+    from agentdataset.core.extractor import Extractor
+
+    variables, _ = Extractor(api_key="", env_var="_TEST_NO_KEY")._extract_with_regex(
+        "The mean is 10.5 and the standard deviation is 2.1."
+    )
+    assert list(variables) == ["var_1"]
 
 
 def test_collect_specs_covers_every_input_class():

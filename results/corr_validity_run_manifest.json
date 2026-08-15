@@ -1,6 +1,6 @@
 {
-  "recorded_at_utc": "2026-08-14T23:49:11.066243+00:00",
-  "git_commit": "a411ea1387420fefcae7570f6c04ae0bad4b62e9",
+  "recorded_at_utc": "2026-08-15T04:45:34.390375+00:00",
+  "git_commit": "6c5ef0959fb86a191d33553dfdc27917d972e9c2",
   "git_dirty": true,
   "python_version": "3.13.5",
   "platform": "Windows-11-10.0.26200-SP0",
@@ -18,11 +18,11 @@
       "n": 8,
       "pd_rate": 1.0,
       "dropped_rate": 0.0,
-      "vacuous_rate": 1.0,
-      "pairs_applied_rate": 0,
+      "vacuous_rate": 0.0,
+      "pairs_applied_rate": 8,
       "pairs_declared": 8,
-      "mean_min_eigenvalue": 1.0,
-      "effective_copula_rate": 0.0
+      "mean_min_eigenvalue": 0.55,
+      "effective_copula_rate": 1.0
     },
     {
       "source_class": "gold",
@@ -51,11 +51,11 @@
       "n": 11,
       "pd_rate": 1.0,
       "dropped_rate": 0.0,
-      "vacuous_rate": 0.09090909090909091,
-      "pairs_applied_rate": 11,
+      "vacuous_rate": 0.0,
+      "pairs_applied_rate": 20,
       "pairs_declared": 20,
-      "mean_min_eigenvalue": 0.6263161404490525,
-      "effective_copula_rate": 0.55
+      "mean_min_eigenvalue": 0.5195259136057292,
+      "effective_copula_rate": 1.0
     }
   ],
   "overall_pd_rate": 0.8461538461538461,

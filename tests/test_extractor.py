@@ -212,3 +212,103 @@ def test_parse_llm_result_tolerates_explicit_null_numbers():
 
     assert variables["group"].categories == {"a": 0.5, "b": 0.5}
     assert correlations["x__y"].correlation == 0.0
+
+
+# --- §9.7 fix: regex variable naming ------------------------------------------
+
+
+def test_regex_names_variable_from_variable_clause():
+    """"The variable X has mean ... and std ..." -- the UCI prose form."""
+    ext = Extractor()
+    text = "The variable education_num has mean 10.08 and std 2.57."
+    variables, _ = ext._extract_with_regex(text)
+    assert "education_num" in variables
+    assert variables["education_num"].mean == 10.08
+    assert variables["education_num"].std == 2.57
+
+
+def test_regex_names_variable_from_distribution_clause():
+    """Multi-word names in prose normalize to the underscored form."""
+    ext = Extractor()
+    text = (
+        "We observed a heart rate distribution with mean 72.0 and std 8.0.\n"
+        "Blood pressure was normally distributed with mean 120.0 and std 15.0."
+    )
+    variables, _ = ext._extract_with_regex(text)
+    assert set(variables) == {"heart_rate", "blood_pressure"}
+    assert variables["heart_rate"].mean == 72.0
+    assert variables["blood_pressure"].std == 15.0
+
+
+def test_regex_correlation_resolves_against_named_variables():
+    """The whole point of the fix: the declared pair must reference real variables."""
+    ext = Extractor()
+    text = (
+        "We observed a heart rate distribution with mean 72.0 and std 8.0.\n"
+        "Blood pressure was normally distributed with mean 120.0 and std 15.0.\n"
+        "The correlation between heart_rate and blood_pressure is 0.35."
+    )
+    variables, correlations = ext._extract_with_regex(text)
+    corr = list(correlations.values())[0]
+    assert corr.var1 in variables and corr.var2 in variables
+
+
+def test_regex_does_not_capture_articles_or_filler_as_names():
+    """A wrong name mismatches silently, so the capture is deliberately narrow."""
+    ext = Extractor()
+    variables, _ = ext._extract_with_regex(
+        "In the sample, the mean is 10.5 and the standard deviation is 2.1."
+    )
+    assert list(variables) == ["var_1"]
+    assert not any(name in ("the", "a", "sample", "in_the_sample") for name in variables)
+
+
+def test_regex_falls_back_when_name_already_taken():
+    """Two variables must never collapse into one because they share a name."""
+    ext = Extractor()
+    text = (
+        "The variable age has mean 38.0 and std 13.0.\n"
+        "The variable age has mean 51.0 and std 9.0."
+    )
+    variables, _ = ext._extract_with_regex(text)
+    assert len(variables) == 2, "distinct statistics must stay distinct"
+    assert "age" in variables
+    assert any(name.startswith("var_") for name in variables)
+
+
+def test_regex_name_capture_does_not_reach_across_sentences():
+    """A name must be adjacent to its statistic, not merely somewhere earlier."""
+    ext = Extractor()
+    text = (
+        "The variable age was collected for every participant. "
+        "Some other text intervenes here to push the clause well out of range, "
+        "padding the gap further still. The mean is 10.5 and the std is 2.1."
+    )
+    variables, _ = ext._extract_with_regex(text)
+    assert list(variables) == ["var_1"]
+
+
+def test_normalize_variable_name():
+    from agentdataset.core.extractor import _normalize_variable_name
+
+    assert _normalize_variable_name("Heart Rate") == "heart_rate"
+    assert _normalize_variable_name("education_num") == "education_num"
+    assert _normalize_variable_name("  follow-up  ") == "follow_up"
+    assert _normalize_variable_name("BMI") == "bmi"
+
+
+def test_regex_categorical_name_is_normalized_for_matching():
+    """Categorical names normalize too, so they can resolve in a correlation."""
+    ext = Extractor()
+    text = (
+        "The categorical variable Sex takes value 'Female' with probability 0.4 "
+        "and 'Male' with probability 0.6.\n"
+        "The variable age has mean 38.0 and std 13.0.\n"
+        "The correlation between sex and age is 0.12."
+    )
+    variables, correlations = ext._extract_with_regex(text)
+    assert "sex" in variables
+    # Labels keep their original casing; only the variable name is normalized.
+    assert variables["sex"].categories == {"Female": 0.4, "Male": 0.6}
+    corr = list(correlations.values())[0]
+    assert corr.var1 in variables and corr.var2 in variables
