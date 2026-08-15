@@ -1,0 +1,136 @@
+{
+  "provenance": {
+    "recorded_at_utc": "2026-08-15T07:32:48.420969+00:00",
+    "git_commit": "5124636f85364b383d2e93a767ea34a0be29020f",
+    "git_dirty": true,
+    "python_version": "3.13.5",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "dependency_lock": "uv.lock",
+    "dependency_lock_sha256": "5ac40da015af432f039e096ad94c70714a353f8f24133f5eec51bcef98a1ea3c",
+    "command": "python analysis/end_to_end_cost.py --seeds 3",
+    "seeds": [
+      0,
+      1,
+      2
+    ]
+  },
+  "provider": "openrouter",
+  "model": "openrouter/openai/gpt-4o",
+  "gateway": "openrouter",
+  "mode": "live",
+  "sources": [
+    "cdc_nhanes_rural_urban",
+    "calerie_rct",
+    "student_mental_health"
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "refinement_iterations": 3,
+  "scope": "cost of producing one final dataset per source; network and LLM stages run once, local stages averaged over seeds",
+  "stages": [
+    "query_expansion",
+    "search",
+    "fetch",
+    "parse",
+    "extraction",
+    "synthesis",
+    "validation",
+    "refinement_overhead"
+  ],
+  "totals": {
+    "api_cost_usd": 0.0367475,
+    "api_latency_seconds": 18.139682399996673,
+    "local_compute_seconds": 114.01648363334485,
+    "wall_seconds": 132.15616603334152,
+    "llm_calls": 6.0,
+    "llm_call_failures": 0.0,
+    "prompt_tokens": 8791.0,
+    "completion_tokens": 1477.0
+  },
+  "llm_calls": [
+    {
+      "purpose": "general_llm",
+      "stage": "query_expansion",
+      "model": "openrouter/openai/gpt-4o",
+      "status": "ok",
+      "latency_seconds": 2.824479599999904,
+      "prompt_tokens": 75,
+      "completion_tokens": 75,
+      "total_tokens": 150,
+      "cache_creation_input_tokens": null,
+      "cache_read_input_tokens": null,
+      "cost_usd": 0.0009375
+    },
+    {
+      "purpose": "structured_extraction",
+      "stage": "extraction",
+      "model": "openrouter/openai/gpt-4o",
+      "status": "ok",
+      "latency_seconds": 4.026557000004686,
+      "prompt_tokens": 2332,
+      "completion_tokens": 204,
+      "total_tokens": 2536,
+      "cache_creation_input_tokens": null,
+      "cache_read_input_tokens": null,
+      "cost_usd": 0.00787,
+      "fence_stripped": false
+    },
+    {
+      "purpose": "general_llm",
+      "stage": "query_expansion",
+      "model": "openrouter/openai/gpt-4o",
+      "status": "ok",
+      "latency_seconds": 1.9120570000013686,
+      "prompt_tokens": 72,
+      "completion_tokens": 80,
+      "total_tokens": 152,
+      "cache_creation_input_tokens": null,
+      "cache_read_input_tokens": null,
+      "cost_usd": 0.00098
+    },
+    {
+      "purpose": "structured_extraction",
+      "stage": "extraction",
+      "model": "openrouter/openai/gpt-4o",
+      "status": "ok",
+      "latency_seconds": 3.235932600000524,
+      "prompt_tokens": 3629,
+      "completion_tokens": 461,
+      "total_tokens": 4090,
+      "cache_creation_input_tokens": null,
+      "cache_read_input_tokens": null,
+      "cost_usd": 0.0136825,
+      "fence_stripped": false
+    },
+    {
+      "purpose": "general_llm",
+      "stage": "query_expansion",
+      "model": "openrouter/openai/gpt-4o",
+      "status": "ok",
+      "latency_seconds": 2.190919299995585,
+      "prompt_tokens": 76,
+      "completion_tokens": 64,
+      "total_tokens": 140,
+      "cache_creation_input_tokens": null,
+      "cache_read_input_tokens": null,
+      "cost_usd": 0.00083
+    },
+    {
+      "purpose": "structured_extraction",
+      "stage": "extraction",
+      "model": "openrouter/openai/gpt-4o",
+      "status": "ok",
+      "latency_seconds": 3.9497368999946048,
+      "prompt_tokens": 2607,
+      "completion_tokens": 593,
+      "total_tokens": 3200,
+      "cache_creation_input_tokens": null,
+      "cache_read_input_tokens": null,
+      "cost_usd": 0.0124475,
+      "fence_stripped": false
+    }
+  ]
+}

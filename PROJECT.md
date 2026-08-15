@@ -676,20 +676,22 @@ Numbers quoted in the paper are transcribed from `results/`, which stays here.
 
 ### 9.8 P1 — Baselines and cost accounting
 
-- [ ] **Add a fair summary-statistics-only baseline presentation.**
+- [x] **Add a fair summary-statistics-only baseline presentation.**
   - Keep independent marginals as the primary like-for-like baseline.
   - Consider adding a simple non-iterative copula synthesis baseline if it is meaningfully different from the current synthesizer.
   - Continue labeling SDV as a real-data-access upper bound, never as a directly comparable competitor.
   - State exactly which inputs each method receives in table captions.
   - **Done when:** readers can separate the value of correlations, optimization, extraction, and access to real records.
+  - **Done:** the input each method receives is now stated per column in the captions of Table~2 (`tab:empirical`) and Table~9 (`tab:calibration`) — the latter previously repeated the same four columns with no provenance note at all. No new baseline was added: a non-iterative copula baseline would differ from the shipped synthesizer only in the optimization loop, and §9.7 already measures that loop directly (and finds it inert at the shipped budget), so it would duplicate an existing result rather than isolate a new one.
 
-- [ ] **Report total end-to-end cost and latency.**
+- [x] **Report total end-to-end cost and latency.**
   - Instrument discovery query expansion, search/fetch, document parsing, extraction for every selected document, synthesis, validation, refinement, and retry/failure overhead.
   - Separate paid API cost from local compute time.
   - Report per-stage and total values for each real-paper pipeline run.
   - Include the number of LLM calls, input/output tokens, documents processed, and optimization iterations.
   - **Deliverable:** `results/end_to_end_cost_latency.csv`.
   - **Done when:** a practitioner can estimate the cost of producing one final dataset, not just one extraction call.
+  - **Done:** `analysis/end_to_end_cost.py` times all eight stages and writes the deliverable plus a summary and run manifest. One dataset costs **$0.0122 and 44 s**. Two things the per-call table could not show: web search is ~31 s of the 44 s while the whole synthesize–validate–refine loop is under 0.25 s, and extraction on real full-length papers costs **$0.0113/call at 2,856 prompt tokens** against $0.0023 at 363 tokens in Table~4, which was measured on short challenge-set snippets — a ~5× understatement. Instrumentation is in shared code (`Extractor.stage_scope`, `Extractor._record_failure`, per-iteration `synthesis_seconds`/`validation_seconds` in `run_optimization_loop`, `stage_timer` in `evaluation.py`), so the frozen §9.2 artifacts were not re-run.
 
 ### 9.9 P2 — Paper presentation and clarity
 

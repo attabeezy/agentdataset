@@ -6,9 +6,11 @@ import hashlib
 import json
 import platform
 import subprocess
+import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Iterator, Sequence
 
 import numpy as np
 import pandas as pd
@@ -64,6 +66,34 @@ def collect_provenance(command: str, seeds: Sequence[int] = ()) -> dict:
         "command": command,
         "seeds": list(seeds),
     }
+
+
+@contextmanager
+def stage_timer(stage: str) -> Iterator[dict]:
+    """Time one pipeline stage, yielding a dict filled in on exit.
+
+    Wall time is what a practitioner waits for; CPU time separates genuine local
+    computation from time spent blocked on the network or a provider. Subtracting
+    the recorded API latency of the calls made inside the stage from `wall_seconds`
+    gives the local-compute share that §9.8 asks to be reported apart from paid
+    API time.
+
+    The dict is yielded before the body runs and mutated on exit, so a caller can
+    hold a reference to it and read the timings afterwards. Timings are recorded
+    even if the body raises; `status` reports which happened.
+    """
+    record = {"stage": stage, "wall_seconds": float("nan"),
+              "cpu_seconds": float("nan"), "status": "ok"}
+    wall_started = time.perf_counter()
+    cpu_started = time.process_time()
+    try:
+        yield record
+    except Exception as exc:
+        record["status"] = f"failed:{type(exc).__name__}"
+        raise
+    finally:
+        record["wall_seconds"] = time.perf_counter() - wall_started
+        record["cpu_seconds"] = time.process_time() - cpu_started
 
 
 def validate_raw_results(frame: pd.DataFrame) -> None:

@@ -6,8 +6,9 @@ PDF/Markdown -> Parameters (Pydantic)
 import json
 import logging
 import os
+from contextlib import contextmanager
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Iterator
 import re
 import time
 import fitz  # PyMuPDF
@@ -256,6 +257,25 @@ class Extractor:
         self.api_key = api_key
         self.env_var = env_var
         self.call_history: list[dict] = []
+        # Set via `stage_scope`; stamped onto every recorded call so end-to-end
+        # accounting can attribute API spend to a pipeline stage. `purpose` stays
+        # the free-text label an experiment arm sets; `stage` is the coarse
+        # pipeline position (discovery, extraction, …).
+        self.stage: str | None = None
+
+    @contextmanager
+    def stage_scope(self, stage: str | None) -> Iterator[None]:
+        """Label every call recorded inside the block with `stage`.
+
+        Nests: the previous label is restored on exit, so a stage that calls into
+        another does not leave the inner label dangling.
+        """
+        previous = self.stage
+        self.stage = stage
+        try:
+            yield
+        finally:
+            self.stage = previous
 
     def _record_completion(
         self, response, started_at: float, purpose: str, model: str | None = None
@@ -268,12 +288,48 @@ class Extractor:
             cost = float("nan")
         self.call_history.append({
             "purpose": purpose,
+            "stage": self.stage,
             "model": model or self.model,
+            "status": "ok",
             "latency_seconds": time.perf_counter() - started_at,
             "prompt_tokens": getattr(usage, "prompt_tokens", None),
             "completion_tokens": getattr(usage, "completion_tokens", None),
             "total_tokens": getattr(usage, "total_tokens", None),
+            # Not every gateway reports cache accounting; absent is a legitimate
+            # answer, so read defensively rather than assuming the fields exist.
+            "cache_creation_input_tokens": getattr(usage, "cache_creation_input_tokens", None),
+            "cache_read_input_tokens": getattr(usage, "cache_read_input_tokens", None),
             "cost_usd": cost,
+        })
+
+    def _record_failure(
+        self,
+        exc: Exception,
+        started_at: float,
+        purpose: str,
+        model: str | None = None,
+        num_retries: int | None = None,
+    ) -> None:
+        """Record a call that raised, so retry/failure overhead stays visible.
+
+        litellm burns the full `num_retries` budget before raising. Without this
+        row that wall time is spent but unaccounted, and end-to-end latency
+        silently under-reports exactly the runs that went worst.
+        """
+        self.call_history.append({
+            "purpose": purpose,
+            "stage": self.stage,
+            "model": model or self.model,
+            "status": "failed",
+            "error_type": type(exc).__name__,
+            "num_retries": num_retries,
+            "latency_seconds": time.perf_counter() - started_at,
+            "prompt_tokens": None,
+            "completion_tokens": None,
+            "total_tokens": None,
+            "cache_creation_input_tokens": None,
+            "cache_read_input_tokens": None,
+            "cost_usd": 0.0,
         })
 
     def pdf_to_markdown(self, pdf_path: str) -> str:
@@ -307,17 +363,21 @@ class Extractor:
         # leakage); fall back to None so litellm reads the env var itself.
         api_key = self.api_key.strip() if self.api_key else None
         started_at = time.perf_counter()
-        response = completion(
-            model=model or self.model,
-            messages=[
-                {"role": "system", "content": system_prompt or EXTRACTION_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            response_format={"type": "json_object"},
-            api_key=api_key,
-            temperature=0,
-            num_retries=num_retries,
-        )
+        try:
+            response = completion(
+                model=model or self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt or EXTRACTION_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                response_format={"type": "json_object"},
+                api_key=api_key,
+                temperature=0,
+                num_retries=num_retries,
+            )
+        except Exception as exc:
+            self._record_failure(exc, started_at, purpose, model=model, num_retries=num_retries)
+            raise
         self._record_completion(response, started_at, purpose, model=model)
         if not response.choices or response.choices[0].message.content is None:
             raise ValueError("LLM returned an empty response (no choices/content).")
@@ -465,15 +525,19 @@ class Extractor:
         """
         api_key = self.api_key.strip() if self.api_key else None
         started_at = time.perf_counter()
-        response = completion(
-            model=self.model,
-            messages=[
-                {"role": "user", "content": prompt},
-            ],
-            api_key=api_key,
-            temperature=0,
-            num_retries=2,
-        )
+        try:
+            response = completion(
+                model=self.model,
+                messages=[
+                    {"role": "user", "content": prompt},
+                ],
+                api_key=api_key,
+                temperature=0,
+                num_retries=2,
+            )
+        except Exception as exc:
+            self._record_failure(exc, started_at, "general_llm", num_retries=2)
+            raise
         self._record_completion(response, started_at, "general_llm")
         if not response.choices or response.choices[0].message.content is None:
             raise ValueError("LLM returned an empty response.")

@@ -14,6 +14,7 @@ the reason stated -- that is a deliberate act, not a side effect of a rerun.
 """
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -81,6 +82,7 @@ def test_both_hash_maps_cover_the_same_files():
     "analysis/real_paper_eval.py",
     "analysis/p0_utility_benchmark.py",
     "analysis/adult_calibration.py",
+    "analysis/end_to_end_cost.py",
 ])
 def test_provenance_is_captured_before_outputs_are_written(script):
     """collect_provenance() must run before the first write, not after.
@@ -111,4 +113,33 @@ def test_current_runs_do_not_target_frozen_filenames():
         )
         assert f'"{filename}")' not in source.split("def run_cost_latency_analysis")[-1], (
             f"run_cost_latency_analysis still writes the frozen baseline {filename}"
+        )
+
+
+def test_end_to_end_cost_writes_only_its_own_files():
+    """The §9.8 cost run must not regenerate the real-paper study's artifacts.
+
+    `analysis/end_to_end_cost.py` deliberately reuses `real_paper_eval`'s fetch and
+    parse functions, which makes it easy to also inherit its output paths by
+    accident. Those files back Table 1 and the Q1 numbers; a cost run that
+    overwrote them would silently invalidate published results with a fresh,
+    nondeterministic LLM extraction.
+    """
+    source = (ROOT / "analysis" / "end_to_end_cost.py").read_text(encoding="utf-8")
+    protected = {
+        *_manifest()["files"],
+        "real_paper_pipeline_raw.csv",
+        "real_paper_pipeline_summary.csv",
+        "real_paper_optimization_traces.csv",
+        "real_paper_run_manifest.json",
+        "real_paper_extraction.csv",
+        "real_paper_discovery.csv",
+    }
+    for filename in protected:
+        # Anchored so this script's own `end_to_end_cost_latency.csv` does not
+        # trip the guard on the frozen `cost_latency.csv` it contains as a suffix.
+        pattern = r"(?<![\w.-])" + re.escape(filename)
+        assert not re.search(pattern, source), (
+            f"analysis/end_to_end_cost.py references {filename}; it must write only "
+            f"results/end_to_end_cost_latency*.csv and its own run manifest"
         )

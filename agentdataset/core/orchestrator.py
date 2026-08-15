@@ -222,9 +222,10 @@ class Orchestrator:
         )
 
         try:
-            response = self.extractor.llm_call(
-                prompt
-            )  # Reusing extractor's LLM interface
+            with self.extractor.stage_scope("query_expansion"):
+                response = self.extractor.llm_call(
+                    prompt
+                )  # Reusing extractor's LLM interface
             queries = [q.strip() for q in response.split("\n") if q.strip()]
             # Always include the original query for safety
             return [query] + queries[:4]
@@ -269,7 +270,8 @@ class Orchestrator:
         else:
             text = content
 
-        return self.extractor.extract_parameters(text, result.title)
+        with self.extractor.stage_scope("extraction"):
+            return self.extractor.extract_parameters(text, result.title)
 
     def suggest_sources(self, results: List[DiscoveryResult]) -> List[int]:
         """Analyze discovery results and suggest which ones likely contain statistical data.
@@ -297,7 +299,8 @@ class Orchestrator:
         )
 
         try:
-            response = self.extractor.llm_call(prompt).strip()
+            with self.extractor.stage_scope("source_triage"):
+                response = self.extractor.llm_call(prompt).strip()
             if response.lower() == "none" or not response:
                 return []
             # Extract digits from the response
@@ -345,10 +348,14 @@ class Orchestrator:
             logger.info("Loop %d/%d (noise=%.4f)...", i + 1, iterations, noise_level)
 
             # Synthesis
+            synthesis_started = time.perf_counter()
             df = self.synthesizer.synthesize(current_params, noise_level=noise_level)
+            synthesis_seconds = time.perf_counter() - synthesis_started
 
             # Validation
+            validation_started = time.perf_counter()
             report = self.validator.validate(df, current_params)
+            validation_seconds = time.perf_counter() - validation_started
             logger.info("  Fidelity Score: %s", report.overall_score)
             improved = report.overall_score > self.best_score
             trace_row = {
@@ -359,6 +366,11 @@ class Orchestrator:
                 "corr_score": report.corr_score,
                 "bias_score": report.bias_score,
                 "improved": improved,
+                # Synthesis and validation interleave per iteration, so they can
+                # only be separated from inside the loop. Recorded here so
+                # end-to-end accounting can split local compute by stage.
+                "synthesis_seconds": synthesis_seconds,
+                "validation_seconds": validation_seconds,
                 # Filled in below once the pivot branch is known. "keep" means the
                 # ratchet accepted this iteration, so no pivot fired.
                 "phase": "keep",

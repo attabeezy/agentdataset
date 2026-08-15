@@ -335,9 +335,66 @@ changed. The self-refinement contribution bullet became an audit of the
 internal objective, and System Overview, Q1, Discussion, and the scoring
 appendix now state the score's scope.
 
+### End-to-end cost and latency (§9.8)
+
+**Headline: one finished dataset costs about $0.012 and 44 seconds, and neither
+number is dominated by the thing the paper previously reported.**
+
+- `end_to_end_cost_latency.csv` — the §9.8 deliverable. One long-schema row per
+  (source, stage, metric), where `condition` carries the pipeline stage:
+  `query_expansion`, `search`, `fetch`, `parse`, `extraction`, `synthesis`,
+  `validation`, `refinement_overhead`. Metrics split paid API time from local
+  compute: `api_cost_usd`, `api_latency_seconds`, `local_compute_seconds`,
+  `wall_seconds`, `cpu_seconds`, `prompt_tokens`, `completion_tokens`,
+  `llm_calls`, `llm_call_failures`, plus stage-specific counts
+  (`documents_processed`, `optimization_iterations`, `parsed_characters`,
+  `rows_synthesized`, `queries_issued`, `search_results`).
+- `end_to_end_cost_latency_summary.csv` — per source × stage means with bootstrap
+  intervals, plus a `TOTAL` row per source and an `ALL_SOURCES` grand total.
+  Totals sum per-stage *means*, so a stage measured over three seeds counts once
+  toward the cost of the one dataset the total describes.
+- `end_to_end_cost_latency_run_manifest.json` — provenance, seeds, stage list,
+  grand totals, and the full per-call history.
+
+Measured over the three real papers, 3 synthesis seeds, `iterations=3`, GPT-4o
+via OpenRouter: **$0.0367 total API cost, 18.1 s API latency, 114.0 s local
+compute, 6 LLM calls, 0 failures** — about **$0.0122 and 44 s per dataset**.
+
+Two findings that the per-call table (Table 4) could not show:
+
+1. **Web search dominates wall time, not the LLM and not synthesis.** Search is
+   ~31 s of the ~44 s per dataset (five DuckDuckGo queries), against 3–4 s for
+   extraction and **under 0.25 s** for the entire synthesize–validate–refine
+   loop. The agentic loop the paper is about is the cheapest part of running it.
+2. **Per-call benchmarks understate real-document extraction cost by ~5×.**
+   Extraction on full-length real papers averages **2,856 prompt tokens and
+   $0.0113 per call** (range $0.0079–$0.0137), against 363 tokens and $0.0023 in
+   Table 4, which was measured on short challenge-set snippets. Real documents
+   fill the extractor's 10,000-character input budget; the benchmark cases do
+   not.
+
+The three extraction calls here total $0.034 / 11.2 s, consistent with the
+$0.0319 / 15.5 s reported for the same three papers in Q1.
+
+This study deliberately does **not** re-run `real_paper_eval.py`, which owns the
+frozen artifacts behind Table 1; it reuses that module's fetch and parse
+functions so both measure the same code path, and writes only its own files.
+`tests/test_baseline_manifest.py::test_end_to_end_cost_writes_only_its_own_files`
+enforces the separation.
+
+Instrumentation lives in shared code rather than the driver:
+`Extractor.stage_scope()` labels every recorded call with its pipeline stage,
+`Extractor._record_failure()` records calls that raised so litellm's retry
+overhead stays visible, `run_optimization_loop` now emits `synthesis_seconds`
+and `validation_seconds` per iteration (they interleave and cannot be separated
+from outside), and `stage_timer()` in `agentdataset/evaluation.py` supplies the
+wall/CPU split.
+
 Reproduce the new studies with:
 
 ```powershell
+.venv\Scripts\python.exe analysis\end_to_end_cost.py --dry-run   # no API key
+.venv\Scripts\python.exe analysis\end_to_end_cost.py --seeds 3   # full run
 .venv\Scripts\python.exe analysis\real_paper_eval.py --mode live
 .venv\Scripts\python.exe analysis\real_paper_eval.py --mode cached
 .venv\Scripts\python.exe analysis\p0_utility_benchmark.py --seeds 30
