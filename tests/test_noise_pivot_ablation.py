@@ -110,3 +110,39 @@ def test_incumbent_condition_is_the_shipped_default():
     incumbent = next(c for c in conditions if c["condition"] == "incumbent")
     assert incumbent["config"] == NoisePivotConfig()
     assert incumbent["iterations"] == npa.DEFAULT_ITERATIONS
+
+
+def test_rank_knobs_orders_by_effect_and_keeps_every_knob():
+    """The knob ranking must cover all five schedule knobs, including the arm
+    whose level is written as None -- pandas reads that back as NaN and would
+    silently drop it, losing the "never reset" case."""
+    import pandas as pd
+    from analysis.noise_pivot_report import rank_knobs
+
+    rows = []
+    # initial_noise separates strongly; reset_multiple not at all.
+    for level, value in [("0.05", 100.0), ("0.4", 60.0)]:
+        for seed in range(3):
+            rows.append({"family": "ofat", "factor": "initial_noise", "level": level,
+                         "metric": "best_score", "status": "ok", "value": value})
+    for level, value in [("2", 80.0), ("3", 80.0), (None, 80.0)]:
+        for seed in range(3):
+            rows.append({"family": "ofat", "factor": "reset_multiple", "level": level,
+                         "metric": "best_score", "status": "ok", "value": value})
+
+    ranked = rank_knobs(pd.DataFrame(rows))
+
+    assert list(ranked.knob) == ["initial_noise", "reset_multiple"], "sorted by effect"
+    assert ranked.iloc[0].effect_range == pytest.approx(40.0)
+    assert ranked.iloc[0].best_level == "0.05"
+    # The None level is retained rather than dropped.
+    assert int(ranked.iloc[1].n_levels) == 3
+    assert ranked.iloc[1].effect_range == pytest.approx(0.0)
+
+
+def test_rank_knobs_handles_an_empty_grid():
+    import pandas as pd
+    from analysis.noise_pivot_report import rank_knobs
+
+    empty = pd.DataFrame(columns=["family", "factor", "level", "metric", "status", "value"])
+    assert rank_knobs(empty).empty

@@ -1,0 +1,6 @@
+knob,effect_range,best_level,worst_level
+initial_noise,37.034833333333346,0.01,0.5
+patience,15.572444444444429,1,5
+exploitation_factor,9.327111111111108,0.25,0.9
+reset_interval_cycles,7.925833333333344,2.0,1.0
+exploration_multiplier,3.689444444444433,1.05,1.5

@@ -119,6 +119,52 @@ def paired_tests(raw: pd.DataFrame) -> pd.DataFrame:
     return frame.sort_values(["split", "family", "factor", "level"])
 
 
+def rank_knobs(raw: pd.DataFrame) -> pd.DataFrame:
+    """Rank the schedule knobs by how much moving one moves the mean best score.
+
+    The paired tests answer "is this level better than the shipped one"; they do
+    not answer "which knob should I care about at all". The range of the
+    per-level mean is the effect size a one-factor-at-a-time design can measure,
+    and collapsing to one row per knob is what makes the ordering legible.
+
+    Read against the fidelity objective, not against ground truth: that
+    objective is invariant to errors in the extracted parameters (see
+    analysis/fidelity_validity_probe.py), so this ranks knobs for the score the
+    optimizer actually maximizes.
+    """
+    ofat = raw.loc[
+        raw.status.eq("ok")
+        & raw.metric.eq(PRIMARY_METRIC)
+        & raw.family.eq("ofat")
+    ].copy()
+    if ofat.empty:
+        return pd.DataFrame(
+            columns=["knob", "effect_range", "best_level", "worst_level", "n_levels"]
+        )
+
+    ofat["value"] = pd.to_numeric(ofat["value"], errors="coerce")
+    # reset_multiple's "never reset" arm is written as None and read back as NaN,
+    # which groupby would drop -- losing the one level most likely to matter.
+    ofat["level"] = ofat["level"].fillna("none").astype(str)
+    per_level = ofat.groupby(["factor", "level"])["value"].mean()
+
+    rows = []
+    for knob, means in per_level.groupby(level="factor"):
+        rows.append({
+            "knob": knob,
+            "effect_range": float(means.max() - means.min()),
+            "best_level": str(means.idxmax()[1]),
+            "worst_level": str(means.idxmin()[1]),
+            "n_levels": int(len(means)),
+        })
+
+    return (
+        pd.DataFrame(rows)
+        .sort_values("effect_range", ascending=False)
+        .reset_index(drop=True)
+    )
+
+
 def budget_table(raw: pd.DataFrame) -> pd.DataFrame:
     """Score, spread, and cost as a function of the iteration budget."""
     subset = raw.loc[
@@ -200,7 +246,13 @@ def main() -> None:
     variance = variance_analysis(raw, traces)
     variance.to_csv(RESULTS_DIR / "noise_pivot_variance.csv", index=False)
 
+    ranking = rank_knobs(raw)
+    ranking.to_csv(RESULTS_DIR / "noise_pivot_knob_ranking.csv", index=False)
+
     # --- console summary, i.e. the numbers that go into the paper -------------
+    print("\n=== Which knob matters? (OFAT effect range on best_score) ===")
+    print(ranking.to_string(index=False))
+
     print("\n=== Iteration budget (pivot schedule, best_score) ===")
     budget_best = budget.loc[
         budget.family.eq("iterations") & budget.metric.eq("best_score")
