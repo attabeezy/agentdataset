@@ -238,6 +238,29 @@ imposes nothing.
 - `noise_pivot_traces.csv.gz` — per-iteration noise level, score, and pivot
   `phase`, which is what makes the reset frequency and the budget-dependent
   variance measurable rather than asserted.
+- `noise_pivot_knob_ranking.csv` — one row per schedule knob, ranked by the
+  range of its per-level mean best score. The paired tests answer "is this level
+  better than the shipped one"; this answers "which knob is worth caring about
+  at all". Ordering: `initial_noise` (37.50) ≫ `patience` (16.18) >
+  `exploit_factor` (9.18) > `explore_mult` (2.91) ≫ `reset_multiple` (**0.00**).
+- **The reset branch is inert at the shipped budget.** `reset_multiple` shows an
+  effect range of exactly 0.0 across all four arms — including the one that
+  disables reset entirely. At five iterations with `patience=2` a run cannot
+  accumulate the non-improvement streak the reset branch needs, so that branch
+  never changes the outcome. It is dead code at the shipped settings.
+- `noise_pivot_knob_ranking_replication.csv` — the same ranking produced by a
+  **separate, independent implementation** of §9.7 (different script, different
+  grid, different levels), retained as corroboration. It agrees on the ordering
+  and closely on the magnitudes: `initial_noise` 37.03 vs 37.50, `patience`
+  15.57 vs 16.18, `exploitation_factor` 9.33 vs 9.18, `exploration_multiplier`
+  3.69 vs 2.91, and both pick the lowest available initial-noise level as best.
+  It differs on `reset_interval_cycles` (7.93 vs 0.00) because its screen used a
+  longer iteration budget, where the reset branch can actually fire — which is
+  consistent with, rather than contrary to, the dead-branch finding above.
+  Caveat: both studies score against the same fidelity objective, which is
+  invariant to errors in the extracted parameters, so this corroborates the knob
+  ordering *for that objective* and is not independent evidence that the
+  objective is the right one.
 - `noise_pivot_tests.csv` / `_budget.csv` / `_variance.csv` — produced by
   `analysis/noise_pivot_report.py` from the raw grid: paired Wilcoxon tests
   against the shipped configuration with Holm–Bonferroni correction inside each

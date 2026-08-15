@@ -1,0 +1,6 @@
+knob,effect_range,best_level,worst_level,n_levels
+initial_noise,37.49972727272728,0.05,0.4,4
+patience,16.181454545454528,1,4,4
+exploit_factor,9.180818181818182,0.25,0.9,4
+explore_mult,2.9086363636363615,1.25,1.5,5
+reset_multiple,0.0,2,2,4
