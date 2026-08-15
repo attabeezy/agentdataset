@@ -1,0 +1,102 @@
+{
+  "recorded_at_utc": "2026-08-14T23:42:37.216221+00:00",
+  "git_commit": "a411ea1387420fefcae7570f6c04ae0bad4b62e9",
+  "git_dirty": true,
+  "python_version": "3.13.5",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "dependency_lock": "uv.lock",
+  "dependency_lock_sha256": "5ac40da015af432f039e096ad94c70714a353f8f24133f5eec51bcef98a1ea3c",
+  "command": "uv run python analysis/noise_pivot_ablation.py --seeds 20",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+  ],
+  "n_sources": 11,
+  "n_conditions": 95,
+  "n_seeds": 20,
+  "n_trials": 20900,
+  "n_rows_per_dataset": 2000,
+  "quick_mode": false,
+  "tune_sources": [
+    "domain_0_heart_rate",
+    "domain_1_cholesterol",
+    "domain_2_temperature",
+    "domain_3_stock_price",
+    "cdc_nhanes_rural_urban"
+  ],
+  "report_sources": [
+    "domain_4_credit_score",
+    "domain_5_study_hours",
+    "domain_6_commute_time",
+    "domain_7_rainfall",
+    "calerie_rct",
+    "student_mental_health"
+  ],
+  "ofat_levels": {
+    "patience": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
+    "initial_noise": [
+      "0.05",
+      "0.1",
+      "0.2",
+      "0.4"
+    ],
+    "explore_mult": [
+      "1.0",
+      "1.05",
+      "1.1",
+      "1.25",
+      "1.5"
+    ],
+    "exploit_factor": [
+      "0.25",
+      "0.5",
+      "0.75",
+      "0.9"
+    ],
+    "reset_multiple": [
+      "2",
+      "3",
+      "4",
+      "None"
+    ]
+  },
+  "iteration_levels": [
+    0,
+    1,
+    2,
+    3,
+    5,
+    10,
+    20
+  ],
+  "fixed_noise_levels": [
+    0.01,
+    0.05,
+    0.1,
+    0.2,
+    0.5
+  ]
+}

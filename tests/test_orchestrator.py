@@ -205,3 +205,130 @@ def test_noise_pivot_strategy(mock_orchestrator):
     assert noise_calls[3] == pytest.approx(exploit_noise)
     # iter 4: streak=4 (full cycle, streak % (PATIENCE*2) == 0) → reset
     assert noise_calls[4] == pytest.approx(min(exploit_noise * 1.1, MAX_NOISE))
+
+
+# --- §9.7: the pivot schedule as configurable, testable surface ---------------
+
+
+def _noise_sequence(cfg, orchestrator, n_iterations, scores):
+    """Drive the loop with fixed scores and return the noise used per iteration."""
+    params = Parameters(
+        variables={"v1": VariableParams(name="v1")},
+        correlations={},
+        meta=MetaParams(source="S", extracted_at="N"),
+    )
+    df = pd.DataFrame({"v1": [1, 2, 3]})
+    orchestrator.validator.validate.side_effect = [
+        MagicMock(overall_score=s) for s in scores
+    ]
+    orchestrator.validator.generate_datacard.return_value = ""
+
+    calls = []
+
+    def capture(params, noise_level):
+        calls.append(noise_level)
+        return df
+
+    orchestrator.synthesizer.synthesize.side_effect = capture
+    orchestrator.run_optimization_loop(params, iterations=n_iterations, pivot=cfg)
+    return calls
+
+
+def test_next_noise_explore_exploit_reset():
+    """The pure schedule function reproduces each documented branch."""
+    from agentdataset.core.orchestrator import NoisePivotConfig, next_noise
+
+    cfg = NoisePivotConfig()  # patience 2, reset_multiple 2 → full cycle 4
+
+    noise, phase = next_noise(1, 0.1, cfg)
+    assert phase == "explore" and noise == pytest.approx(0.11)
+
+    noise, phase = next_noise(2, 0.11, cfg)
+    assert phase == "exploit" and noise == pytest.approx(0.055)
+
+    noise, phase = next_noise(3, 0.055, cfg)
+    assert phase == "explore" and noise == pytest.approx(0.0605)
+
+    noise, phase = next_noise(4, 0.0605, cfg)
+    assert phase == "reset" and noise == pytest.approx(cfg.initial_noise)
+
+
+def test_next_noise_respects_bounds():
+    from agentdataset.core.orchestrator import NoisePivotConfig, next_noise
+
+    cfg = NoisePivotConfig()
+    # Exploit cannot go below min_noise.
+    noise, phase = next_noise(2, cfg.min_noise, cfg)
+    assert phase == "exploit" and noise == pytest.approx(cfg.min_noise)
+    # Explore cannot exceed max_noise.
+    noise, phase = next_noise(1, cfg.max_noise, cfg)
+    assert phase == "explore" and noise == pytest.approx(cfg.max_noise)
+
+
+def test_next_noise_reset_can_be_disabled():
+    """reset_multiple=None is the study arm with no reset branch."""
+    from agentdataset.core.orchestrator import NoisePivotConfig, next_noise
+
+    cfg = NoisePivotConfig(reset_multiple=None)
+    phases = [next_noise(s, 0.1, cfg)[1] for s in range(1, 9)]
+    assert "reset" not in phases
+    assert phases == ["explore", "exploit"] * 4
+
+
+def test_reset_takes_precedence_over_exploit():
+    """A full-cycle streak also satisfies the exploit condition; reset wins."""
+    from agentdataset.core.orchestrator import NoisePivotConfig, next_noise
+
+    cfg = NoisePivotConfig(patience=2, reset_multiple=2)
+    assert next_noise(4, 0.5, cfg)[1] == "reset"
+
+
+def test_invalid_pivot_config_rejected():
+    from agentdataset.core.orchestrator import NoisePivotConfig
+
+    with pytest.raises(ValueError, match="patience"):
+        NoisePivotConfig(patience=0)
+    with pytest.raises(ValueError, match="reset_multiple"):
+        NoisePivotConfig(reset_multiple=0)
+    with pytest.raises(ValueError, match="min_noise"):
+        NoisePivotConfig(min_noise=1.0, max_noise=0.5)
+
+
+def test_default_pivot_matches_omitting_the_argument(mock_orchestrator, tmp_path):
+    """Passing DEFAULT_PIVOT explicitly must change nothing."""
+    from agentdataset.core.orchestrator import DEFAULT_PIVOT
+
+    scores = [95.0, 80.0, 79.0, 78.0, 77.0]
+    explicit = _noise_sequence(DEFAULT_PIVOT, mock_orchestrator, 5, scores)
+
+    with patch('agentdataset.core.orchestrator.DiscoveryAgent'), \
+         patch('agentdataset.core.orchestrator.Extractor'), \
+         patch('agentdataset.core.orchestrator.Synthesizer'), \
+         patch('agentdataset.core.orchestrator.Validator'):
+        fresh = Orchestrator(session_id="test_default", base_dir=str(tmp_path))
+    implicit = _noise_sequence(None, fresh, 5, scores)
+
+    assert explicit == pytest.approx(implicit)
+
+
+def test_custom_pivot_changes_the_schedule(mock_orchestrator):
+    """A non-default config must actually take effect end to end."""
+    from agentdataset.core.orchestrator import NoisePivotConfig
+
+    cfg = NoisePivotConfig(initial_noise=0.4, explore_mult=2.0, patience=3)
+    calls = _noise_sequence(cfg, mock_orchestrator, 3, [95.0, 80.0, 79.0])
+
+    assert calls[0] == pytest.approx(0.4)
+    # streak 1 → explore at the custom multiplier
+    assert calls[1] == pytest.approx(0.4)
+    assert calls[2] == pytest.approx(0.8)
+
+
+def test_optimization_trace_records_phase(mock_orchestrator):
+    """The trace carries the pivot phase so the ablation can count resets."""
+    scores = [95.0, 80.0, 79.0, 78.0, 77.0]
+    _noise_sequence(None, mock_orchestrator, 5, scores)
+
+    phases = [row["phase"] for row in mock_orchestrator.optimization_trace]
+    assert phases == ["keep", "explore", "exploit", "explore", "reset"]
+    assert all("noise_after" in row for row in mock_orchestrator.optimization_trace)

@@ -212,3 +212,201 @@ def test_parse_llm_result_tolerates_explicit_null_numbers():
 
     assert variables["group"].categories == {"a": 0.5, "b": 0.5}
     assert correlations["x__y"].correlation == 0.0
+
+
+# --- §9.7 fix: regex variable naming ------------------------------------------
+
+
+def test_regex_names_variable_from_variable_clause():
+    """"The variable X has mean ... and std ..." -- the UCI prose form."""
+    ext = Extractor()
+    text = "The variable education_num has mean 10.08 and std 2.57."
+    variables, _ = ext._extract_with_regex(text)
+    assert "education_num" in variables
+    assert variables["education_num"].mean == 10.08
+    assert variables["education_num"].std == 2.57
+
+
+def test_regex_names_variable_from_distribution_clause():
+    """Multi-word names in prose normalize to the underscored form."""
+    ext = Extractor()
+    text = (
+        "We observed a heart rate distribution with mean 72.0 and std 8.0.\n"
+        "Blood pressure was normally distributed with mean 120.0 and std 15.0."
+    )
+    variables, _ = ext._extract_with_regex(text)
+    assert set(variables) == {"heart_rate", "blood_pressure"}
+    assert variables["heart_rate"].mean == 72.0
+    assert variables["blood_pressure"].std == 15.0
+
+
+def test_regex_correlation_resolves_against_named_variables():
+    """The whole point of the fix: the declared pair must reference real variables."""
+    ext = Extractor()
+    text = (
+        "We observed a heart rate distribution with mean 72.0 and std 8.0.\n"
+        "Blood pressure was normally distributed with mean 120.0 and std 15.0.\n"
+        "The correlation between heart_rate and blood_pressure is 0.35."
+    )
+    variables, correlations = ext._extract_with_regex(text)
+    corr = list(correlations.values())[0]
+    assert corr.var1 in variables and corr.var2 in variables
+
+
+def test_regex_does_not_capture_articles_or_filler_as_names():
+    """A wrong name mismatches silently, so the capture is deliberately narrow."""
+    ext = Extractor()
+    variables, _ = ext._extract_with_regex(
+        "In the sample, the mean is 10.5 and the standard deviation is 2.1."
+    )
+    assert list(variables) == ["var_1"]
+    assert not any(name in ("the", "a", "sample", "in_the_sample") for name in variables)
+
+
+def test_regex_falls_back_when_name_already_taken():
+    """Two variables must never collapse into one because they share a name."""
+    ext = Extractor()
+    text = (
+        "The variable age has mean 38.0 and std 13.0.\n"
+        "The variable age has mean 51.0 and std 9.0."
+    )
+    variables, _ = ext._extract_with_regex(text)
+    assert len(variables) == 2, "distinct statistics must stay distinct"
+    assert "age" in variables
+    assert any(name.startswith("var_") for name in variables)
+
+
+def test_regex_name_capture_does_not_reach_across_sentences():
+    """A name must be adjacent to its statistic, not merely somewhere earlier."""
+    ext = Extractor()
+    text = (
+        "The variable age was collected for every participant. "
+        "Some other text intervenes here to push the clause well out of range, "
+        "padding the gap further still. The mean is 10.5 and the std is 2.1."
+    )
+    variables, _ = ext._extract_with_regex(text)
+    assert list(variables) == ["var_1"]
+
+
+def test_normalize_variable_name():
+    from agentdataset.core.extractor import _normalize_variable_name
+
+    assert _normalize_variable_name("Heart Rate") == "heart_rate"
+    assert _normalize_variable_name("education_num") == "education_num"
+    assert _normalize_variable_name("  follow-up  ") == "follow_up"
+    assert _normalize_variable_name("BMI") == "bmi"
+
+
+def test_regex_categorical_name_is_normalized_for_matching():
+    """Categorical names normalize too, so they can resolve in a correlation."""
+    ext = Extractor()
+    text = (
+        "The categorical variable Sex takes value 'Female' with probability 0.4 "
+        "and 'Male' with probability 0.6.\n"
+        "The variable age has mean 38.0 and std 13.0.\n"
+        "The correlation between sex and age is 0.12."
+    )
+    variables, correlations = ext._extract_with_regex(text)
+    assert "sex" in variables
+    # Labels keep their original casing; only the variable name is normalized.
+    assert variables["sex"].categories == {"Female": 0.4, "Male": 0.6}
+    corr = list(correlations.values())[0]
+    assert corr.var1 in variables and corr.var2 in variables
+
+
+# --- LLM path: fallback-only correlation name resolution ----------------------
+
+
+def _llm_payload(variables, correlations):
+    return {"variables": variables, "correlations": correlations}
+
+
+def test_llm_exact_names_pass_through_unchanged():
+    """The guarantee that makes this change safe: exact matches are untouched.
+
+    If this breaks, previously reported extraction numbers could move.
+    """
+    ext = Extractor()
+    data = _llm_payload(
+        {
+            "heart_rate": {"distribution": "normal", "mean": 72.0, "std": 8.0},
+            "blood_pressure": {"distribution": "normal", "mean": 120.0, "std": 15.0},
+        },
+        {"c1": {"var1": "heart_rate", "var2": "blood_pressure", "correlation": 0.35}},
+    )
+    _, correlations = ext._parse_llm_result(data)
+    corr = correlations["c1"]
+    assert corr.var1 == "heart_rate"
+    assert corr.var2 == "blood_pressure"
+
+
+def test_llm_correlation_name_resolves_by_normalization():
+    """A response that spells the variable differently in its correlations."""
+    ext = Extractor()
+    data = _llm_payload(
+        {
+            "heart_rate": {"distribution": "normal", "mean": 72.0, "std": 8.0},
+            "blood_pressure": {"distribution": "normal", "mean": 120.0, "std": 15.0},
+        },
+        {"c1": {"var1": "Heart Rate", "var2": "blood pressure", "correlation": 0.35}},
+    )
+    variables, correlations = ext._parse_llm_result(data)
+    corr = correlations["c1"]
+    assert corr.var1 == "heart_rate"
+    assert corr.var2 == "blood_pressure"
+    assert corr.var1 in variables and corr.var2 in variables
+
+
+def test_llm_ambiguous_name_is_left_unresolved():
+    """Two variables differing only by case are ambiguous; guessing would merge them."""
+    ext = Extractor()
+    data = _llm_payload(
+        {
+            "BMI": {"distribution": "normal", "mean": 27.0, "std": 5.0},
+            "bmi": {"distribution": "normal", "mean": 31.0, "std": 6.0},
+            "age": {"distribution": "normal", "mean": 40.0, "std": 10.0},
+        },
+        {"c1": {"var1": "b m i", "var2": "age", "correlation": 0.2}},
+    )
+    variables, correlations = ext._parse_llm_result(data)
+    corr = correlations["c1"]
+    # Left exactly as the model wrote it, so the synthesizer counts it as skipped
+    # rather than silently attaching it to whichever variable sorted first.
+    assert corr.var1 == "b m i"
+    assert corr.var1 not in variables
+
+
+def test_llm_unmatched_variable_is_preserved_not_dropped():
+    """A correlation naming an unreported variable stays visible in diagnostics."""
+    ext = Extractor()
+    data = _llm_payload(
+        {"age": {"distribution": "normal", "mean": 40.0, "std": 10.0}},
+        {"c1": {"var1": "age", "var2": "income", "correlation": 0.3}},
+    )
+    variables, correlations = ext._parse_llm_result(data)
+    corr = correlations["c1"]
+    assert corr.var2 == "income"
+    assert corr.var2 not in variables
+
+
+def test_llm_resolution_makes_correlation_apply_in_synthesis():
+    """End to end: the resolved pair actually reaches the correlation matrix."""
+    from agentdataset.core.synthesizer import Synthesizer
+    from agentdataset.models.schemas import MetaParams, Parameters
+
+    ext = Extractor()
+    variables, correlations = ext._parse_llm_result(_llm_payload(
+        {
+            "heart_rate": {"distribution": "normal", "mean": 72.0, "std": 8.0},
+            "blood_pressure": {"distribution": "normal", "mean": 120.0, "std": 15.0},
+        },
+        {"c1": {"var1": "Heart Rate", "var2": "Blood Pressure", "correlation": 0.6}},
+    ))
+    params = Parameters(
+        variables=variables, correlations=correlations,
+        meta=MetaParams(source="s", extracted_at="n"),
+    )
+    synth = Synthesizer(n_rows=2000, seed=0)
+    synth.synthesize(params)
+    assert synth.last_diagnostics.n_pairs_applied == 1
+    assert synth.last_diagnostics.n_pairs_skipped_unknown_var == 0

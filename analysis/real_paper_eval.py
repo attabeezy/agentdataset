@@ -11,7 +11,6 @@ import json
 import os
 import re
 import time
-import warnings
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
@@ -305,15 +304,23 @@ def synthesize_conditions(source: pd.Series, conditions: dict[str, Parameters]) 
                 base_dir=str(CACHE_DIR / "sessions"), model=MODEL, env_var=ENV_VAR,
             )
             orchestrator.synthesizer = Synthesizer(n_rows=int(source.sample_size), seed=seed)
-            with warnings.catch_warnings(record=True) as caught:
-                warnings.simplefilter("always")
-                best_score, frame = orchestrator.run_optimization_loop(params, iterations=3)
+            best_score, frame = orchestrator.run_optimization_loop(params, iterations=3)
             report = Validator().validate(frame, params)
+            # §9.7: read the structured diagnostics the synthesizer now records
+            # instead of string-matching a RuntimeWarning message. `pairs_applied`
+            # matters as much as the PD status — a matrix can pass the
+            # positive-definite check and still impose nothing, if the declared
+            # pairs name variables that were never extracted.
+            diagnostics = orchestrator.synthesizer.diagnostics
+            fallback_count = sum(d.action == "dropped_all" for d in diagnostics)
+            vacuous_count = sum(d.n_pairs_applied == 0 for d in diagnostics)
             for metric, value in {
                 "fidelity_score": best_score, "ks_score": report.ks_score,
                 "correlation_score": report.corr_score, "bias_score": report.bias_score,
                 "normalized_row_dispersion": report.dispersion_details["normalized_row_dispersion"],
-                "fallback_warning_count": sum("positive-definite" in str(item.message) for item in caught),
+                "fallback_warning_count": fallback_count,
+                "vacuous_matrix_count": vacuous_count,
+                "correlation_matrices_built": len(diagnostics),
             }.items():
                 raw_rows.append({
                     "experiment_id": "real_paper_pipeline_v1", "run_id": f"{source.source_id}:{condition}:{seed}",

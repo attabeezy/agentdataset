@@ -1,0 +1,27 @@
+{
+  "recorded_at_utc": "2026-08-15T01:19:01.813410+00:00",
+  "git_commit": "15011de7c3ce15ab2f0061174791af5107f93d89",
+  "git_dirty": true,
+  "python_version": "3.13.5",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "dependency_lock": "uv.lock",
+  "dependency_lock_sha256": "5ac40da015af432f039e096ad94c70714a353f8f24133f5eec51bcef98a1ea3c",
+  "command": "uv run python analysis/fidelity_validity_probe.py --seeds 5",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "n_rows_per_dataset": 2000,
+  "epsilons": [
+    0.0,
+    0.1,
+    0.25,
+    0.5,
+    1.0,
+    2.0
+  ],
+  "collection_notes": []
+}

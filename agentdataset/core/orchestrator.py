@@ -6,6 +6,7 @@ The Agentic Workflow Engine
 import logging
 import os
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, List
 import pandas as pd
@@ -31,6 +32,67 @@ PATIENCE = 2  # non-improvement streak length that triggers a pivot
 MAX_SESSIONS = 3  # oldest session dirs beyond this limit are deleted on startup
 AGENTDATASET_CACHE_DIR = ".agentdataset_cache"
 DEFAULT_SESSION_DIR = str(Path(AGENTDATASET_CACHE_DIR) / "sessions")
+INITIAL_NOISE = 0.1
+EXPLORE_MULT = 1.1
+EXPLOIT_FACTOR = 0.5
+RESET_MULTIPLE = 2  # reset fires every PATIENCE * RESET_MULTIPLE non-improvements
+
+
+@dataclass(frozen=True)
+class NoisePivotConfig:
+    """Knobs for the noise-pivot schedule.
+
+    Defaults reproduce the shipped schedule exactly, so omitting the config
+    leaves optimization behaviour bit-identical. §9.7 varies these on a
+    predeclared grid; see analysis/noise_pivot_ablation.py.
+
+    `reset_multiple=None` disables the reset branch (a study arm, not a
+    supported production setting).
+    """
+
+    patience: int = PATIENCE
+    initial_noise: float = INITIAL_NOISE
+    explore_mult: float = EXPLORE_MULT
+    exploit_factor: float = EXPLOIT_FACTOR
+    reset_multiple: Optional[int] = RESET_MULTIPLE
+    min_noise: float = MIN_NOISE
+    max_noise: float = MAX_NOISE
+
+    def __post_init__(self):
+        if self.patience < 1:
+            raise ValueError(f"patience must be >= 1, got {self.patience}")
+        if self.reset_multiple is not None and self.reset_multiple < 1:
+            raise ValueError(
+                f"reset_multiple must be >= 1 or None, got {self.reset_multiple}"
+            )
+        if not 0 < self.min_noise <= self.max_noise:
+            raise ValueError(
+                f"require 0 < min_noise <= max_noise, got "
+                f"({self.min_noise}, {self.max_noise})"
+            )
+
+
+DEFAULT_PIVOT = NoisePivotConfig()
+
+
+def next_noise(
+    streak: int, noise: float, cfg: NoisePivotConfig = DEFAULT_PIVOT
+) -> tuple[float, str]:
+    """One step of the noise-pivot schedule, as a pure function.
+
+    `streak` is the non-improvement streak length *after* incrementing for the
+    current failed iteration. Branch order is reset → exploit → explore, which
+    matters because a full-cycle streak also satisfies the exploit condition.
+
+    Returns (new_noise, phase) with phase in {"reset", "exploit", "explore"}.
+    """
+    full_cycle = None if cfg.reset_multiple is None else cfg.patience * cfg.reset_multiple
+
+    if full_cycle is not None and streak % full_cycle == 0:
+        return cfg.initial_noise, "reset"
+    if streak % cfg.patience == 0:
+        return max(noise * cfg.exploit_factor, cfg.min_noise), "exploit"
+    return min(noise * cfg.explore_mult, cfg.max_noise), "explore"
 
 
 def _prune_old_sessions(base_dir: str, keep: int = MAX_SESSIONS) -> None:
@@ -248,13 +310,21 @@ class Orchestrator:
             logger.error("Source suggestion failed: %s", e)
             return []
 
-    def run_optimization_loop(self, parameters: Parameters, iterations: int = 5):
+    def run_optimization_loop(
+        self,
+        parameters: Parameters,
+        iterations: int = 5,
+        pivot: Optional[NoisePivotConfig] = None,
+    ):
         """Phase 2 & 3: The Engine (Synthesis-Validation Loop).
 
         Noise pivot strategy — patience + reset:
           - Every PATIENCE consecutive non-improvements  → exploit: halve noise
           - Every PATIENCE*2 consecutive non-improvements → reset to initial noise
           - Single non-improvement steps (streak % PATIENCE != 0) → explore: raise noise
+
+        `pivot` overrides the schedule; omitting it uses DEFAULT_PIVOT, which
+        reproduces the shipped constants exactly.
 
         Raises ValueError if `parameters` has no variables — synthesizing an empty
         frame would otherwise produce a spurious score and write an empty data.csv.
@@ -265,9 +335,9 @@ class Orchestrator:
                 "Check the source/extraction step before synthesizing."
             )
 
+        cfg = pivot if pivot is not None else DEFAULT_PIVOT
         current_params = parameters
-        initial_noise = 0.1
-        noise_level = initial_noise
+        noise_level = cfg.initial_noise
         no_improve_streak = 0
         self.optimization_trace = []
 
@@ -281,7 +351,7 @@ class Orchestrator:
             report = self.validator.validate(df, current_params)
             logger.info("  Fidelity Score: %s", report.overall_score)
             improved = report.overall_score > self.best_score
-            self.optimization_trace.append({
+            trace_row = {
                 "iteration": i + 1,
                 "noise_level": noise_level,
                 "overall_score": report.overall_score,
@@ -289,7 +359,12 @@ class Orchestrator:
                 "corr_score": report.corr_score,
                 "bias_score": report.bias_score,
                 "improved": improved,
-            })
+                # Filled in below once the pivot branch is known. "keep" means the
+                # ratchet accepted this iteration, so no pivot fired.
+                "phase": "keep",
+                "noise_after": noise_level,
+            }
+            self.optimization_trace.append(trace_row)
 
             # Ratchet Logic
             if improved:
@@ -317,31 +392,14 @@ class Orchestrator:
                     )
             else:
                 no_improve_streak += 1
-                full_cycle = PATIENCE * 2
-
-                if no_improve_streak % full_cycle == 0:
-                    # Full cycle with no gain — reset to initial noise
-                    noise_level = initial_noise
-                    logger.info(
-                        "  [DISCARD] Streak=%d — reset noise to %.4f",
-                        no_improve_streak,
-                        noise_level,
-                    )
-                elif no_improve_streak % PATIENCE == 0:
-                    # Exploit phase: tighten noise to improve fit
-                    noise_level = max(noise_level * 0.5, MIN_NOISE)
-                    logger.info(
-                        "  [DISCARD] Streak=%d — exploit: noise → %.4f",
-                        no_improve_streak,
-                        noise_level,
-                    )
-                else:
-                    # Explore phase: expand noise for more variance
-                    noise_level = min(noise_level * 1.1, MAX_NOISE)
-                    logger.info(
-                        "  [DISCARD] Streak=%d — explore: noise → %.4f",
-                        no_improve_streak,
-                        noise_level,
-                    )
+                noise_level, phase = next_noise(no_improve_streak, noise_level, cfg)
+                trace_row["phase"] = phase
+                trace_row["noise_after"] = noise_level
+                logger.info(
+                    "  [DISCARD] Streak=%d — %s: noise → %.4f",
+                    no_improve_streak,
+                    phase,
+                    noise_level,
+                )
 
         return self.best_score, self.best_data

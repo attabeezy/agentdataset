@@ -149,6 +149,89 @@ _PATTERN_CATEGORY_PAIR = re.compile(
     re.IGNORECASE,
 )
 
+# Function words that are never part of a variable name. Without this guard the
+# name capture below swallows the article in "a heart rate distribution".
+#
+# Deliberately limited to grammatical filler. Content nouns are *not* listed:
+# excluding a word like "study" does not yield no-name, it yields the wrong name
+# ("study hours" captures as "hours"), and a wrong name mismatches silently,
+# which is the failure this whole change exists to remove.
+_STOPWORDS = (
+    r"(?:an?|the|we|this|that|these|those|there|its?|and|or|but|of|for|with|"
+    r"in|on|at|by|from|was|were|is|are|be|been|has|have|had|which|who|whose|"
+    r"when|where)"
+)
+
+# One to three words, none of them a stopword. Hyphens and underscores are kept
+# because real column names use them (education_num, follow-up).
+_NAME = (
+    r"(?!" + _STOPWORDS + r"\b)[A-Za-z][A-Za-z0-9_-]*"
+    r"(?:\s+(?!" + _STOPWORDS + r"\b)[A-Za-z][A-Za-z0-9_-]*){0,2}"
+)
+
+# Recover the variable name that a mean/std match belongs to.
+#
+# The mean/std patterns capture only the two numbers, so on their own they
+# cannot say which variable the numbers describe -- which is why unnamed
+# variables fall back to "var_N". That fallback is not harmless: a correlation
+# naming a variable that no extracted variable matches is dropped silently by
+# the synthesizer, so an entire correlation structure can vanish while every
+# validity check still passes (see analysis/corr_validity_audit.py).
+#
+# This is matched against the text *preceding* a mean/std hit and anchored to
+# the end of it, so only the immediately adjacent phrasing can supply a name.
+# Deliberately conservative: a wrong name is worse than no name, because it
+# mismatches silently instead of falling back to var_N.
+_PATTERN_NAME_BEFORE_STAT = re.compile(
+    r"(?:"
+    # "The variable age has ", "for variable bmi with "
+    r"variables?\s+(?P<v_var>" + _NAME + r")\s+(?:has|had|is|was|with|,)\s*"
+    # "a heart rate distribution with ", "Blood pressure was normally distributed with "
+    r"|(?P<v_dist>" + _NAME + r")\s+(?:"
+    r"distribution\s+with|(?:was|is|were|are)\s+normally\s+distributed\s+with"
+    r")\s*"
+    r")$",
+    re.IGNORECASE,
+)
+
+
+def _resolve_correlation_name(
+    name: str, variables: Dict[str, Any], by_normalized: Dict[str, list]
+) -> str:
+    """Map a correlation's variable name onto a declared variable, if it can be.
+
+    Strictly a fallback. An exact hit is returned untouched, so a response whose
+    correlations already reference declared variables is passed through
+    unchanged and no previously reported number can move. Only when the literal
+    name matches nothing do we retry on the normalized form, and only when that
+    normalized form identifies exactly one declared variable -- two variables
+    that differ solely by case or punctuation are genuinely ambiguous, and
+    guessing between them would silently merge distinct columns.
+
+    An unresolvable name is returned as given rather than dropped: the
+    synthesizer then records it in `n_pairs_skipped_unknown_var`, which is how a
+    correlation whose variable was never extracted stays visible instead of
+    vanishing. That case is legitimate -- papers often report a correlation
+    without reporting both marginals.
+    """
+    if name in variables:
+        return name
+    candidates = by_normalized.get(_normalize_variable_name(name), [])
+    if len(candidates) == 1:
+        return candidates[0]
+    return name
+
+
+def _normalize_variable_name(name: str) -> str:
+    """Canonical form used to match correlation pairs against variables.
+
+    Prose and correlation clauses disagree about spelling: source text says
+    "heart rate" while the correlation clause says "heart_rate". Both sides go
+    through this, so they meet in the middle.
+    """
+    cleaned = re.sub(r"[^A-Za-z0-9_]+", "_", name.strip())
+    return cleaned.strip("_").lower()
+
 
 # Some providers ignore response_format={"type": "json_object"} and wrap the
 # object in a markdown fence. Anthropic models via OpenRouter do this on every
@@ -270,11 +353,18 @@ class Extractor:
                 categories=categories,
             )
 
+        # Names are resolved against the declared variables only when the literal
+        # name does not already match, so a self-consistent response is passed
+        # through byte-for-byte. See _resolve_correlation_name.
+        by_normalized: Dict[str, list] = {}
+        for declared in variables:
+            by_normalized.setdefault(_normalize_variable_name(declared), []).append(declared)
+
         correlations: Dict[str, CorrelationParams] = {}
         for key, c in data.get("correlations", {}).items():
             correlations[key] = CorrelationParams(
-                var1=c["var1"],
-                var2=c["var2"],
+                var1=_resolve_correlation_name(c["var1"], variables, by_normalized),
+                var2=_resolve_correlation_name(c["var2"], variables, by_normalized),
                 correlation=float(c.get("correlation") if c.get("correlation") is not None else 0.0),
                 direction=c.get("direction", "positive"),
             )
@@ -282,44 +372,43 @@ class Extractor:
         return variables, correlations
 
     def _extract_with_regex(self, text: str) -> tuple[Dict, Dict]:
-        """Fallback regex extraction returning (variables, correlations)."""
+        """Fallback regex extraction returning (variables, correlations).
+
+        Continuous variables are named from the surrounding prose when it says
+        clearly enough which variable a mean/std pair belongs to, and fall back
+        to a positional "var_N" when it does not.
+        """
         variables: Dict[str, VariableParams] = {}
         seen = set()
 
-        for match in _PATTERN_MEAN_STD.finditer(text):
-            mean, std = float(match.group(1)), float(match.group(2))
+        def add_variable(mean: float, std: float, start: int) -> None:
+            """Record one continuous variable, named from the text where possible."""
             key = (mean, std)
-            if key not in seen:
-                seen.add(key)
-                name = f"var_{len(variables) + 1}"
-                variables[name] = VariableParams(
-                    name=name,
-                    distribution="normal",
-                    mean=mean,
-                    std=std,
-                    min=mean - 3 * std,
-                    max=mean + 3 * std,
-                )
+            if key in seen:
+                return
+            seen.add(key)
+            name = self._name_for_stat(text, start, variables)
+            variables[name] = VariableParams(
+                name=name,
+                distribution="normal",
+                mean=mean,
+                std=std,
+                min=mean - 3 * std,
+                max=mean + 3 * std,
+            )
+
+        for match in _PATTERN_MEAN_STD.finditer(text):
+            add_variable(float(match.group(1)), float(match.group(2)), match.start())
 
         for match in _PATTERN_STD_MEAN.finditer(text):
-            std, mean = float(match.group(1)), float(match.group(2))
-            key = (mean, std)
-            if key not in seen:
-                seen.add(key)
-                name = f"var_{len(variables) + 1}"
-                variables[name] = VariableParams(
-                    name=name,
-                    distribution="normal",
-                    mean=mean,
-                    std=std,
-                    min=mean - 3 * std,
-                    max=mean + 3 * std,
-                )
+            add_variable(float(match.group(2)), float(match.group(1)), match.start())
 
-        # Categorical variables (any category count) — captured with their real
-        # name, unlike the anonymized "var_N" naming used for mean/std pairs above.
+        # Categorical variables (any category count) — always captured with their
+        # real name. Category *labels* are left exactly as written; only the
+        # variable name is normalized, so it can match a correlation clause.
         for match in _PATTERN_CATEGORICAL.finditer(text):
             name, blob = match.groups()
+            name = _normalize_variable_name(name) or name
             pairs = _PATTERN_CATEGORY_PAIR.findall(blob)
             # A single pair would normalize to probability 1.0 — almost certainly
             # a parse fragment rather than a real categorical description.
@@ -330,12 +419,16 @@ class Extractor:
                     categories={label: float(prob) for label, prob in pairs},
                 )
 
-        # Best-effort correlation extraction (synthesizer ignores pairs whose
-        # variable names are not present, so mismatched names are harmless).
+        # Correlation extraction. Names go through the same normalization as the
+        # variables above so that a pair can actually resolve; a pair naming a
+        # variable that was never extracted is still emitted, and the synthesizer
+        # records it as skipped rather than silently pretending it applied.
         correlations: Dict[str, CorrelationParams] = {}
         for pattern in (_PATTERN_CORR_NAMED, _PATTERN_CORR_FUNC):
             for match in pattern.finditer(text):
-                v1, v2, value = match.group(1), match.group(2), float(match.group(3))
+                v1 = _normalize_variable_name(match.group(1)) or match.group(1)
+                v2 = _normalize_variable_name(match.group(2)) or match.group(2)
+                value = float(match.group(3))
                 key = f"{v1}__{v2}"
                 if key not in correlations:
                     correlations[key] = CorrelationParams(
@@ -346,6 +439,24 @@ class Extractor:
                     )
 
         return variables, correlations
+
+    @staticmethod
+    def _name_for_stat(text: str, start: int, existing: Dict[str, VariableParams]) -> str:
+        """Name the variable a mean/std hit at `start` describes.
+
+        Looks only at the 80 characters immediately before the hit, so a name
+        has to be adjacent to the statistic to be claimed. Returns "var_N" when
+        no confident name is available, or when the name is already taken --
+        reusing a name would silently merge two distinct variables.
+        """
+        window = text[max(0, start - 80):start]
+        match = _PATTERN_NAME_BEFORE_STAT.search(window)
+        if match:
+            raw = match.group("v_var") or match.group("v_dist")
+            name = _normalize_variable_name(raw or "")
+            if name and name not in existing:
+                return name
+        return f"var_{len(existing) + 1}"
 
     def llm_call(self, prompt: str) -> str:
         """General purpose LLM call for non-structured extraction tasks.
