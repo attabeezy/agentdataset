@@ -49,9 +49,11 @@ htmlcov/
 
 # AgentDataset generated/runtime files
 .agentdataset_cache/
-docs/
+docs/*
+!docs/neurips/
 
-# AAAI/IAAI paper sources are selectively tracked by AuthorKit27/.gitignore.
+# The migrated NeurIPS paper is selectively tracked by docs/neurips/.gitignore.
+AuthorKit27/
 output/
 
 # OS

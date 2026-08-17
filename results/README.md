@@ -415,14 +415,14 @@ Reproduce the new studies with:
 .venv\Scripts\python.exe analysis\paper_artifacts.py --write
 .venv\Scripts\python.exe analysis\paper_artifacts.py --check
 
-# Paper build (run from AuthorKit27 after generating Figures\architecture.pdf)
+# Paper build (run from docs\neurips after generating Figures\architecture.pdf)
 Push-Location Figures
 pdflatex architecture
 Pop-Location
-pdflatex main
-bibtex main
-pdflatex main
-pdflatex main
+pdflatex neurips_2026
+bibtex neurips_2026
+pdflatex neurips_2026
+pdflatex neurips_2026
 ```
 
 The utility benchmark computes parameters from each training fold only. Raw

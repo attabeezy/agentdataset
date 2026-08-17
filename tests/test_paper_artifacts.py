@@ -9,8 +9,8 @@ from analysis import paper_artifacts
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PAPER = ROOT / "AuthorKit27" / "main.tex"
-FIGURE = ROOT / "AuthorKit27" / "Figures" / "architecture.tex"
+PAPER = ROOT / "docs" / "neurips" / "neurips_2026.tex"
+FIGURE = ROOT / "docs" / "neurips" / "Figures" / "architecture.tex"
 
 
 def test_generated_tables_match_committed_results():
@@ -75,3 +75,13 @@ def test_live_web_test_remains_separate_from_default_suite():
     assert "@pytest.mark.live_e2e" in live_test
     assert "live_e2e:" in config
     assert 'not live_e2e' in config
+
+
+def test_paper_uses_neurips_template_and_completed_checklist():
+    text = PAPER.read_text(encoding="utf-8")
+    checklist = (PAPER.parent / "checklist.tex").read_text(encoding="utf-8")
+    assert r"\usepackage{neurips_2026}" in text
+    assert r"\input{checklist.tex}" in text
+    assert "aaai2027" not in text
+    assert r"\answerTODO" not in checklist
+    assert r"\justificationTODO" not in checklist

@@ -172,23 +172,23 @@ supersedes it with 30-seed linear/nonlinear classification and regression.
 
 ---
 
-## 8. Paper (IAAI-27) — Status & Pickup Notes
+## 8. Paper (NeurIPS 2026) — Status & Pickup Notes
 
-**Target venue:** IAAI-27 (co-located with AAAI-27), Emerging Applications track.
-**Format:** AAAI two-column, **6-page** main-content limit; references + appendices unlimited.
-**Review model:** **single-blind** — author names are required (not anonymized).
+**Target venue:** NeurIPS 2026, Main Track.
+**Format:** official NeurIPS 2026 template, **9-page** main-content limit; acknowledgments, references, checklist, and optional technical appendices do not count toward that limit.
+**Review model:** **double-blind** — the default `neurips_2026` style suppresses the author block and adds review line numbers.
 
 ### 8.1 Draft location & build
-The paper lives in `AuthorKit27/` (git-ignored — build artifacts excluded from the repo):
+The paper lives in `docs/neurips/`; canonical sources are tracked while build artifacts are ignored:
 
-- `AuthorKit27/main.tex` — canonical paper source. Compiles clean via MiKTeX `pdflatex` + `bibtex`. After the §9.6 blocks landed this is **11 pages: main content now runs to ~page 6, i.e. at the limit rather than under it**, references p. 7, technical appendix + reproducibility checklist pp. 8–11. New main-text prose has essentially no headroom — put §9.7 and later material in the appendix (unlimited) with short pointers from the main text. (The `AnonymousSubmission2027.tex`/`CameraReady2027.tex` files in the kit are unused AAAI template boilerplate.)
-- `AuthorKit27/references.bib` — 35 references, including the three real-paper sources and disclosure-control literature.
-- `AuthorKit27/Figures/architecture.tex` → `architecture.pdf` — TikZ pipeline diagram (standalone-compiled to vector PDF, included via `\includegraphics`).
-- `AuthorKit27/ReproducibilityChecklist.tex` — filled in, `\input` at end of paper.
-- Uses the `[preprint]` style option (authors shown, copyright slug suppressed during review). **Do NOT** use `[submission]` — that anonymizes the author block (wrong for single-blind).
+- `docs/neurips/neurips_2026.tex` — canonical paper source using the repository's official NeurIPS 2026 template.
+- `docs/neurips/references.bib` — references, including the three real-paper sources and disclosure-control literature.
+- `docs/neurips/Figures/architecture.tex` → `architecture.pdf` — TikZ pipeline diagram (standalone-compiled to vector PDF, included via `\includegraphics`).
+- `docs/neurips/checklist.tex` — completed official NeurIPS paper checklist, `\input` at the end of the paper.
+- `docs/neurips/generated_tables/` — deterministic result-backed TeX fragments.
 
-**Build:** from `AuthorKit27/`, run `pdflatex main` → `bibtex main` → `pdflatex main` ×2.
-Compliance verified: 0 overfull boxes, 0 undefined refs, no Type-3 fonts, all fonts embedded, PDF 1.5.
+**Build:** from `docs/neurips/`, run `pdflatex neurips_2026` → `bibtex neurips_2026` → `pdflatex neurips_2026` ×2.
+Compliance verified after migration: main text ends on page 9 and references start on page 10; the 25-page submission PDF has 0 overfull boxes, 0 undefined refs, no Type-3 fonts, all fonts embedded, and PDF 1.5.
 
 ### 8.2 Historical reviewer-readiness assessment (pre-P0)
 These five-seed results are retained as provenance and are superseded by the
@@ -204,8 +204,8 @@ These five-seed results are retained as provenance and are superseded by the
 1. **(crit #1) — DONE.** 5-seed loop + mean ± std in `run_empirical_benchmark`.
 2. **(crit #5) — DONE.** Independent-marginals + SDV GaussianCopula baselines on the same TSTR protocol.
 3. **(crit #3) — DONE.** Adult F1 gap analyzed (`analysis/adult_f1_gap.py`) and written up.
-4. **DONE.** Folded into the paper's Evaluation: Table 1 rebuilt with error bars + baseline columns (`main.tex`, rebuilt clean — 0 overfull, 0 undefined, main content ≤ 6 pp).
-5. **Housekeeping before submission — OPEN.** Confirm co-author list/affiliations (IAAI recommends a deploying-institution co-author; note the `% TODO` in the author block of `main.tex`); final proofread.
+4. **DONE.** Folded into the paper's Evaluation: the utility table includes error bars and baseline columns in `docs/neurips/neurips_2026.tex`.
+5. **Housekeeping before submission — OPEN.** Confirm the co-author list/affiliations, replace the `% TODO` camera-ready author block, and perform the final proofread.
 
 **Historical story:** these five-seed numbers overturned the earlier single-seed narrative. The current paper no longer uses them; its conclusions come from the 30-seed benchmark and real-paper study.
 
@@ -334,7 +334,7 @@ This is the reviewer's most important request and should be completed before opt
     - possible disclosure of aggregate or group attributes;
     - absence of a formal differential-privacy guarantee.
   - Reframe the nearest-neighbor value as a diagnostic, not a formal privacy score or proof.
-  - **Likely files:** `AuthorKit27/main.tex`, `README.md`, `agentdataset/core/validator.py`, generated `DATACARD.md` text, and UI copy.
+  - **Likely files:** `docs/neurips/neurips_2026.tex`, `README.md`, `agentdataset/core/validator.py`, generated `DATACARD.md` text, and UI copy.
   - **Done when:** no text equates aggregate-only input with guaranteed privacy.
 
 - [x] **Add a threat model and limitations subsection.**
@@ -355,7 +355,7 @@ This is the reviewer's most important request and should be completed before opt
     - Taub et al. (2018) on attribute disclosure from synthetic data.
   - Add recent primary literature only after checking the original source and relevance.
   - Explain how aggregate-statistics synthesis relates to reconstruction and disclosure limitation rather than adding citations as an isolated list.
-  - **Likely files:** `AuthorKit27/references.bib`, related work and limitations in `AuthorKit27/main.tex`.
+  - **Likely files:** `docs/neurips/references.bib`, related work and limitations in `docs/neurips/neurips_2026.tex`.
   - **Done when:** privacy framing is connected to the established disclosure-control literature.
 
 - [x] **Decide whether formal differential privacy is in scope for this revision.**
@@ -440,7 +440,7 @@ This is the reviewer's most important request and should be completed before opt
       label leaves all non-oracle thresholds and predicted-positive rates unchanged while the
       oracle threshold moves, so the guard cannot pass vacuously.
     - Paper text and the appendix table are applied to the draft; the blocks and their
-      applier now live in `AuthorKit27/` alongside the paper (see "Paper material" below).
+      revisions are integrated in the canonical NeurIPS paper source (see "Paper material" below).
 
 ### 9.6 P1 — Extraction robustness and prompt ablations
 
@@ -523,19 +523,14 @@ This is the reviewer's most important request and should be completed before opt
     `extraction_cost_latency.csv` and `extraction_prompt_token_savings.csv` instead; and
     `tests/test_baseline_manifest.py` verifies all six hashes and asserts the producer
     no longer targets those filenames.
-  - Paper blocks applied to the draft; they now live in `AuthorKit27/` (see below).
+  - Paper blocks applied to the draft; their final text now lives in `docs/neurips/neurips_2026.tex` (see below).
 
-### Paper material lives outside this repository
+### Paper material is tracked with the repository
 
-The paper is unpublished, so its prose is not stored here. `AuthorKit27/` is
-git-ignored and versioned as its own separate repository, and it holds:
-
-- `main.tex` and the rest of the draft,
-- `extraction_ablation_paper_snippets.tex` and `adult_calibration_paper_snippets.tex`
-  (the version-controlled paper blocks),
-- `apply_extraction_snippets.py` and `apply_paper_snippets.py`, which apply those
-  blocks to `main.tex`. Both are idempotent, insist that every anchor match exactly
-  once, and write a `.bak` before changing anything.
+The canonical NeurIPS manuscript, official style/checklist, bibliography, figure
+source, and generated result-table fragments live in `docs/neurips/`. Auxiliary
+LaTeX files and rendered PDFs remain ignored; quantitative fragments are rebuilt
+and checked by `analysis/paper_artifacts.py`.
 
 These four files previously lived under `analysis/`. They were moved because they
 carry verbatim draft prose, which does not belong beside the public code. Both
@@ -660,7 +655,7 @@ Numbers quoted in the paper are transcribed from `results/`, which stays here.
   - Avoid promising recovery of relationships not represented in the published statistics.
   - An implementation change to vine copulas is optional; a precise operating envelope is required.
   - **Done when:** the Adult results are connected to the pairwise-dependence limitation in the method and discussion.
-  - **Result.** Written as the `method-envelope` and `discussion-dependence` blocks in `AuthorKit27/noise_pivot_paper_snippets.tex`. The stated envelope: AgentDataset reproduces per-variable marginals and *pairwise monotone* association, and nothing beyond that.
+  - **Result.** Integrated into Method and Discussion in `docs/neurips/neurips_2026.tex`. The stated envelope: AgentDataset reproduces per-variable marginals and *pairwise monotone* association, and nothing beyond that.
   - **Why Pearson:** it is the only dependence statistic reliably present in published aggregate statistics. Spearman/Kendall would be nearly free given the rank transform already in the pipeline (`synthesizer.py` reorders each marginal by the latent's ranks, so the imposed dependence is closer to a rank correlation than to Pearson's — worth stating precisely rather than claiming Pearson fidelity). Vine copulas need joint data or far richer reported statistics and are therefore outside the literature-only operating envelope; not implemented, and the paper says so rather than promising it.
   - **Categorical encoding is a hard limit, not a footnote.** Categorical variables are drawn as integer category codes and rank-transformed, so a correlation involving a categorical is a correlation against an arbitrary label ordering. This is now stated in Method.
   - **Connected to the Adult results (the acceptance criterion):** §9.5 showed an oracle threshold fitted on real test labels still leaves HGB −.025 below TRTR — exactly its ROC-AUC loss — and independent marginals −.192 at AUC .509. The residual *is* the ranking deficit: thresholding cannot restore dependence that was never synthesized. §9.7's audit supplies the mechanism from the other end — for auto-extracted specs, 0% of declared correlations are ever applied, so those datasets are independent marginals in all but name.
@@ -671,7 +666,7 @@ Numbers quoted in the paper are transcribed from `results/`, which stays here.
   - **This is invariance by construction, not a sampling artifact.** The KS term (weight .40) compares each column against the same parameterized CDF *and the same mean/std* used to draw it; the bias term (.20) compares the sample mean to the declared mean. Any location–scale error moves data and reference together and cancels.
   - **The correlation term (.40) is the exception and does carry signal** — it detects synthesis failures such as a dropped or unresolved matrix (52–67 vs 80–100 repaired). It still reproduces a wrong *declared* correlation faithfully.
   - **Net:** the score measures whether the synthesizer did what it was told, never whether it was told the right thing. This is the common cause behind the §9.4/§9.5 pattern of high intrinsic fidelity with weak TSTR/HGB utility, and behind extraction quality (Q3) not showing up in fidelity at all.
-  - **Acted on (paper reframing, no reported number changed).** `AuthorKit27/fidelity_reframe_paper_snippets.tex` + `apply_fidelity_reframe_snippets.py`, applied: the self-refinement contribution bullet became "An audit of the internal objective"; System Overview, Q1, and Discussion now state the score's scope; appendix `app:scoring` carries the corruption table (`tab:validity`). Rebuilt clean at 13 pages, 0 errors / 0 overfull / 0 undefined refs, main content still ending p6.
+  - **Acted on (paper reframing, no reported number changed).** Integrated into the canonical paper: the self-refinement contribution bullet became "An audit of the internal objective"; System Overview, Q1, and Discussion state the score's scope; appendix `app:scoring` carries the corruption table (`tab:validity`).
   - **Not done, deliberately:** the score itself is unchanged. Scoring against the published statistics or against downstream utility instead of the sampled CDF is the real fix, and it is a new contribution rather than a revision — see §9.9/§9.10 sequencing before attempting it.
 
 ### 9.8 P1 — Baselines and cost accounting
@@ -739,7 +734,7 @@ Numbers quoted in the paper are transcribed from `results/`, which stays here.
   - Add a compact example showing query → discovered source → extracted statistic → generated rows/fidelity result.
   - Use a real-paper study example if space and licensing allow.
   - Keep labels readable at two-column print size.
-  - **Likely file:** `AuthorKit27/Figures/architecture.tex`.
+  - **Likely file:** `docs/neurips/Figures/architecture.tex`.
   - **Done when:** a first-time reader can understand the input and output of each phase without reading the method section.
   - **Result:** Figure 1 now follows the rank-1 student-mental-health paper from query through the returned SAS-SV summary, 447 generated rows, and the internal-fidelity limitation caused by an omitted source correlation.
 
@@ -779,7 +774,7 @@ Numbers quoted in the paper are transcribed from `results/`, which stays here.
   - Confirm the co-author list and affiliations and resolve the existing author-block TODO.
   - Proofread specifically for stale claims from the earlier single-seed narrative.
   - **Done when:** the built PDF matches committed results and contains no unresolved submission TODOs.
-  - **Status:** technical checks pass: ten generated table fragments match committed results, the 14-page PDF has embedded Type 1 fonts, and the final log has no undefined references, citation warnings, overfull boxes, or stale result claims. This item remains open only for confirmed author names/affiliations and removal of the deliberate author-block TODO.
+  - **Status:** technical checks pass after migration to the official NeurIPS 2026 template: ten generated table fragments match committed results; main text ends on page 9 and references start on page 10; the 25-page PDF has embedded Type 1 fonts; and the final log has no undefined references, citation warnings, overfull boxes, or stale result claims. The official NeurIPS checklist is complete. This item remains open only for confirmed camera-ready author names/affiliations and removal of the deliberate author-block TODO.
 
 ### 9.11 Recommended execution order
 

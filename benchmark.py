@@ -1289,11 +1289,11 @@ def run_cost_latency_analysis(n_repeats: int = 5):
 
 if __name__ == "__main__":
     load_env()
-    print("Starting AgentDataset IAAI-27 Benchmarks...\n")
+    print("Starting AgentDataset NeurIPS 2026 Benchmarks...\n")
     try:
         run_empirical_benchmark()
         run_ablation_study()
         run_cost_latency_analysis()
-        print("\nBenchmarks complete. Ready for IAAI-27 submission.")
+        print("\nBenchmarks complete. Ready for NeurIPS 2026 review.")
     except Exception as e:
         logger.exception("Benchmark failed")

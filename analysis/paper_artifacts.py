@@ -1,7 +1,7 @@
 """Generate and verify the result-backed LaTeX table rows used by the paper.
 
 The committed CSV/JSON artifacts are the source of truth. The write mode updates
-the TeX fragments consumed by AuthorKit27/main.tex; check mode fails if a
+the TeX fragments consumed by docs/neurips/neurips_2026.tex; check mode fails if a
 fragment is stale or a result contract no longer holds.
 """
 
@@ -17,7 +17,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS = ROOT / "results"
 ANALYSIS = ROOT / "analysis"
-GENERATED = ROOT / "AuthorKit27" / "generated_tables"
+GENERATED = ROOT / "docs" / "neurips" / "generated_tables"
 
 
 def _read_csv(path: Path) -> pd.DataFrame:
