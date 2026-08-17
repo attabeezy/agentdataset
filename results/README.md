@@ -378,9 +378,18 @@ stage, while `--source ID --merge-existing` supports a scoped replacement.
 
 Reproduce the new studies with:
 
+| Study | Primary outputs | Offline/API-free path | Live requirements |
+|---|---|---|---|
+| Real-paper discovery/extraction | `analysis/real_paper_*`, `results/real_paper_*` | Verify committed outputs with `paper_artifacts.py --check`; forced regex runs without a key | Network plus `OPENROUTER_API_KEY` for live discovery and LLM extraction |
+| Utility and baselines | `p0_utility_*` | Fully local; SDV may be skipped if unavailable | None |
+| Adult calibration | `adult_calibration*` | Fully local | None |
+| Extraction challenge | `extraction_challenge_*` | `--dry-run` executes regex only | `OPENROUTER_API_KEY` for LLM arms |
+| Optimizer/correlation/fidelity audits | `noise_pivot_*`, `corr_validity_*`, `fidelity_validity_probe_*` | Fully local | None |
+| End-to-end accounting | `end_to_end_cost_latency*` | `--mode cached` performs no network or API calls | Network plus `OPENROUTER_API_KEY` for live mode |
+
 ```powershell
 .venv\Scripts\python.exe analysis\real_paper_eval.py --mode live
-.venv\Scripts\python.exe analysis\real_paper_eval.py --mode cached
+.venv\Scripts\python.exe analysis\real_paper_eval.py --mode cached  # cached documents; LLM extraction still uses a configured key
 .venv\Scripts\python.exe analysis\p0_utility_benchmark.py --seeds 30
 .venv\Scripts\python.exe analysis\adult_calibration.py --seeds 30
 
@@ -401,8 +410,23 @@ Reproduce the new studies with:
 .venv\Scripts\python.exe analysis\end_to_end_cost.py --mode cached         # deterministic, no API key
 .venv\Scripts\python.exe analysis\end_to_end_cost.py --mode live           # network + paid OpenRouter calls
 .venv\Scripts\python.exe analysis\end_to_end_cost.py --mode live --summarize-existing
+
+# Rebuild or verify every result-backed manuscript table without network/API use
+.venv\Scripts\python.exe analysis\paper_artifacts.py --write
+.venv\Scripts\python.exe analysis\paper_artifacts.py --check
+
+# Paper build (run from AuthorKit27 after generating Figures\architecture.pdf)
+Push-Location Figures
+pdflatex architecture
+Pop-Location
+pdflatex main
+bibtex main
+pdflatex main
+pdflatex main
 ```
 
 The utility benchmark computes parameters from each training fold only. Raw
 rows use the shared schema defined in `agentdataset/evaluation.py`; empty and
 failed runs remain explicit rather than disappearing during aggregation.
+The committed result files are the deterministic reviewer path: the table
+checker consumes them directly and never performs network or paid calls.

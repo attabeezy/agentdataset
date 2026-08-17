@@ -86,7 +86,7 @@ agentdataset/
 │   │   └── validator.py      # Fidelity + row-dispersion diagnostics
 │   └── models/
 │       └── schemas.py        # Pydantic data models
-├── tests/                    # 58 unit tests plus opt-in live e2e
+├── tests/                    # automated checks plus opt-in live e2e
 └── .agentdataset_cache/      # Ignored runtime output, reports, sessions, artifacts
 ```
 

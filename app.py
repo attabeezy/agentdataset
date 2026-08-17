@@ -197,7 +197,10 @@ if st.session_state.discovery_results:
                 st.session_state.best_data = best_data
                 progress_bar.progress(100)
 
-                st.success(f"Dataset finalized with Fidelity Score: {best_score}")
+                st.success(
+                    f"Dataset finalized with Fidelity Score: {best_score} "
+                    "(internal synthesis diagnostic)"
+                )
 
 # --- Results Panel ---
 if st.session_state.best_data is not None and not st.session_state.best_data.empty:
