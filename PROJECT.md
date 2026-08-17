@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-AgentDataset is a 4-phase autonomous pipeline: discover research documents → extract statistical parameters → synthesize a dataset → validate fidelity. Each phase is a standalone module; the `Orchestrator` wires them together and manages the iterative refinement loop.
+AgentDataset is a 4-phase assisted pipeline: discover research documents → extract statistical parameters → synthesize a dataset → validate fidelity. Each phase is a standalone module; the `Orchestrator` wires them together and manages the iterative refinement loop. Human review of selected sources and extracted parameters is part of the intended workflow.
 
 ---
 
@@ -66,7 +66,7 @@ Produces a `FidelityReport` with four components:
 | KS score | 40% | Fraction of variables passing KS-test (`p ≥ 0.05`), × 100 |
 | Correlation score | 40% | Mean absolute error of off-diagonal correlations: `1 − mean(|synth − target|)/2`, clamped to [0, 1] (diagonal excluded so it can't inflate the score) |
 | Bias score | 20% | Fraction of variables within 20% mean deviation |
-| Privacy score | — (reported separately) | Avg nearest-neighbour distance on 500-row subsample, normalised to [0, 1] |
+| Row-dispersion diagnostic | — (reported separately) | Avg nearest-neighbour distance on a 500-row synthetic-only subsample, normalised to [0, 1]; not a privacy audit or guarantee |
 
 Distribution CDFs used in KS-test: `stats.norm` (normal), `stats.uniform` (uniform), `stats.gamma` (gamma).
 
@@ -91,7 +91,7 @@ otherwise                   → explore:  noise *= 1.1  (cap MAX_NOISE = 2.0)
 
 `PATIENCE = 2` — so the cycle is: explore → exploit → explore → reset.
 
-All six knobs are exposed as `NoisePivotConfig` (with `next_noise()` as a pure transition function); the defaults reproduce the constants above exactly. **§9.7 measured them and they are not optimal**: the fidelity landscape falls off sharply above noise 0.05, so the shipped `initial_noise = 0.1` starts on the wrong side of the cliff and a fixed noise of 0.01 beats the schedule at equal budget. The defaults are retained so published results stay reproducible — see §9.7 before treating them as tuned.
+All seven schedule and bound values are exposed as `NoisePivotConfig` (with `next_noise()` as a pure transition function); the defaults reproduce the constants above exactly. **§9.7 measured the five active schedule choices and they are not optimal**: the fidelity landscape falls off sharply above noise 0.05, so the shipped `initial_noise = 0.1` starts on the wrong side of the cliff and a fixed noise of 0.01 beats the schedule at equal budget. The defaults are retained so published results stay reproducible — see §9.7 before treating them as tuned.
 
 ---
 
@@ -129,7 +129,7 @@ Managed via `litellm`. The provider is selected in the UI; `Extractor` receives 
     └── run_<timestamp>/
     ├── data.csv          # Best synthetic dataset
     ├── parameters.json   # Parameters used for best run
-    └── DATACARD.md       # Fidelity + privacy report
+    └── DATACARD.md       # Fidelity + synthetic-row dispersion report
 ```
 
 `.agentdataset_cache/` also holds runtime artifacts, migrated results, memory files, and live e2e reports. It is ignored by git. Only the 3 most recent session directories are retained. Older ones are deleted at `Orchestrator.__init__`.
@@ -138,14 +138,14 @@ Managed via `litellm`. The provider is selected in the UI; `Extractor` receives 
 
 ## 7. Research Viability & Publishability
 
-AgentDataset sits at the intersection of Agentic AI, Synthetic Data Generation, and Data Privacy. It offers a structured, autonomous approach to solving the problem of generating high-fidelity synthetic datasets from academic literature.
+AgentDataset sits at the intersection of agentic AI, synthetic data generation, and statistical disclosure concerns. It offers a structured, assisted approach to generating synthetic datasets from statistics reported in academic literature.
 
 ### 7.1 Novel Contributions
 
-- **End-to-End Autonomous Workflow**: Combines LLM extraction tools and synthetic data generators into a closed-loop autonomous agent that searches the web, reads PDFs, and optimizes its own output.
+- **End-to-End Assisted Workflow**: Combines discovery, LLM extraction, and synthetic generation in one workflow while requiring human verification of source scope and extracted parameters.
 - **The "Noise Pivot" Optimization Loop**: An explore/exploit ratcheting system for tuning the `noise_level` against a multi-component fidelity score (KS-test, Correlation MAE, Bias).
-- **Fidelity vs. Privacy Quantification**: Automatically generates a `DATACARD.md` that quantifies both the statistical fidelity (KS tests, correlation matrices) and privacy (nearest-neighbor distance).
-- **The "Caveman Protocol"**: A token-optimization strategy using compressed, filler-free prompting for extraction to reduce cost and latency in agentic loops.
+- **Fidelity and Diagnostic Reporting**: Automatically generates a `DATACARD.md` with statistical-fidelity measures and a synthetic-row dispersion diagnostic that is explicitly not a privacy guarantee.
+- **Prompt-Compression Audit**: Measures the compressed "Caveman Protocol" and shows that its modest cost saving does not justify its extraction-quality loss; the deployed extractor uses the natural-language prompt.
 - **Mixed Continuous/Categorical Synthesis**: The synthesizer's Cholesky/rank-transform copula extends to categorical variables with any number of categories (e.g. classification targets, demographic features), so the pipeline can model real datasets whose columns aren't purely continuous. The copula treats category codes as ordinal (alphabetical label order in the benchmark, matching the validator's encoding), a documented modeling choice for nominal variables.
 
 ### 7.2 Potential Publication Venues
@@ -728,44 +728,50 @@ Numbers quoted in the paper are transcribed from `results/`, which stays here.
 
 ### 9.9 P2 — Paper presentation and clarity
 
-- [ ] **Tighten the abstract.**
+- [x] **Tighten the abstract.**
   - Move the list of practical problems into the introduction.
   - Lead with the problem, system, evaluation setting, and one defensible quantitative result.
   - Avoid privacy guarantees and autonomous-performance claims stronger than the new evidence.
   - **Done when:** the abstract fits the venue limit and every claim is supported elsewhere in the paper.
+  - **Result:** the 184-word abstract leads with the assisted workflow and reports the final deployed extractor's `.304` micro-F1 while explicitly rejecting unattended-curation and privacy-mechanism interpretations.
 
-- [ ] **Improve Figure 1 with a concrete walkthrough.**
+- [x] **Improve Figure 1 with a concrete walkthrough.**
   - Add a compact example showing query → discovered source → extracted statistic → generated rows/fidelity result.
   - Use a real-paper study example if space and licensing allow.
   - Keep labels readable at two-column print size.
   - **Likely file:** `AuthorKit27/Figures/architecture.tex`.
   - **Done when:** a first-time reader can understand the input and output of each phase without reading the method section.
+  - **Result:** Figure 1 now follows the rank-1 student-mental-health paper from query through the returned SAS-SV summary, 447 generated rows, and the internal-fidelity limitation caused by an omitted source correlation.
 
-- [ ] **Clarify Algorithm 1 notation.**
+- [x] **Clarify Algorithm 1 notation.**
   - Replace ambiguous `θ` for extracted statistics with `S` or another unambiguous symbol.
   - Define every schedule constant and connect it to the sensitivity analysis.
   - **Done when:** extracted statistical parameters cannot be mistaken for learned model weights.
+  - **Result:** the algorithm now uses statistical specification `S`, defines every bound and schedule constant, and identifies the five choices exercised by the sensitivity analysis.
 
-- [ ] **Update the section-by-section narrative.**
+- [x] **Update the section-by-section narrative.**
   - Related work: add disclosure control and clarify what prior aggregate-reconstruction systems required that AgentDataset automates.
   - Method: state the supported distributions, pairwise-only dependence, categorical encoding choice, matrix-fallback behavior, and privacy-diagnostic limitation.
   - Evaluation: add real-paper, nonlinear-model, regression, calibration, robustness, and end-to-end-cost results.
   - Discussion: state the operating envelope, distribution-shift risk, and remaining formal-privacy gap.
   - Conclusion: describe demonstrated capabilities only.
   - **Done when:** terminology and numbers agree across the abstract, tables, discussion, appendix, README, and data card.
+  - **Result:** the paper consistently describes an assisted, pairwise aggregate-reconstruction workflow; all quantitative table rows are generated from committed result artifacts, and limitations cover extraction error, distribution shift, and the absence of formal privacy guarantees.
 
 ### 9.10 P2 — Reproducibility and submission closeout
 
-- [ ] **Add commands for every new experiment.**
+- [x] **Add commands for every new experiment.**
   - Document real-paper study, broader utility benchmark, calibration, prompt ablation, optimizer sensitivity, and cost accounting in `results/README.md`.
   - Note which commands require network access or paid API credentials.
   - Provide a deterministic offline path using stored parsed text or regex where licensing permits.
   - **Done when:** a reviewer can reproduce each non-web-dependent table from the repository.
+  - **Result:** `results/README.md` provides a study-to-command/output matrix, separates cached/offline and paid live paths, and documents deterministic table regeneration and checking.
 
-- [ ] **Expand automated tests.**
+- [x] **Expand automated tests.**
   - Add tests for new benchmark schemas, regression metrics, nonlinear-model preprocessing, threshold selection without test leakage, privacy-label changes, matrix diagnostics/repair, and challenge-set scoring.
   - Keep live web/API tests separate from the default unit-test suite.
   - **Done when:** `pytest` passes and result-schema regressions are caught automatically.
+  - **Result:** 230 default tests pass, including paper-artifact/result reconciliation; the credentialed end-to-end test is marked and excluded from the default suite.
 
 - [ ] **Perform final paper consistency and build checks.**
   - Rebuild all tables from saved result files.
@@ -773,6 +779,7 @@ Numbers quoted in the paper are transcribed from `results/`, which stays here.
   - Confirm the co-author list and affiliations and resolve the existing author-block TODO.
   - Proofread specifically for stale claims from the earlier single-seed narrative.
   - **Done when:** the built PDF matches committed results and contains no unresolved submission TODOs.
+  - **Status:** technical checks pass: ten generated table fragments match committed results, the 14-page PDF has embedded Type 1 fonts, and the final log has no undefined references, citation warnings, overfull boxes, or stale result claims. This item remains open only for confirmed author names/affiliations and removal of the deliberate author-block TODO.
 
 ### 9.11 Recommended execution order
 
@@ -790,11 +797,12 @@ Numbers quoted in the paper are transcribed from `results/`, which stays here.
 
 If time is constrained, the minimum defensible response to this review is:
 
-- [ ] a real-paper study covering at least three heterogeneous documents, with discovery and extraction scored separately;
-- [ ] carefully scoped privacy claims, a disclosure-risk threat model, and relevant disclosure-control citations;
-- [ ] one nonlinear classifier and one regression task;
+- [x] a real-paper study covering at least three heterogeneous documents, with discovery and extraction scored separately;
+- [x] carefully scoped privacy claims, a disclosure-risk threat model, and relevant disclosure-control citations;
+- [x] one nonlinear classifier and one regression task;
 - [x] Adult threshold/calibration results that avoid real-test-set tuning;
 - [x] end-to-end rather than per-call cost reporting;
-- [ ] an explicit limitations discussion for idealized extraction, pairwise dependence, sample size, and distribution shift;
+- [x] an explicit limitations discussion for idealized extraction, pairwise dependence, sample size, and distribution shift;
 - [ ] updated paper tables, appendix details, reproducibility commands, and a clean final build.
+  - Technical artifacts and build are complete; the submission build remains open pending the author-block confirmation in Section 9.10.
 
