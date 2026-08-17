@@ -1,0 +1,301 @@
+% ============================================================
+% AgentDataset references.
+% [VERIFY] markers in comments indicate fields a co-author should
+% confirm against the primary source before camera-ready.
+% ============================================================
+
+% ---- Tabular synthetic data generation ----
+@inproceedings{xu2019ctgan,
+  title     = {Modeling Tabular Data using Conditional {GAN}},
+  author    = {Xu, Lei and Skoularidou, Maria and Cuesta-Infante, Alfredo and Veeramachaneni, Kalyan},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2019}
+}
+
+@inproceedings{patki2016sdv,
+  title     = {The Synthetic Data Vault},
+  author    = {Patki, Neha and Wedge, Roy and Veeramachaneni, Kalyan},
+  booktitle = {IEEE International Conference on Data Science and Advanced Analytics (DSAA)},
+  pages     = {399--410},
+  year      = {2016},
+  doi       = {10.1109/DSAA.2016.49}
+}
+
+@inproceedings{sun2019vinecopula,
+  title     = {Learning Vine Copula Models for Synthetic Data Generation},
+  author    = {Sun, Yi and Cuesta-Infante, Alfredo and Veeramachaneni, Kalyan},
+  booktitle = {Proceedings of the AAAI Conference on Artificial Intelligence (AAAI)},
+  volume    = {33},
+  year      = {2019}
+}
+
+@inproceedings{kotelnikov2023tabddpm,
+  title     = {{TabDDPM}: Modelling Tabular Data with Diffusion Models},
+  author    = {Kotelnikov, Akim and Baranchuk, Dmitry and Rubachev, Ivan and Babenko, Artem},
+  booktitle = {Proceedings of the 40th International Conference on Machine Learning (ICML)},
+  pages     = {17564--17579},
+  year      = {2023}
+}
+
+@inproceedings{zhao2021ctabgan,
+  title     = {{CTAB-GAN}: Effective Table Data Synthesizing},
+  author    = {Zhao, Zilong and Kunar, Aditya and Birke, Robert and Chen, Lydia Y.},
+  booktitle = {Proceedings of the Asian Conference on Machine Learning (ACML)},
+  year      = {2021}
+}
+
+% ---- LLMs generating tabular / synthetic data ----
+@inproceedings{borisov2023great,
+  title     = {Language Models are Realistic Tabular Data Generators},
+  author    = {Borisov, Vadim and Se{\ss}ler, Kathrin and Leemann, Tobias and Pawelczyk, Martin and Kasneci, Gjergji},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2023}
+}
+
+@article{zhao2023tabula,
+  title   = {{TabuLa}: Harnessing Language Models for Tabular Data Synthesis},
+  author  = {Zhao, Zilong and Birke, Robert and Chen, Lydia Y.},
+  journal = {arXiv preprint arXiv:2310.12746},
+  year    = {2023}
+}
+
+@inproceedings{wang2024harmonic,
+  title     = {{HARMONIC}: Harnessing {LLM}s for Tabular Data Synthesis and Privacy Protection},
+  author    = {Wang, Yuxin and Feng, Duanyu and Dai, Yongfu and Chen, Zhengyu and Huang, Jimin and Ananiadou, Sophia and Xie, Qianqian and Wang, Hao},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS), Datasets and Benchmarks Track},
+  year      = {2024}
+}
+
+@article{sidorenko2025statacc,
+  title   = {A Note on Statistically Accurate Tabular Data Generation Using Large Language Models},
+  author  = {Sidorenko, Andrey},
+  journal = {arXiv preprint arXiv:2505.02659},
+  year    = {2025}
+}
+
+@article{shi2025survey,
+  title   = {A Comprehensive Survey of Synthetic Tabular Data Generation},
+  author  = {Shi, Ruxue and Wang, Yili and Du, Mengnan and Shen, Xu and Chang, Yi and Wang, Xin},
+  journal = {arXiv preprint arXiv:2504.16506},
+  year    = {2025}
+}
+
+% ---- Evaluation methodology ----
+@article{esteban2017rcgan,
+  title   = {Real-valued (Medical) Time Series Generation with Recurrent Conditional {GAN}s},
+  author  = {Esteban, Crist{\'o}bal and Hyland, Stephanie L. and R{\"a}tsch, Gunnar},
+  journal = {arXiv preprint arXiv:1706.02633},
+  year    = {2017}
+}
+
+@inproceedings{alaa2022faithful,
+  title     = {How Faithful is your Synthetic Data? Sample-level Metrics for Evaluating and Auditing Generative Models},
+  author    = {Alaa, Ahmed and Van Breugel, Boris and Saveliev, Evgeny S. and van der Schaar, Mihaela},
+  booktitle = {Proceedings of the 39th International Conference on Machine Learning (ICML)},
+  volume    = {162},
+  pages     = {290--306},
+  year      = {2022}
+}
+
+@misc{sdmetrics,
+  title        = {{SDMetrics}: Metrics to Evaluate the Quality and Efficacy of Synthetic Data},
+  author       = {{DataCebo, Inc.}},
+  howpublished = {\url{https://docs.sdv.dev/sdmetrics}},
+  note         = {Accessed: 2026-07-19},
+  year         = {2023}
+}
+
+% ---- Privacy of synthetic data ----
+@inproceedings{jordon2019pategan,
+  title     = {{PATE-GAN}: Generating Synthetic Data with Differential Privacy Guarantees},
+  author    = {Jordon, James and Yoon, Jinsung and van der Schaar, Mihaela},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2019}
+}
+
+@inproceedings{fang2022dpctgan,
+  title     = {{DP-CTGAN}: Differentially Private Medical Data Generation Using {CTGAN}s},
+  author    = {Fang, Mei Ling and Dhami, Devendra Singh and Kersting, Kristian},
+  booktitle = {International Conference on Artificial Intelligence in Medicine (AIME)},
+  pages     = {178--188},
+  year      = {2022},
+  doi       = {10.1007/978-3-031-09342-5_17}
+}
+
+@inproceedings{chen2020ganleaks,
+  title     = {{GAN-Leaks}: A Taxonomy of Membership Inference Attacks against Generative Models},
+  author    = {Chen, Dingfan and Yu, Ning and Zhang, Yang and Fritz, Mario},
+  booktitle = {Proceedings of the ACM SIGSAC Conference on Computer and Communications Security (CCS)},
+  year      = {2020}
+}
+
+@inproceedings{stadler2022groundhog,
+  title     = {Synthetic Data -- Anonymisation Groundhog Day},
+  author    = {Stadler, Theresa and Oprisanu, Bristena and Troncoso, Carmela},
+  booktitle = {31st USENIX Security Symposium (USENIX Security)},
+  year      = {2022}
+}
+
+% ---- Autonomous / tool-using LLM agents ----
+@inproceedings{yao2023react,
+  title     = {{ReAct}: Synergizing Reasoning and Acting in Language Models},
+  author    = {Yao, Shunyu and Zhao, Jeffrey and Yu, Dian and Du, Nan and Shafran, Izhak and Narasimhan, Karthik and Cao, Yuan},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2023}
+}
+
+@inproceedings{schick2023toolformer,
+  title     = {Toolformer: Language Models Can Teach Themselves to Use Tools},
+  author    = {Schick, Timo and Dwivedi-Yu, Jane and Dess{\`i}, Roberto and Raileanu, Roberta and Lomeli, Maria and Hambro, Eric and Zettlemoyer, Luke and Cancedda, Nicola and Scialom, Thomas},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2023}
+}
+
+@inproceedings{shinn2023reflexion,
+  title     = {Reflexion: Language Agents with Verbal Reinforcement Learning},
+  author    = {Shinn, Noah and Cassano, Federico and Berman, Edward and Gopinath, Ashwin and Narasimhan, Karthik and Yao, Shunyu},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2023}
+}
+
+@inproceedings{madaan2023selfrefine,
+  title     = {Self-Refine: Iterative Refinement with Self-Feedback},
+  author    = {Madaan, Aman and Tandon, Niket and Gupta, Prakhar and Hallinan, Skyler and Gao, Luyu and Wiegreffe, Sarah and Alon, Uri and Dziri, Nouha and Prabhumoye, Shrimai and Yang, Yiming and Gupta, Shashank and Majumder, Bodhisattwa Prasad and Hermann, Katherine and Welleck, Sean and Yazdanbakhsh, Amir and Clark, Peter},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2023}
+}
+
+@article{wang2023voyager,
+  title   = {Voyager: An Open-Ended Embodied Agent with Large Language Models},
+  author  = {Wang, Guanzhi and Xie, Yuqi and Jiang, Yunfan and Mandlekar, Ajay and Xiao, Chaowei and Zhu, Yuke and Fan, Linxi and Anandkumar, Anima},
+  journal = {Transactions on Machine Learning Research (TMLR)},
+  year    = {2023},
+  note    = {arXiv:2305.16291}
+}
+
+@article{wang2024agentsurvey,
+  title   = {A Survey on Large Language Model Based Autonomous Agents},
+  author  = {Wang, Lei and Ma, Chen and Feng, Xueyang and Zhang, Zeyu and Yang, Hao and Zhang, Jingsen and Chen, Zhiyuan and Tang, Jiakai and Chen, Xu and Lin, Yankai and Zhao, Wayne Xin and Wei, Zhewei and Wen, Jirong},
+  journal = {Frontiers of Computer Science},
+  volume  = {18},
+  number  = {6},
+  pages   = {186345},
+  year    = {2024}
+}
+
+% ---- Scientific information extraction ----
+@inproceedings{beltagy2019scibert,
+  title     = {{SciBERT}: A Pretrained Language Model for Scientific Text},
+  author    = {Beltagy, Iz and Lo, Kyle and Cohan, Arman},
+  booktitle = {Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing (EMNLP-IJCNLP)},
+  pages     = {3615--3620},
+  year      = {2019}
+}
+
+@article{sysrev2024extraction,
+  title   = {Exploring the Use of a Large Language Model for Data Extraction in Systematic Reviews: A Rapid Feasibility Study},
+  author  = {Schmidt, Lena and Hair, Kaitlyn and Graziosi, Sergio and Campbell, Fiona and Kapp, Claudia and Khanteymoori, Alireza and Craig, Dawn and Engelbert, Mark and Thomas, James},
+  journal = {arXiv preprint arXiv:2405.14445},
+  year    = {2024}
+}
+
+% ---- Reconstructing individual data from summary statistics ----
+@article{synthipd2025,
+  title   = {{SynthIPD}: Assumption-Lean Synthetic Individual Patient Data Generation},
+  author  = {Zhao, Zixuan and Ren, Zexin and Zhai, Guannan and Hu, Feifang and Ma, Will and Xie, En and Shi, Qian},
+  journal = {arXiv preprint arXiv:2509.16466},
+  year    = {2025}
+}
+
+@article{papadimitropoulou2020ipd,
+  title   = {Meta-Analysis of Continuous Outcomes: Using Pseudo {IPD} Created from Aggregate Data to Adjust for Baseline Imbalance and Assess Treatment-by-Baseline Modification},
+  author  = {Papadimitropoulou, Katerina and Stijnen, Theo and Riley, Richard D. and Dekkers, Olaf M. and le Cessie, Saskia},
+  journal = {Research Synthesis Methods},
+  volume  = {11},
+  number  = {6},
+  pages   = {780--794},
+  year    = {2020},
+  doi     = {10.1002/jrsm.1434}
+}
+
+% ---- Prompt compression ----
+@inproceedings{jiang2023llmlingua,
+  title     = {{LLMLingua}: Compressing Prompts for Accelerated Inference of Large Language Models},
+  author    = {Jiang, Huiqiang and Wu, Qianhui and Lin, Chin-Yew and Yang, Yuqing and Qiu, Lili},
+  booktitle = {Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
+  pages     = {13358--13376},
+  year      = {2023}
+}
+
+% ---- Retrieval-augmented generation ----
+@inproceedings{lewis2020rag,
+  title     = {Retrieval-Augmented Generation for Knowledge-Intensive {NLP} Tasks},
+  author    = {Lewis, Patrick and Perez, Ethan and Piktus, Aleksandra and Petroni, Fabio and Karpukhin, Vladimir and Goyal, Naman and K{\"u}ttler, Heinrich and Lewis, Mike and Yih, Wen-tau and Rockt{\"a}schel, Tim and Riedel, Sebastian and Kiela, Douwe},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2020}
+}
+
+% ---- Statistical disclosure control ----
+@book{hundepool2012sdc,
+  title     = {Statistical Disclosure Control},
+  author    = {Hundepool, Anco and Domingo-Ferrer, Josep and Franconi, Luisa and Giessing, Sarah and Schulte Nordholt, Eric and Spicer, Keith and de Wolf, Peter-Paul},
+  year      = {2012},
+  publisher = {John Wiley \& Sons},
+  isbn      = {9781119978152},
+  doi       = {10.1002/9781118348239}
+}
+
+@article{rubin1993disclosure,
+  title   = {Discussion: Statistical Disclosure Limitation},
+  author  = {Rubin, Donald B.},
+  journal = {Journal of Official Statistics},
+  volume  = {9},
+  number  = {2},
+  pages   = {461--468},
+  year    = {1993}
+}
+
+@inproceedings{taub2018dcap,
+  title     = {Differential Correct Attribution Probability for Synthetic Data: An Exploration},
+  author    = {Taub, Jennifer and Elliot, Mark and Pampaka, Maria and Smith, Duncan},
+  booktitle = {Privacy in Statistical Databases},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {11126},
+  pages     = {122--137},
+  year      = {2018},
+  publisher = {Springer},
+  doi       = {10.1007/978-3-319-99771-1_9}
+}
+
+% ---- Real-paper evaluation sources ----
+@article{fan2014rural,
+  title   = {Rural--Urban Differences in Objective and Subjective Measures of Physical Activity: Findings From the National Health and Nutrition Examination Survey ({NHANES}) 2003--2006},
+  author  = {Fan, Jessie X. and Wen, Ming and Kowaleski-Jones, Lori},
+  journal = {Preventing Chronic Disease},
+  volume  = {11},
+  pages   = {E141},
+  year    = {2014},
+  doi     = {10.5888/pcd11.140189}
+}
+
+@article{meydani2016calerie,
+  title   = {Long-term Moderate Calorie Restriction Inhibits Inflammation Without Impairing Cell-mediated Immunity: A Randomized Controlled Trial in Non-obese Humans},
+  author  = {Meydani, Simin N. and Das, Sai K. and Pieper, Carl F. and Lewis, Michael R. and Klein, Sam and Dixit, Vishwa D. and Gupta, Alok K. and Villareal, Dennis T. and Bhapkar, Manjushri and Huang, Megan and Fuss, Paul J. and Roberts, Susan B. and Holloszy, John O. and Fontana, Luigi},
+  journal = {Aging},
+  volume  = {8},
+  number  = {7},
+  pages   = {1416--1431},
+  year    = {2016},
+  doi     = {10.18632/aging.100994}
+}
+
+@article{linh2026smartphone,
+  title   = {Smartphone and Internet Addiction, Social Support, and Mental Health Among Health Science Students: A Structural Equation Modeling Approach},
+  author  = {Linh, Huynh Ngoc and Tam, Ngo Thi and Thang, Tran Quoc and Huong, Nguyen Thi Lan and Nguyet, Nguyen Bich and Hanh, Hoang Duc},
+  journal = {Clinical Neuropsychiatry},
+  volume  = {23},
+  number  = {1},
+  pages   = {69--76},
+  year    = {2026},
+  doi     = {10.36131/cnfioritieditore20260107}
+}

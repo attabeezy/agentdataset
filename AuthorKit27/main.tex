@@ -1,0 +1,1205 @@
+\documentclass[letterpaper]{article} % DO NOT CHANGE THIS
+% IAAI-27 is SINGLE-BLIND: author names must be shown. The [preprint] option
+% keeps authors visible while suppressing the camera-ready copyright slug during
+% review. (Do NOT use [submission] here -- that anonymizes the author block.)
+\usepackage[preprint]{aaai2027}
+\usepackage[hyphens]{url}  % DO NOT CHANGE THIS
+\usepackage{graphicx} % DO NOT CHANGE THIS
+\urlstyle{rm} % DO NOT CHANGE THIS
+\def\UrlFont{\rm}  % DO NOT CHANGE THIS
+\usepackage{natbib}  % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\usepackage{caption} % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\frenchspacing  % DO NOT CHANGE THIS
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{booktabs}
+\usepackage{multirow}
+
+\pdfinfo{
+/TemplateVersion (2027.1)
+}
+
+\setcounter{secnumdepth}{0}
+
+% ==== TITLE ====
+\title{AgentDataset: An Assisted LLM Workflow for Generating Validated Synthetic\\ Datasets from Published Research Statistics}
+
+% IAAI-27 is SINGLE-BLIND: identifying author information is required.
+% TODO: confirm full co-author list and affiliations before submission.
+\author{
+    Anonymous Author(s)
+    % , Co-Author Two, Advisor Name
+}
+\affiliations{
+    Anonymous Institution
+}
+
+% ==== ALTERNATIVE AUTHOR BLOCK (uncomment and remove the block above to use) ====
+% \author{
+%     Benjamin E. Attabra\textsuperscript{\rm 1},
+%     Prince W. Ashiagbor\textsuperscript{\rm 1},
+%     Samuel P. Nadutey\textsuperscript{\rm 1},
+%     Ephraim Teye-Mensah\textsuperscript{\rm 1},
+%     John N. Dadzie\textsuperscript{\rm 1},
+%     Sena K. Agbenya\textsuperscript{\rm 1}
+% }
+% \affiliations{
+%     \textsuperscript{\rm 1}Kwame Nkrumah University of Science and Technology, Ghana\\
+%     beattabra@st.knust.edu.gh, pwashiagbor@st.knust.edu.gh, psnadutey@st.knust.edu.gh,\\
+%     eteyemensah1@st.knust.edu.gh, njdadzie@st.knust.edu.gh, skagbenya@st.knust.edu.gh
+% }
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Published research often exposes means, standard deviations, correlations, and
+category frequencies even when individual records are unavailable. We present
+\emph{AgentDataset}, an LLM-assisted workflow that turns those aggregate
+statistics into synthetic tabular data. From a natural-language query, it
+discovers candidate documents, extracts a structured parameterization with an
+LLM and regex fallback, synthesizes mixed continuous/categorical columns with a
+Gaussian-copula rank transform, and checks whether the generated data reproduce
+the extracted inputs. We evaluate live discovery and extraction on three open
+papers and downstream utility on three classification datasets plus one
+regression dataset over 30 seeds. Discovery finds all three targets, but the
+deployed extractor reaches only .304 micro-$F_1$ on prespecified fields,
+requiring human verification of source scope and parameters. With verified
+summaries, synthetic data preserve much linear ranking signal but lose
+minority-class and nonlinear utility; the internal fidelity score cannot detect
+incorrect extracted parameters. AgentDataset is therefore a reproducible
+assisted workflow for literature-grounded prototyping, not an unattended
+substitute for scientific curation or a privacy mechanism.
+\end{abstract}
+
+% \begin{links}
+%     \link{Code}{https://github.com/ANON/agentdataset}
+% \end{links}
+
+\section{Introduction}
+
+Machine learning practitioners in health, finance, and the social sciences
+repeatedly face the same obstacle: the individual-level data they need is
+scarce, expensive, legally restricted, or simply unavailable. Acquiring it can
+mean months of IRB review, data-use agreements, or de-identification work
+before a single model is trained. Paradoxically, a great deal is already
+\emph{known} about these populations: the research literature reports the
+means, standard deviations, correlations, and category frequencies of exactly
+the variables practitioners want to model. This descriptive knowledge is public
+and abundant; what is missing is a way to turn it into data one can compute on.
+
+Synthetic data generation is the natural bridge, but essentially all mainstream
+methods (GAN-, VAE-, diffusion-, and copula-based generators) assume
+access to a real dataset to learn from. That assumption is precisely what fails
+in the data-scarce regime. The complementary knowledge locked in published
+summary statistics is left unused, in part because extracting it and turning it
+into a faithful joint distribution has been a manual, error-prone task.
+
+We present \emph{AgentDataset}, an LLM-assisted workflow that addresses this gap
+end to end. Given only a natural-language description of a target population,
+the agent searches the web for relevant research documents, reads them,
+extracts a structured statistical parameterization, synthesizes a tabular
+dataset that reproduces those statistics, and then validates and refines its
+own output, all without touching any real individual-level record. The
+system is deployed as an interactive application in which a practitioner issues
+a query and receives a synthetic dataset together with an automatically
+generated data card reporting its statistical fidelity and diagnostic limits.
+
+Realizing this pipeline required solving several practical problems that we
+believe are of interest to the applied-AI community:
+
+\begin{itemize}
+    \item \textbf{Robust extraction under messy inputs.} Statistical claims in
+    papers are written in wildly inconsistent prose. We pair an LLM extractor
+    with a deterministic regular-expression fallback so that the pipeline
+    degrades gracefully rather than failing when the LLM is unavailable,
+    rate-limited, or returns malformed output.
+    \item \textbf{Mixed-type synthesis from marginals plus correlations.} Real
+    tabular data mixes continuous and categorical columns (e.g.\ income,
+    marital status, credit risk). We extend a Gaussian-copula rank transform to
+    categorical variables with arbitrary cardinality so that classification
+    targets (not just continuous features) can be modeled.
+    \item \textbf{An audit of the internal objective.} Because no real data is
+    available at generation time, the agent can only optimize an internal
+    fidelity score. We measure what that score does and does not certify and
+    report a second negative result: it is invariant to errors in the extracted
+    parameters, so it validates synthesis rather than the pipeline, and the
+    explore/exploit ``noise pivot'' that optimizes it does no better than
+    holding the noise at a small constant.
+    \item \textbf{Cost-aware agentic prompting, measured and revised.}
+    Autonomous loops make many LLM calls. We measure a compressed prompting
+    scheme (the ``Caveman Protocol'') against a schema-matched natural-language
+    prompt on token count, cost, latency \emph{and} extraction quality across
+    three commercial providers, and report a negative result: the compression
+    costs accuracy for negligible saving, so the deployed system does not use it.
+\end{itemize}
+
+We evaluate live discovery and extraction on three published sources, then run
+30-seed train-on-synthetic/test-on-real (TSTR) experiments on three
+classification datasets and one regression dataset against real-data (TRTR),
+independent-marginal, and SDV baselines. The results expose extraction as the
+dominant end-to-end failure mode and show that summary-driven synthesis
+preserves linear signal more reliably than nonlinear interactions.
+
+\textbf{Contributions.} (1)~An end-to-end assisted agent that generates
+synthetic datasets directly from published research statistics, without direct
+access to individual records; (2)~a mixed continuous/categorical copula synthesis
+procedure and a data-free self-refinement loop suited to this setting;
+(3)~a source-level evaluation on real papers plus 30-seed linear, nonlinear,
+classification, and regression utility with bootstrap intervals and raw traces.
+
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Tabular synthetic data generation.}
+A large body of work generates tabular data by fitting a generative model to a
+real dataset: conditional GANs and VAEs \citep{xu2019ctgan}, the Synthetic Data
+Vault \citep{patki2016sdv}, copula-based methods \citep{sun2019vinecopula},
+diffusion models \citep{kotelnikov2023tabddpm}, and mixed-type GANs
+\citep{zhao2021ctabgan}; a recent survey catalogs the space \citep{shi2025survey}.
+Our synthesizer's Gaussian-copula rank transform is algorithmically close to the
+vine-copula approach of \citet{sun2019vinecopula}, but with a decisive
+difference: they estimate the copula \emph{from data}, whereas we parameterize it
+\emph{from published statistics} with no data in hand.
+
+\paragraph{LLMs for tabular data.}
+Recent work shows LLMs can generate tabular data by serializing rows and sampling
+autoregressively \citep{borisov2023great,zhao2023tabula}, including
+privacy-aware variants \citep{wang2024harmonic} and prompting an LLM to estimate
+conditional distributions \citep{sidorenko2025statacc}. All of these still
+require the real table at training or reference time; AgentDataset requires only
+its \emph{published statistics}.
+
+\paragraph{Evaluation and disclosure risk.}
+We adopt the train-on-synthetic/test-on-real (TSTR) protocol introduced by
+\citet{esteban2017rcgan} and now standard for utility assessment
+\citep{alaa2022faithful}, paralleling toolkits such as SDMetrics
+\citep{sdmetrics}. On privacy, differentially private generators
+\citep{jordon2019pategan,fang2022dpctgan} and membership-inference analyses
+\citep{chen2020ganleaks} mitigate leakage \emph{after} fitting to real records,
+and \citet{stadler2022groundhog} caution that synthetic data does not guarantee
+anonymity. Statistical disclosure control explicitly treats release risk and
+utility as a joint problem \citep{hundepool2012sdc}; fully synthetic releases
+date at least to \citet{rubin1993disclosure}, and attribute disclosure requires
+measures beyond record linkage \citep{taub2018dcap}. AgentDataset avoids direct
+training-record memorization because it receives aggregate publications, but it
+does not thereby eliminate aggregate, group, or reconstruction disclosure risk.
+
+\paragraph{Autonomous LLM agents.}
+The agent's control loop follows the reason--act--observe and
+generate--critique--refine paradigms established by ReAct
+\citep{yao2023react}, tool use \citep{schick2023toolformer}, Reflexion
+\citep{shinn2023reflexion}, Self-Refine \citep{madaan2023selfrefine}, and
+open-ended agents \citep{wang2023voyager,wang2024agentsurvey}. These target
+question answering, embodied control, or code; we specialize the paradigm to
+dataset construction.
+
+\paragraph{Scientific extraction and summary-statistic reconstruction.}
+LLMs and their predecessors \citep{beltagy2019scibert} can extract structured
+information and statistics from papers, including for systematic reviews
+\citep{sysrev2024extraction}, but stop at populating evidence tables. On the
+output side, statistics has long reconstructed pseudo individual-patient data
+from aggregate results \citep{papadimitropoulou2020ipd,synthipd2025}, yet these
+methods are domain-specific and fed statistics a human has already located and
+transcribed. AgentDataset is, to our knowledge, the first system to automate the
+full chain: document discovery (retrieval-grounded, à la
+\citet{lewis2020rag}), LLM extraction with a robust fallback, synthesis, and
+data-free validation, as a single agent. Finally, our token-compression
+prompting relates to learned prompt compression \citep{jiang2023llmlingua} but is
+a lightweight application-specific heuristic that keeps the multi-call loop
+economical.
+
+\section{System Overview}
+
+AgentDataset is organized as a four-phase pipeline coordinated by an
+orchestrator that also manages the self-refinement loop (Figure~\ref{fig:arch}).
+Each phase is a standalone module.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.98\textwidth]{Figures/architecture}
+\caption{The AgentDataset workflow and a source-backed walkthrough. A query
+finds the open student-health paper at rank 1; the extractor recovers a rounded
+SAS-SV marginal but omits the paper's $r{=}.64$ relationship. Synthesis returns
+447 rows and the intrinsic check scores them 96.81 against the returned
+parameters, so it cannot expose the omitted source statistic. The example makes
+the human review boundary explicit; the noise-pivot loop accesses no real
+records.}
+\label{fig:arch}
+\end{figure*}
+
+\paragraph{Phase 0: Discovery.}
+The agent expands the user's natural-language query into several
+search-optimized queries using the configured LLM (falling back to the
+original query on failure), searches the web for both PDF and HTML results,
+deduplicates by URL, and asks the LLM to rank which results are most likely to
+contain the means, standard deviations, correlations, and distributions needed
+downstream. PDFs are streamed to disk; HTML is reduced to clean text.
+
+\paragraph{Phase 1: Extraction.}
+Each selected document is parsed (PyMuPDF for PDFs) and passed to the
+extractor. When an API key is present, the LLM is prompted to emit a strict
+JSON schema of variables (distribution type, mean, standard deviation, bounds,
+or category probabilities) and named correlations. On any failure (missing
+key, rate limit, or malformed output) the system falls back to a
+deterministic regex extractor that recovers mean/standard-deviation pairs
+(including SD, $\sigma$, and s.d.\ notation, negative and
+scientific notation), categorical distributions of arbitrary cardinality, and
+named correlations. When multiple sources are selected, parameters are merged:
+shared variables are averaged, unique ones unioned, and duplicate correlation
+pairs averaged.
+
+\paragraph{Phases 2--3: Synthesis and Validation.}
+The synthesizer draws each variable from its parameterized marginal (normal,
+uniform, gamma, or categorical) and imposes the target correlation structure
+through a Cholesky decomposition of the correlation matrix applied via a rank
+transform (a Gaussian copula); a non--positive-definite matrix triggers a
+warning and independent synthesis. Categorical codes are treated as ordinal in
+label order, matching the validator's encoding. The validator produces a
+fidelity report combining a Kolmogorov--Smirnov (KS) marginal score,
+a correlation-error score, and a mean-bias score, and separately reports a
+nearest-neighbor row-dispersion diagnostic.
+
+The fidelity report is computed against the extracted parameters rather than
+against the source data, so it certifies that synthesis reproduced its inputs,
+not that those inputs were correct (Appendix~\ref{app:scoring}). These phases run inside the optimization loop
+described next.
+
+\section{Method}
+
+\subsection{Mixed-Type Copula Synthesis}
+Given per-variable marginals and a target correlation matrix $R$, the
+synthesizer generates $n$ samples by (1)~drawing standard normal latents,
+(2)~inducing correlation via the Cholesky factor of $R$, and (3)~rank-transforming
+each latent onto the target marginal by inverse-CDF. Continuous marginals use
+the parameterized normal, uniform, or gamma CDF; categorical marginals map
+quantiles onto category codes ordered by label, so that a $k$-category variable
+of any cardinality (e.g.\ a three-way marital-status feature or a binary
+classification target) participates in the same correlation structure as the
+continuous columns. A configurable noise level perturbs every marginal,
+widening uniform bounds symmetrically. Randomness is drawn from an
+instance-scoped generator and does not perturb global program state.
+
+The dependence model is deliberately narrow. Published papers report Pearson
+correlations, so that is what the extractor targets; because step~(3) reorders
+each marginal by the ranks of its latent, the imposed dependence is in practice
+closer to a rank correlation than to Pearson's, and we claim only that pairwise
+\emph{monotone} association is reproduced. Categorical marginals participate
+through integer category codes, so a correlation involving a categorical
+variable is a correlation against an arbitrary label ordering. Nonlinear
+dependence, conditional dependence, and higher-order interactions are outside
+the model: they are not represented in the published statistics the system
+consumes, and we do not attempt to recover them. Rank-based alternatives
+(Spearman, Kendall) would be a near-free substitution; vine copulas would not,
+as they require joint data or far richer reported statistics than a results
+table provides.
+
+\subsection{Data-Free Self-Refinement: The Noise Pivot}
+Because no real data is available at generation time, the agent cannot validate
+against held-out records; instead it optimizes the internal fidelity score. The
+loop runs for a budget of iterations, synthesizing at the current noise level,
+scoring, and \emph{ratcheting}, keeping the best dataset and saving artifacts
+whenever the score improves. On a non-improving step it \emph{pivots} the noise
+level according to the length of the no-improvement streak: exploring
+(multiplying noise by $1.1$, capped) on a single miss, exploiting (halving, with
+a floor) on every second consecutive miss, and resetting to the initial noise on
+every fourth. This explore/exploit schedule requires no gradients and no real
+data, making it appropriate for the data-scarce setting.
+
+We treat these constants as an empirical question rather than a design choice,
+and report a sensitivity study over all six of them in
+Appendix~\ref{app:pivotgrid}. Its main finding is negative and worth stating
+plainly: the schedule's benefit is largely the recovery of a poor default
+initial noise, and a fixed low noise matches or beats it at equal cost.
+
+\subsection{Cost-Aware Prompting}
+The extraction system prompt was originally written in a compressed, filler-free
+style (the ``Caveman Protocol'': no articles, pleasantries, or hedging), applied
+only to internal prompts while user-facing output remained in natural language.
+We measure its effect rather than assert it (Q5 and Q6). Because that measurement
+showed a quality cost that outweighed the saving, the deployed extractor now uses
+the natural-language prompt; we keep the compressed variant documented and
+measured in Appendix~\ref{app:caveman}.
+
+\subsection{Deployment and Use}
+AgentDataset is deployed as an interactive web application (Streamlit) aimed at
+researchers and practitioners who need a starter dataset in a data-scarce
+domain. The user selects an LLM provider and model, enters a natural-language
+query, and sets an iteration budget. The agent runs discovery and presents the
+ranked candidate documents for the user to confirm or prune (a lightweight
+human-in-the-loop step that keeps a domain expert in control of which sources
+ground the synthesis), and then extracts, synthesizes, validates, and returns
+the dataset alongside a data card. The final three-paper extraction replicate
+took 13.9 seconds and cost \$0.0343 in total; provider benchmarks appear in
+Table~\ref{tab:cost}. Because the extractor falls back to deterministic regex
+when no key is supplied, extraction itself can be API-free. A fully offline
+reproduction uses cached parsed text; live discovery and document fetching
+still require network access. The workflow accelerates literature search,
+transcription, and generator construction while keeping source and parameter
+review with the practitioner.
+
+\section{Evaluation}
+\label{sec:eval}
+
+We ask six questions. (Q1)~Can the deployed pipeline discover and process real
+papers? (Q2)~Does synthesis produce downstream-useful data under linear and
+nonlinear models, including regression? (Q3)~What does the LLM extractor add
+over regex? (Q4)~Does self-refinement help? (Q5)~What does the pipeline cost?
+(Q6)~Does prompt compression change extraction quality?
+All numbers below are measurements; live extraction is routed through
+OpenRouter, with regex used as an explicitly forced comparison.
+
+\subsection{Q1: End-to-End Evaluation on Real Papers}
+We fixed three open sources before evaluation: a CDC/NHANES report with subgroup
+tables \citep{fan2014rural}, a clinical-trial PDF with multiple arms and time
+points \citep{meydani2016calerie}, and a health-science student study with a
+correlation matrix \citep{linh2026smartphone}. One annotator made two passes
+over 25 prespecified target statistics, recording variable, statistic type,
+value, units, population, subgroup, time point, arm, and table location. The
+same parsed text was given to GPT-4o and the forced regex path; empty outputs
+and parse failures remained in the denominator.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrrr}
+\toprule
+Source & Rank & Parse & LLM F1 & Regex F1 & Gold/LLM fidelity \\
+\midrule
+\input{generated_tables/realpapers.tex}%
+\end{tabular}
+\caption{Live discovery rank, extraction F1 on prespecified target fields, and
+mean synthesis fidelity over 30 seeds. Discovery found every target, although
+the trial paper missed the top five. Fidelity intervals and all row-level
+errors are included in the released result artifacts.}
+\label{tab:realpapers}
+\end{table}
+
+The result sharply limits the automation claim. Discovery succeeded for all
+three sources (recall@5: 1, 0, 1), but the final deployed-prompt replicate
+reached micro-precision, recall, and $F_1$ of only .222, .480, and .304;
+the mean source-level unsupported or out-of-scope rate was 76.9\%. Regex
+extracted no target items. The three LLM calls cost \$0.0343 and took 13.9
+seconds in total. Conditional on usable
+parameters, synthesis was stable, but a high fidelity score cannot repair
+incorrect source grounding, and cannot flag it either: the score is computed
+against the extracted parameters and is invariant to their being wrong
+(Appendix~\ref{app:scoring}). AgentDataset should therefore be treated as
+an assisted workflow whose source scope and extracted parameters require human
+review, not as unattended scientific curation.
+
+\subsection{Q2: End-to-End Utility (TRTR vs.\ TSTR)}
+We evaluate classification on Adult Income, Pima Diabetes, and German Credit,
+and regression on UCI Concrete Compressive Strength. For each of 30 seeds, an
+80/20 split is made first; summary parameters are computed only from the
+training fold, and synthetic-trained models are evaluated on the untouched real
+test fold. We test a linear model and histogram gradient boosting (HGB), report
+the minority class explicitly (Adult $>$50K, diabetes positive, German bad
+credit), and compare with a one-shot summary-statistics copula, independent
+marginals, and an SDV Gaussian copula fit to the real training rows. The latter is a data-access baseline, not a
+like-for-like method. Table~\ref{tab:empirical} gives means; paired seed-level
+deltas and 10,000-resample bootstrap 95\% intervals are released with the raw
+results.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.3pt}
+\begin{tabular}{llrrrrr}
+\toprule
+Dataset & Model & TRTR & Agent & 1-shot & Indep. & SDV$^\dagger$ \\
+\midrule
+\input{generated_tables/utility.tex}%
+\end{tabular}
+\caption{Thirty-seed TRTR/TSTR means. Classification cells are minority-F1/AUC;
+Concrete regression cells are $R^2$/RMSE. Agent and 1-shot receive identical
+gold training-fold marginals and correlations; 1-shot makes one synthesis call
+at noise .1, while Agent runs three refinement iterations. Indep.\ receives the
+same marginals with correlations removed. $^\dagger$SDV and TRTR access real
+training records; SDV is an upper bound, not a like-for-like method.}
+\label{tab:empirical}
+\end{table}
+
+The linear results show where second-order summaries suffice: AgentDataset
+essentially matches TRTR AUC on Adult (.850/.850) and Pima (.818/.819), and
+matches Concrete linear regression closely ($R^2$ .587/.598; RMSE 10.59/10.44).
+It is consistently stronger than independent marginals. The controlled baseline
+attributes this gain to pairwise correlations, not refinement: one-shot
+synthesis already recovers large paired gains over independence (e.g., Adult LR
+$+.341$ AUC and Concrete LR $+.612$ $R^2$), while Agent-minus-one-shot intervals
+include zero for every classification primary metric. Only Concrete HGB shows a
+small refinement gain ($R^2$ $+.030$ [.003,.059]). This does not carry
+over uniformly to nonlinear structure: HGB loses .025 AUC on Adult, .056 on
+Pima, and .082 on German, while Concrete $R^2$ falls from .926 to .528.
+Minority-F1 also remains below TRTR on every classification task. These results
+support a narrower conclusion: extracted marginals and pairwise correlations
+can preserve much linear ranking signal, but do not reconstruct higher-order
+interactions or guarantee thresholded minority performance. We did not add a
+matched, literature-grounded distribution-shift pair; this remains future work
+rather than an unsupported robustness claim.
+
+\paragraph{Calibration and the minority-F1 gap.} The Adult minority-F1 numbers
+above are measured at a fixed $0.5$ threshold, which conflates ranking quality
+with operating point. We therefore refit each classifier on an $80/20$ split of
+its own \emph{synthetic} training frame and select a threshold, a Platt sigmoid,
+or an isotonic map on the synthetic validation fold alone; the real test fold is
+scored against but never tuned on. Choosing the operating point without any real
+labels removes most of the gap: AgentDataset's LR deficit falls from $-.161$
+$[-.165,-.156]$ to $-.008$ $[-.011,-.005]$, and HGB from $-.227$ to $-.032$
+$[-.037,-.028]$. Platt and isotonic maps applied at the default threshold recover
+nothing ($-.162$ and $-.182$ for LR), so what is recovered is the decision
+threshold, not the shape of the probabilities: uncalibrated synthetic-trained
+models simply under-predict the minority class, at a predicted-positive rate of
+$.086$ against a true prevalence of $.239$. What remains is structural and tracks
+the ranking deficit. An oracle threshold fitted directly on the real test labels
+---an upper bound, not a usable method---still leaves HGB $-.025$ below TRTR,
+matching its AUC loss, and leaves independent marginals $-.192$ below, because no
+threshold can restore dependence that was never synthesized (AUC $.509$). Adult
+minority-class utility is therefore mostly an operating-point artifact for the
+linear model and genuinely structural for the nonlinear one
+(Table~\ref{tab:calibration}).
+
+\subsection{Q3: LLM vs.\ Regex Extraction}
+We score both extractors against known ground truth across eight varied domain
+texts (heart rate, cholesterol, temperature, stock price, credit score, study
+hours, commute time, rainfall), three LLM repetitions each. On these
+well-formed inputs \emph{both} methods achieve a perfect success rate and zero
+mean relative error, while regex is roughly four orders of magnitude faster
+(0.0003\,s vs.\ 2.80\,s mean). The LLM's value is therefore not accuracy on
+clean text but robustness on messy, unstructured prose where regex patterns do
+not fire, which is exactly why the system uses the LLM as the primary path
+and regex as a guaranteed-available fallback rather than the reverse.
+
+Q6 tests that claim directly on deliberately messy text, where the gap is stark
+rather than absent.
+
+\subsection{Q4: Effect of the Self-Refinement Loop}
+We measure the fidelity score as a function of iteration budget across $11$
+source specifications and $20$ seeds, and compare the shipped schedule against
+fixed-noise and budget-matched random-search baselines
+(Table~\ref{tab:noise}; full grid in Appendix~\ref{app:pivotgrid}). The loop
+does improve monotonically with budget, from $68.8$ at zero iterations to
+$99.9$ at twenty. But the gain is not attributable to the adaptive schedule:
+the fidelity landscape is monotone decreasing in noise with a sharp drop
+between $0.05$ and $0.1$, and the shipped initial noise of $0.1$ sits on the
+wrong side of it. At the shipped five-iteration budget the pivot reaches
+$88.50$, while simply holding the noise at $0.01$ reaches $99.88$
+($\Delta{+}11.47$, paired Cohen's $d{=}1.09$, Wilcoxon $p{<}10^{-15}$ after
+Holm correction), and random search reaches $99.49$. The effect replicates on a
+held-out subset of sources that was fixed before any result was inspected.
+
+The high variance previously reported at ten iterations is not instability.
+Outcomes are a two-point mixture: within its budget a run either accumulates
+enough halving steps to cross the noise threshold, scoring near $100$, or it
+does not, scoring near $60$, with almost nothing in between. Across-run
+dispersion is therefore the spread of a Bernoulli mixture and is largest at
+whichever budget leaves about half the runs on each side --- ten iterations in
+our earlier configuration, roughly five here, where $43.6\%$ of runs cross by
+five iterations and $95.5\%$ by ten. Read this way the loop is a slow,
+deterministic descent toward low noise rather than an explorer that
+occasionally gets lucky, and the operational recommendation changes
+accordingly: lower the initial noise rather than buy more iterations.
+
+\begin{table}[t]
+\centering
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrrrr}
+\toprule
+Iterations & 0 & 1 & 2 & 3 & 5 & 10 \\
+\midrule
+\input{generated_tables/noise.tex}%
+\end{tabular}
+\caption{Noise-pivot self-refinement: mean fidelity score vs.\ iteration budget
+($n{=}40$ per column). The loop's benefit concentrates at higher budgets and is
+high-variance but monotone in expectation.}
+\label{tab:noise}
+\end{table}
+
+\paragraph{How often is the copula path actually used?}
+We instrumented every correlation matrix the synthesizer builds, recording its
+minimum eigenvalue, positive-definiteness, and the number of declared pairs
+that were actually applied (Appendix~\ref{app:corrvalidity}). Two results
+matter. First, positive-definiteness is not the binding constraint: every
+matrix built from templated, gold, or automatically extracted inputs in our
+sweep is positive-definite, and the documented fallback that drops all
+correlations fires only on matrices we constructed to be invalid. Second, and
+less comfortably, the path could be entered with nothing in it. A declared
+correlation whose variables are absent from the extracted variable dictionary
+is discarded silently, leaving an identity matrix that passes every validity
+check and imposes no dependence at all. Counting applied pairs rather than
+matrices, the effective rate was initially $11/20$ for templated inputs, $3/4$
+for gold statistics, and $0/8$ for regex extraction, whose continuous variables
+were named positionally and so never matched the names its own correlation
+clauses referred to. Datasets built from regex extraction alone were therefore
+independent marginals in all but name.
+
+This was a defect rather than a limitation, and the instrumentation is what
+surfaced it: every individual component reported success. Recovering the
+variable name from the text adjacent to each statistic, and normalizing names
+on both sides, raises the effective rate to $8/8$ for regex extraction and
+$20/20$ for templated inputs, and raises the correlation score from $77.3$ to
+$99.3$ across the eight templated domains. The remaining gold shortfall is
+correct behavior: that pair names a variable its source never reports. We keep
+the positional fallback where the text supplies no confident name, since a
+wrong name mismatches silently whereas an unresolved one is visible in the
+diagnostics.
+
+\subsection{Q5: Cost and Latency}
+We track real per-call latency, dollar cost, and token usage across three
+providers routed through OpenRouter (Table~\ref{tab:cost}). Extraction costs
+fractions of a cent per document and completes in 1--4 seconds, making the
+agentic loop economically practical. Google's Gemini~2.5~Flash is the cheapest ($\$0.0006$/call) and among the fastest
+($2.15$\,s, level with GPT-4o at $2.00$\,s); Anthropic's Claude Sonnet~4.5 is the
+most expensive ($\$0.0042$/call) and slowest ($3.95$\,s). We separately measure
+the Caveman Protocol's prompt compression at a \textbf{38.6\%} reduction in
+system-prompt tokens ($308 \rightarrow 189$), or $30.0\%$ of the prompt tokens
+actually billed on a challenge-set request. An earlier version of this
+measurement reported $21.9\%$ against a natural-language baseline that omitted
+the categorical distribution and its \texttt{categories} field; that baseline
+requested strictly less than the Caveman prompt and so \emph{understated} the
+compression. Compression does not translate into proportional saving: because
+completion tokens dominate this workload, the measured cost reduction is only
+$3.5\%$ (paired Wilcoxon $p=.0065$) and latency is unchanged. Q6 shows that it
+also costs accuracy.
+
+Per-call figures understate the bill and misplace the bottleneck, so we also
+instrument the pipeline end to end (Table~\ref{tab:e2ecost}). Producing one
+finished dataset from a real paper averages \textbf{\$0.0169} and
+\textbf{41.8\,s} (observed ranges \$0.0133--\$0.0209 and 39.1--45.6\,s) across
+three LLM calls: query expansion, source suggestion, and extraction. Search and
+fetch dominate wall time (28.0 and 5.1\,s); all local work totals 0.98\,s,
+including 0.34\,s for synthesis, validation, refinement, and artifact writing.
+
+\begin{table}[t]
+\centering
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrrr}
+\toprule
+Provider & Lat.\ (s) & Cost (\$) & Prompt & Compl. \\
+\midrule
+\input{generated_tables/provider_cost.tex}%
+\end{tabular}
+\caption{Real cost/latency per extraction call, mean of 5 repetitions per
+provider via OpenRouter (Google: Gemini~2.5~Flash; OpenAI: GPT-4o; Anthropic:
+Claude Sonnet~4.5). Prompt/Compl.\ are token counts.}
+\label{tab:cost}
+\end{table}
+
+\subsection{Q6: Does Prompt Compression Cost Extraction Quality?}
+The compression in Q5 is only meaningful alongside its effect on what is
+extracted. We built a 30-case challenge set of deliberately messy source text
+spanning ten failure modes: negated findings, several populations reported for
+one variable, values that conflict between abstract and table, repeated
+timepoints, mixed units, confidence intervals, footnote-marked table cells,
+scientific notation, irrelevant nearby numbers, and standard errors presented
+where the schema wants a standard deviation. Eleven cases are verbatim excerpts
+from the sources of Q1, sliced programmatically at recorded character offsets so
+the fixture cannot drift from its sources; nineteen are constructed and labelled
+as such. Each case also annotates the values that must \emph{not} be extracted
+(p-values, sample sizes, instrument ranges, thresholds), which is what makes
+context errors and hallucinations countable rather than invisible. Abstention is
+rewarded rather than punished: emitting nothing yields no false positives, so the
+three cases whose correct answer is silence score $F_1{=}1$ for an extractor that
+stays silent.
+
+The compression is not free (Table~\ref{tab:extraction}). Averaged over three
+models and five repetitions, the Caveman prompt reaches $F_1=.710$ against $.778$
+for the schema-matched natural-language prompt, a paired deficit of $-.069$
+(Wilcoxon $p=.0001$, $n=90$ case\,$\times$\,model pairs) that holds in the same
+direction for all three models. The loss is precision, not coverage: recall is
+near-ceiling for both ($.960$ vs.\ $.989$) while precision falls from $.720$ to
+$.639$, and the hallucination rate rises from $.098$ to $.154$. Stripping the
+prose that tells the model what \emph{not} to do makes it invent more numbers.
+Against a $3.5\%$ cost saving that is a poor trade, so AgentDataset now ships the
+natural-language prompt; we retain the Caveman Protocol as a documented, measured
+design because the negative result is itself the contribution---prompt
+compression is widely assumed to be free when the schema is held fixed, and on
+messy source text it is not.
+
+Both prompts remain far ahead of the regex fallback ($F_1=.156$), whose patterns
+require literal ``mean\,\ldots\,std'' phrasing and so rarely fire on real tables;
+its precision of $1.000$ reflects near-total silence, which also gives it the best
+abstention behaviour of the three arms ($3/3$ silence cases, against $11\%$ for
+the natural-language prompt and $0\%$ for the Caveman prompt). Neither LLM arm
+reliably declines to answer when a document supports no answer, which we regard
+as the most consequential remaining weakness of the extraction stage. Real
+excerpts are markedly harder than constructed ones ($F_1$ $.550$ vs.\ $.803$ for
+the Caveman arm), the clearest evidence we have that synthetic evaluation text
+overstates extraction quality. Appendix~\ref{app:extraction} reports a full
+independent replication and the effect of the prompt change on Q1.
+
+\begin{table}[t]
+\centering
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrr}
+\toprule
+& Caveman & Natural & Regex \\
+\midrule
+\input{generated_tables/extraction.tex}%
+\end{tabular}
+\caption{Extraction over the 30-case challenge set, averaged over three
+OpenRouter-routed models and five repetitions (900 LLM calls and 30 regex runs).
+The Caveman prompt buys a $30\%$ prompt-token reduction for $-.069$ $F_1$
+(paired Wilcoxon $p=.0001$) and a $57\%$ relative increase in hallucination,
+while saving $3.5\%$ of cost. ``Correct abstention'' is measured on the three
+cases whose correct answer is to extract nothing.}
+\label{tab:extraction}
+\end{table}
+
+\subsection{Disclosure-risk threat model}
+AgentDataset does not ingest an individual-level training table, so conventional
+training-record memorization and membership attacks against that table are not
+the relevant threat. Our adversary instead observes the published statistics,
+the released synthetic data, and arbitrary auxiliary information. Protected
+information may include rare-category membership, small-cell attributes, and
+facts about groups or subpopulations. Rich collections of marginals and
+correlations can support reconstruction; differencing or composing multiple
+publications can expose more than any one release; and public aggregates may
+already reveal sensitive group facts. The architecture therefore reduces one
+common exposure path but supplies neither anonymity nor differential privacy.
+Formal DP would require an adjacency definition, bounded statistic sensitivity,
+a calibrated mechanism, and composition accounting, none of which the current
+noise-pivot implements. We leave such a mechanism to future work.
+
+The data card reports a \emph{synthetic-row dispersion diagnostic}: average
+nearest-neighbor spacing among standardized generated numeric rows. It never
+compares against confidential records and is sensitive to sample size,
+normalization, mixed scales, and excluded categorical columns. It is not a
+privacy score, disclosure audit, or guarantee.
+
+\section{Discussion and Limitations}
+The evaluation makes the operating envelope explicit. The largest end-to-end
+risk occurs before synthesis: a relevant paper can rank outside the review
+cutoff, and unconstrained extraction can return plausible statistics from the
+wrong arm, time point, or variable. Human confirmation of sources and parameters
+is therefore part of the intended workflow. Once parameters are correct,
+marginals and pairwise correlations preserve much linear signal, but the HGB
+and minority-F1 gaps show that higher-order dependence and decision-threshold
+behavior are not recovered automatically. Intrinsic fidelity is consequently a
+diagnostic of reproduced summaries, not evidence of task suitability. The
+distinction is sharper than it sounds. Because the score is computed against the
+extracted parameters, corrupting those parameters --- even attaching each
+variable's statistics to the wrong variable --- leaves the reported score
+unchanged while the generated data move far from the real distribution
+(Appendix~\ref{app:scoring}). It certifies the synthesizer, not the pipeline,
+and it should be read alongside the utility results rather than in place of them.
+
+The Adult calibration result locates this limitation precisely. An oracle
+threshold fitted directly on the real test labels still leaves histogram
+gradient boosting $.025$ below train-on-real --- exactly its ROC-AUC loss ---
+and leaves independent marginals $.192$ below at an AUC of $.509$. The residual
+after calibration \emph{is} the ranking deficit: no decision threshold can
+restore dependence that was never synthesized. Pairwise monotone association is
+what the model transports, so the gap that remains is the part of the joint
+distribution that pairwise statistics do not determine. The correlation audit
+supplies the other end of the same story, since a specification whose declared
+pairs never resolve produces independent marginals regardless of what the
+source paper reported. We therefore read intrinsic fidelity as evidence that
+reported summaries were reproduced, and not as evidence that a downstream model
+trained on the result will rank cases correctly.
+
+The real-paper sample is deliberately small (three documents and 25 target
+items), annotations came from one annotator with a reconciliation pass, and the
+utility suite contains four datasets. The source gold standard is scoped rather
+than exhaustive, so we call nonmatching outputs unsupported or out of scope,
+not hallucinations. Current extraction targets normal/uniform/gamma marginals
+and pairwise correlations; richer distributions, multi-annotator agreement,
+matched distribution-shift pairs, and broader domain coverage remain future
+work. Finally, no individual-level source records enter AgentDataset, but public
+aggregates can themselves disclose information. The row-dispersion statistic is
+neither a disclosure-risk audit nor differential privacy.
+
+\section{Conclusion}
+AgentDataset shows how published aggregate statistics can bootstrap synthetic
+tables without direct access to individual records. The real-paper evaluation
+also shows why this is an assisted process: discovery and especially contextual
+extraction require review. With verified summaries, the method preserves useful
+linear structure, while nonlinear, minority-class, and privacy limitations
+remain explicit in the data card and released evidence.
+
+% References
+\bibliography{references}
+
+% ============================================================
+% Supplementary technical appendix (after references; unlimited length).
+% ============================================================
+\appendix
+
+\section{Fidelity Scoring and Row Dispersion}
+\label{app:scoring}
+The validator produces an overall fidelity score in $[0,100]$ as a weighted sum
+of three components, plus a separately reported row-dispersion diagnostic.
+
+\paragraph{KS score (weight 0.40).} For each variable we run a one-sample
+Kolmogorov--Smirnov test comparing the synthetic column against the target
+parameterized CDF (normal, uniform, or gamma). The
+component is the fraction of variables with $p \ge 0.05$ (i.e., not rejected),
+scaled to $[0,100]$.
+
+\paragraph{Correlation score (weight 0.40).} Let $R$ and $\hat{R}$ be the target
+and synthetic correlation matrices. The component is
+$1 - \mathrm{mean}(|\hat{R}_{ij} - R_{ij}|)/2$ over the off-diagonal
+entries ($i \ne j$), clamped to $[0,1]$ and scaled to $[0,100]$. The diagonal is
+excluded so trivially-perfect self-correlations cannot inflate the score.
+
+\paragraph{Bias score (weight 0.20).} The fraction of variables whose synthetic
+mean is within $20\%$ of the target mean.
+
+\paragraph{Synthetic-row dispersion (reported separately).} The average
+Euclidean distance from each generated numeric row to its nearest generated-row
+neighbor is computed on a random subsample of at most 500 rows after
+standardization and normalized to $[0,1]$. It never uses a real-record neighbor,
+does not enter the fidelity objective, and is not a privacy guarantee or audit.
+
+\paragraph{What the score does not certify.}
+Two of the three components are invariant to errors in the extracted
+parameters, by construction rather than by accident. The KS component compares
+each column against the same parameterized CDF, with the same mean and standard
+deviation, that the synthesizer drew it from; the bias component compares the
+synthetic mean against that same declared mean. Any location--scale error in
+the parameters therefore moves the data and the reference together and cancels.
+To confirm this we built parameters from three real datasets, corrupted them by
+a controlled amount, synthesized from the corrupted parameters, and compared the
+score the system reports against the distance from the real data
+(Table~\ref{tab:validity}). The reported score is exactly constant --- within
+each dataset and seed it takes a single value across all fourteen corruption
+conditions --- while the synthetic data move to a two-sample KS distance of
+$0.967$ from the real distribution.
+
+\begin{table}[t]
+\centering
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrr}
+\toprule
+Parameter error & Reported & KS & Mean err. \\
+\midrule
+\input{generated_tables/validity.tex}%
+\end{tabular}
+\caption{The reported fidelity score is invariant to parameter error. ``KS'' is
+the two-sample Kolmogorov--Smirnov distance from the real data and ``Mean
+err.'' the absolute error in each variable's mean, in units of that variable's
+real standard deviation. Averaged over three real datasets and five seeds; the
+reported score is identical within every dataset--seed cell. ``Statistics
+swapped'' attaches each variable's mean and standard deviation to a different
+variable.}
+\label{tab:validity}
+\end{table}
+
+The correlation component is the exception and does carry signal: it compares
+the realized correlation matrix against the declared one, so it detects
+synthesis failures such as a matrix that was discarded or never applied,
+scoring $52$--$67$ where a repaired matrix scores $80$--$100$. It still
+reproduces an incorrect \emph{declared} correlation faithfully. The practical
+reading is that the fidelity score is a synthesizer self-check, that extraction
+correctness must be established separately --- which is what the annotated
+real-paper study in Q1 does --- and that downstream utility, not intrinsic
+fidelity, is the evidence relevant to a modeling task.
+
+\section{The Noise-Pivot Loop}
+\label{app:noisepivot}
+Algorithm~\ref{alg:pivot} gives the data-free self-refinement loop. Let $S$
+denote the extracted statistical specification, not learned model weights. The
+shipped schedule uses patience $p{=}2$, initial noise $\eta_0{=}0.1$, bounds
+$\eta_{\min}{=}0.01$ and $\eta_{\max}{=}2.0$, exploration multiplier
+$\alpha{=}1.1$, exploitation factor $\beta{=}0.5$, and reset multiple
+$\rho{=}2$. Thus reset fires every $p\rho$ consecutive misses. The ratchet
+guarantees only that the returned dataset is the best-scoring one seen under
+the internal objective. Appendix~\ref{app:pivotgrid} varies the five active
+schedule choices while keeping the safety bounds fixed.
+
+\begin{algorithm}[t]
+\caption{Noise-Pivot Self-Refinement}
+\label{alg:pivot}
+\textbf{Input}: extracted statistical specification $S$; iteration budget $T$\\
+\textbf{Output}: best synthetic dataset $D^\star$
+\begin{algorithmic}[1]
+\STATE $\eta \gets \eta_0$; \; $s^\star \gets -\infty$; \; \textit{streak} $\gets 0$
+\FOR{$t = 1$ to $T$}
+  \STATE $D \gets \textsc{Synthesize}(S, \eta)$; \; $s \gets \textsc{Validate}(D, S)$
+  \IF{$s > s^\star$}
+    \STATE $s^\star \gets s$; \; $D^\star \gets D$; \; \textit{streak} $\gets 0$ \COMMENT{ratchet}
+  \ELSE
+    \STATE \textit{streak} $\gets$ \textit{streak} $+ 1$
+    \IF{\textit{streak} $\bmod (p\rho) = 0$}
+      \STATE $\eta \gets \eta_0$ \COMMENT{reset; checked first}
+    \ELSIF{\textit{streak} $\bmod p = 0$}
+      \STATE $\eta \gets \max(\eta_{\min}, \beta\eta)$ \COMMENT{exploit}
+    \ELSE
+      \STATE $\eta \gets \min(\eta_{\max}, \alpha\eta)$ \COMMENT{explore}
+    \ENDIF
+  \ENDIF
+\ENDFOR
+\STATE \textbf{return} $D^\star$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Noise-Pivot Sensitivity Grid}
+\label{app:pivotgrid}
+We varied \textsc{Patience}, initial noise, the exploration multiplier, the
+exploitation factor, and the reset interval one factor at a time around the
+shipped configuration, crossed \textsc{Patience} with the iteration budget, and
+added fixed-noise, random-search, and no-loop baselines matched on the number of
+synthesize--validate calls. The design covers $95$ configurations over $11$
+source specifications and $20$ seeds ($20{,}900$ runs). Sources were split into
+a tuning subset and a held-out reporting subset in code before any result was
+examined; every comparison below holds on both, with effect sizes agreeing to
+within $0.1$. Tests are paired Wilcoxon signed-rank on (source, seed) pairs,
+Holm-corrected within each factor.
+
+\begin{table}[t]
+\centering
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrr}
+\toprule
+Configuration (budget $5$) & Mean & SD \\
+\midrule
+\input{generated_tables/pivot.tex}%
+\end{tabular}
+\caption{Best fidelity score at the shipped five-iteration budget, matched on
+synthesize--validate calls ($n{=}220$ per row). A constant low noise dominates
+the adaptive schedule.}
+\label{tab:pivotbaselines}
+\end{table}
+
+Single-factor changes that significantly improve on the shipped configuration
+all point the same way --- reach low noise sooner, and stop exploring upward:
+initial noise $0.05$ ($\Delta{+}11.44$), $\textsc{Patience}{=}1$
+($\Delta{+}7.57$), and exploitation factor $0.25$ ($\Delta{+}1.67$). Changes to
+the exploration multiplier and the reset interval are not significant. Mean
+runtime is linear in the budget ($0.03$\,s per iteration at $2{,}000$ rows), so
+the budget is a real cost rather than a free parameter.
+
+\subsection{Correlation-Matrix Validity}
+\label{app:corrvalidity}
+We logged the minimum eigenvalue, condition number, positive-definite status,
+action taken, and pairs declared versus applied for every correlation matrix
+built across templated specifications, real-paper gold statistics, automatic
+extraction, and a set of deliberately invalid matrices.
+
+\begin{table}[t]
+\centering
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrrr}
+\toprule
+ & & & \multicolumn{2}{c}{Pairs applied} \\
+Input class & $n$ & PD rate & before & after \\
+\midrule
+\input{generated_tables/correlation.tex}%
+\end{tabular}
+\caption{Correlation-matrix validity by input class, before and after fixing
+the variable-naming defect. Positive-definiteness fails only on matrices
+constructed to be invalid; dependence was being lost instead to unresolved
+variable names, which leave a valid but vacuous identity matrix. The remaining
+gold shortfall is correct: that pair names a variable its source never reports.}
+\label{tab:corrvalidity}
+\end{table}
+
+The shipped fallback drops \emph{all} correlations when a matrix is not
+positive-definite, including the well-behaved pairs. We implemented a nearest
+positive-semidefinite repair --- eigenvalue clipping with the diagonal
+renormalized to one, the first iterate of Higham's alternating projection --- as
+an opt-in mode, retaining the current behavior as the default so that previously
+published results remain reproducible. On a slightly invalid matrix the repair
+recovers correlation fidelity that dropping destroys, at a Frobenius distance of
+$5.4{\times}10^{-3}$ from the declared target; on a severely invalid one it
+still returns a well-defined matrix, at a distance of $0.98$, which we report
+rather than presenting the result as a faithful reconstruction of an
+unsatisfiable specification.
+
+\section{Experimental Setup}
+\label{app:setup}
+
+\paragraph{Datasets.} Classification uses Adult Income (UCI id~2), Pima
+Indians Diabetes, and Statlog German Credit (UCI id~144), each with a compact
+mixed-type schema. Positive labels are fixed as income $>$50K, diabetes, and
+bad credit. Regression uses all eight predictors in UCI Concrete Compressive
+Strength (id~165). Marital status is collapsed to three categories to exercise
+multi-category ($k>2$) synthesis.
+
+\paragraph{Parameter isolation.} For every seed, means, standard deviations,
+category probabilities, and pairwise correlations are computed from the
+training fold only and passed directly to synthesis. This controlled utility
+benchmark isolates synthesis from extraction; the separate real-paper study
+evaluates discovery and extraction on unmodified source text. No held-out row is
+used in parameterization or synthesis.
+
+\paragraph{TRTR/TSTR protocol.} We repeat the evaluation over 30 seeds; each
+induces a fresh $80/20$ split (stratified for classification) and a
+seed-specific synthetic draw of training-fold size. Classification uses
+logistic regression and histogram gradient boosting and reports accuracy,
+minority precision/recall/F1, AUC, Brier score, and log loss. Regression uses
+linear regression and histogram gradient boosting and reports MAE, RMSE, and
+$R^2$. Under one protocol we compare four synthesizers: AgentDataset's
+mixed-type copula, the same copula without the refinement loop, an
+independent-marginals baseline (identical per-column draws with all correlations
+removed), and a Gaussian-copula synthesizer (SDV) fit directly on the real
+training split. All synthesizers share each seed's split, encoders, and test set.
+
+\begin{table}[h]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llll}
+\toprule
+Arm & Training input & Pairwise dependence & Refinement \\
+\midrule
+Independent & Gold marginals & None & None \\
+1-shot copula & Gold marginals + correlations & Supplied & None \\
+AgentDataset & Gold marginals + correlations & Supplied & 3 iterations \\
+SDV$^\dagger$ & Individual real rows & Learned from rows & None \\
+TRTR & Individual real rows & Present in rows & N/A \\
+\bottomrule
+\end{tabular}
+\caption{Input-access audit for the utility comparison. ``Gold'' means computed
+from each real training fold, never its test fold. Thus the summary-only arms
+measure a synthesis ceiling with extraction held perfect; Q1 evaluates
+extraction separately. $^\dagger$SDV is not a like-for-like competitor.}
+\label{tab:baselineinputs}
+\end{table}
+
+\paragraph{Adult calibration protocol.} For each of the 30 seeds we hold out
+$20\%$ of every synthetic training frame as a validation split, fit the model on
+the remainder, and derive all calibration decisions from that split: the
+F1-maximizing threshold, a Platt sigmoid on the model log-odds, and an isotonic
+map. Isotonic regression is reported only where the validation split has at least
+$500$ rows and $50$ members of each class, and is otherwise recorded as skipped
+rather than imputed. We report minority precision, recall, and F1, the
+predicted-positive rate, Brier score, and ROC-AUC, with paired TRTR deltas and
+bootstrap intervals. Threshold selection and monotone calibration leave AUC
+unchanged by construction, so any F1 movement in Table~\ref{tab:calibration} is
+an operating-point effect. The single strategy that touches real test labels is
+the oracle bound, which is flagged in the released raw rows
+(\texttt{uses\_real\_test\_labels}) and excluded from every claim of recoverable
+utility.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrr}
+\toprule
+Calibration strategy & TRTR & Agent & Indep. & SDV \\
+\midrule
+\input{generated_tables/calibration.tex}%
+\end{tabular}
+\caption{Adult minority-F1 (LR/HGB) over 30 seeds under post-hoc calibration.
+Columns receive the same inputs as in Table~\ref{tab:empirical}: Agent and
+Indep.\ see only training-fold summary statistics, whereas SDV is fitted on the
+real training records and is a data-access upper bound. Every strategy above the
+rule fits its calibrator and threshold on a validation split of the synthetic
+training frame only. Platt and isotonic maps combined with threshold selection
+match the threshold-only row to three decimals and are omitted.
+$^\ddagger$Threshold fitted on the real test labels: an upper bound on what
+thresholding alone can achieve, not a usable method.}
+\label{tab:calibration}
+\end{table}
+
+\paragraph{Extraction routing.} The real-paper study uses GPT-4o through
+OpenRouter at temperature zero and reruns forced regex on identical parsed
+text. Earlier provider cost measurements include GPT-4o, Claude Sonnet~4.5, and
+Gemini~2.5~Flash. API calls record model, token counts, latency, and reported
+cost without storing credentials.
+
+\paragraph{Runs, variation, and uncertainty.} The empirical benchmark reports
+30 seeds for every dataset--model--synthesizer--metric cell. We release raw
+seed-level rows, means, sample standard deviations, paired TRTR deltas, and
+deterministic 10,000-resample bootstrap 95\% intervals. The extraction ablation
+averages $3$ LLM repetitions per text over $8$ domain texts; the noise-pivot ablation sweeps
+iteration budgets $\{0,1,2,3,5,10\}$ over $8$ texts $\times\,5$ seeds
+($n{=}40$ per cell); the cost/latency table averages $5$ calls per provider. We
+retain earlier paired $t$-tests and Wilcoxon signed-rank tests for the ablation.
+
+\paragraph{Randomness.} Synthesis draws from an instance-scoped random generator
+that does not perturb global program state; the ablation additionally fixes the
+global seed for each configuration. In the utility benchmark seeds 0--29 drive
+both the split and synthesizer, making each seed a paired replication.
+
+\paragraph{Software and hardware.} Python~3.13 with NumPy~$\ge$2.2,
+SciPy~$\ge$1.15, pandas~$\ge$2.2, scikit-learn~$\ge$1.9, litellm~$\ge$1.83,
+PyMuPDF~$\ge$1.25, trafilatura~$\ge$2.0, and SDV~$\ge$1.17 (for the
+Gaussian-copula baseline). Experiments run on commodity CPU hardware with no GPU
+required. The run manifest records the exact command, Git state, Python
+version, dependency-lock hash, and seed set.
+
+\section{End-to-End Cost and Latency}
+\label{app:e2ecost}
+% END-TO-END-COST-V2
+Table~\ref{tab:e2ecost} reports every pipeline stage for the three real papers,
+separating paid API, network, and local time. Network and LLM stages run once
+per paper; local stages are averaged over three timing repetitions at the
+shipped three-iteration budget. Totals describe one finished dataset, not one
+call. All nine retained LLM calls succeeded without retries. The harness also
+records failed attempts, elapsed time, and known or unknown cost because a
+retry consumes budget even when a provider returns no usage record.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{lrrrr}
+\toprule
+Stage & API (\$) & API (s) & Net. (s) & Local (s) \\
+\midrule
+\input{generated_tables/end_to_end_cost.tex}%
+\end{tabular}
+\caption{Mean per-stage cost and latency for one finished dataset, over the three
+real papers of Table~\ref{tab:realpapers} (GPT-4o via OpenRouter, 3 local timing
+repetitions, 3 refinement iterations). Dashes mark inapplicable timing classes.
+The retained runs cost \$0.05058 over 9 calls, $14{,}932$ prompt and $1{,}325$
+completion tokens; human source-review time is excluded.}
+\label{tab:e2ecost}
+\end{table}
+
+Observed per-paper totals span \$0.01327--\$0.02091 and 39.07--45.64\,s. A
+corrective rerun after fixing source selection raised physical experiment spend
+to \$0.057425 over 12 calls; the retained table excludes that superseded run.
+
+\section{Real-Paper Annotation and Error Detail}
+The manifest fixes source URL/DOI, publisher, year, access date and status,
+document type, target population, and selection rationale. The CDC scope is the
+3,828 urban participants; CALERIE is the 143-person calorie-restriction arm at
+baseline; student health is the full sample of 447. The gold file contains 25
+prespecified items with exact source label, normalized name, type, value, unit,
+population, subgroup, time, arm, page/table, evidence, and direct/derived flag.
+A single annotator transcribed every item twice and reconciled against the cited
+location; this is a repeatability check, not inter-annotator agreement. One
+conflicting source value is retained rather than silently corrected.
+
+All source fetches and parses succeeded. For the LLM, the CDC source produced
+2 matched and 27 unsupported/out-of-scope items, with 4 target omissions and 2
+variable-name mismatches; CALERIE produced no target matches, 21 unsupported
+items, and 7 omissions; student health produced 10 matches, 12 unsupported
+items, 2 omissions, and 10 numeric mismatches. The latter mainly reflects
+rounded values or path coefficients substituted for correlations. Regex
+returned an empty result for all sources, yielding 25 omissions. Empty results
+remain in every denominator. Source-level extraction rows, error categories,
+optimization traces, and raw/summary synthesis rows are released under
+\texttt{analysis/} and \texttt{results/}; generated data cards are written to
+the documented cache during reruns.
+
+\section{The Caveman Protocol Prompt}
+\label{app:caveman}
+The compressed extraction system prompt is reproduced below. It is no longer the
+deployed prompt: Q6 shows that it costs $-.069$ $F_1$ against the natural-language
+prompt for a $3.5\%$ cost saving, so the shipped extractor uses the latter. Both
+prompts are included in the released code and request an identical schema, which
+the earlier baseline did not---it omitted the categorical distribution and the
+\texttt{categories} field, and a regression test now enforces field-set parity
+between the two.
+
+\begin{quote}\begin{scriptsize}\begin{verbatim}
+You are an expert statistician.
+Strip prose.
+Extract variables, distributions, correlations.
+Output strict JSON matching this schema exactly:
+{ "variables": {
+    "<name>": {"distribution":
+      "normal|uniform|gamma|categorical",
+      "mean": 0.0, "std": 1.0, "min": null,
+      "max": null, "categories": null} },
+  "correlations": {
+    "<key>": {"var1": "<name>", "var2": "<name>",
+      "correlation": 0.5,
+      "direction": "positive|negative"} } }
+"categories" is only used when distribution is
+"categorical": an object mapping each category
+label to its probability, e.g.
+{"yes": 0.3, "no": 0.7}.
+No fluff. No greeting. Output JSON only.
+\end{verbatim}\end{scriptsize}\end{quote}
+
+\section{Extraction Challenge Set and Replication}
+\label{app:extraction}
+
+\paragraph{Protocol.} All arms run at temperature $0$ with
+\texttt{response\_format} set to \texttt{json\_object}, the production setting,
+and with retries disabled so nondeterminism and transient failure stay visible.
+The regex fallback is deterministic, runs once, and is reported as its own arm;
+fallback output is never folded into LLM results. Matching is by value rather
+than by name, because the regex fallback emits generic identifiers and would
+otherwise be penalised for a reason unrelated to reading the numbers correctly.
+False positives are separated into context errors (a value present in the
+document but annotated as not a distribution parameter) and hallucinations (a
+value appearing nowhere in the source text), the latter grounded in an
+enumeration of every numeric literal the excerpt contains.
+
+\paragraph{Replication.} We ran the full sweep twice, independently, at identical
+settings; both runs are released. The Caveman deficit is $-.069$ in the first and
+$-.063$ in the second (Wilcoxon $p=.0001$ and $p=.0004$); pooled arm means agree
+to within $.010$ $F_1$ ($.710$ vs.\ $.719$ Caveman, $.778$ vs.\ $.782$
+natural-language), and the hallucination gap is present in both. The regex arm is
+bit-identical between runs, confirming the observed spread is model-side rather
+than harness-side. The second run additionally lost $15\%$ of its Anthropic calls
+to transient API errors; because retries are disabled and failures are recorded
+as rows rather than dropped, this shrinks the paired sample from 90 to 85 without
+biasing the reported rates.
+
+\paragraph{Effect on Q1.} Re-running the real-paper evaluation under the new
+prompt on identical cached source text replicates the finding independently:
+extraction $F_1$ rises from $.247$ to $.308$ and precision from $.167$ to $.226$,
+while recall is unchanged at $.480$. The item counts show the mechanism directly:
+false positives fall sharply ($27 \rightarrow 12$ on one source) while true
+positives are identical. The natural-language prompt wins by inventing less, not
+by finding more. This too was run twice ($F_1$ $.308$ then $.304$). Absolute
+performance on real papers remains low, and we do not claim otherwise.
+
+\paragraph{Two measurement caveats.} First, because \texttt{json\_object} is
+requested, the malformed-output rate we report counts schema violations rather
+than invalid JSON; it is $1.3\%$ for the Caveman arm and $0\%$ for the
+natural-language arm. Second, Anthropic models routed through OpenRouter ignore
+the \texttt{json\_object} flag and wrap the object in a Markdown code fence on
+$100\%$ of successful calls (255/255, against 0/600 for the other two providers).
+A strict JSON parse therefore fails on every such response, and a pipeline with a
+regex fallback will silently degrade to that fallback for one of three providers
+while appearing to succeed. We strip the fence before parsing and report the
+incidence rather than hiding it, because the failure is invisible to any
+evaluation that does not separate fallback output from LLM output.
+
+\paragraph{The natural-language prompt.} The deployed extraction prompt, which
+requests the identical schema to the compressed prompt above:
+
+\begin{quote}\begin{scriptsize}\begin{verbatim}
+You are an expert statistician with many years
+of experience analyzing research papers and
+extracting statistical information from them.
+Please carefully read through the following
+text and identify all of the statistical
+variables that are mentioned, along with their
+probability distributions (such as normal,
+uniform, gamma, or categorical), their means,
+and their standard deviations. Also, please
+identify any correlations that are described
+between pairs of variables, including the
+strength and direction (positive or negative)
+of each correlation.
+
+Please format your response as a JSON object
+that matches the following schema exactly:
+{ "variables": {
+    "<name>": {"distribution":
+      "normal|uniform|gamma|categorical",
+      "mean": 0.0, "std": 1.0, "min": null,
+      "max": null, "categories": null} },
+  "correlations": {
+    "<key>": {"var1": "<name>", "var2": "<name>",
+      "correlation": 0.5,
+      "direction": "positive|negative"} } }
+
+The "categories" field should only be used when
+the distribution is "categorical". In that case
+it should be an object that maps each category
+label to its probability, for example
+{"yes": 0.3, "no": 0.7}.
+
+Please make sure to only output the JSON object
+itself and nothing else - no introductory text,
+no explanations, and no markdown code fences.
+\end{verbatim}\end{scriptsize}\end{quote}
+
+% ---- Reproducibility checklist (single-blind: keep with submission) ----
+\def\isChecklistMainFile{}
+\input{ReproducibilityChecklist.tex}
+
+\end{document}

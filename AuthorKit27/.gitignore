@@ -1,0 +1,14 @@
+# Track only the canonical, reproducible manuscript inputs.
+*
+!.gitignore
+!main.tex
+!references.bib
+!ReproducibilityChecklist.tex
+!aaai2027.sty
+!aaai2027.bst
+!Figures/
+Figures/*
+!Figures/architecture.tex
+!generated_tables/
+generated_tables/*
+!generated_tables/*.tex

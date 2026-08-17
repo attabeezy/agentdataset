@@ -51,8 +51,7 @@ htmlcov/
 .agentdataset_cache/
 docs/
 
-# AAAI/IAAI author kit (paper build artifacts)
-AuthorKit27/
+# AAAI/IAAI paper sources are selectively tracked by AuthorKit27/.gitignore.
 output/
 
 # OS
