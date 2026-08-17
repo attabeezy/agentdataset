@@ -9,6 +9,7 @@ from agentdataset.evaluation import (
     validate_raw_results,
 )
 from agentdataset.models.schemas import MetaParams, Parameters, VariableParams
+from analysis import p0_utility_benchmark as utility
 from analysis.p0_utility_benchmark import _encode_classification, parameters_from_training_data
 from analysis.real_paper_eval import flatten_parameters, score_extraction
 
@@ -70,6 +71,85 @@ def test_target_correlation_uses_synthesizer_category_order():
     params = parameters_from_training_data(dataset, train)
     assert list(params.variables["target"].categories) == ["disease", "healthy"]
     assert params.correlations["x__target"].correlation > 0
+
+
+def test_one_shot_copula_is_exact_first_loop_iteration(tmp_path):
+    train = pd.DataFrame({
+        "x": np.linspace(0.0, 9.0, 10),
+        "y": [1.0, 2.5, 4.0, 3.5, 8.0, 7.0, 11.0, 10.0, 15.0, 17.0],
+    })
+    dataset = {
+        "name": "toy", "task_type": "regression", "continuous": ["x"],
+        "categorical_features": [], "target": "y",
+    }
+    params = parameters_from_training_data(dataset, train)
+    expected = utility._one_shot_copula(params, len(train), seed=7)
+
+    orchestrator = utility.Orchestrator(
+        session_id="one_shot_equivalence", base_dir=str(tmp_path)
+    )
+    orchestrator.synthesizer = utility.Synthesizer(n_rows=len(train), seed=7)
+    _, actual = orchestrator.run_optimization_loop(params, iterations=1)
+
+    pd.testing.assert_frame_equal(actual, expected, check_exact=True)
+
+
+def test_utility_arms_share_gold_summaries_and_paired_seeds(monkeypatch, tmp_path):
+    frame = pd.DataFrame({
+        "x": np.linspace(0.0, 49.0, 50),
+        "target": np.linspace(0.0, 49.0, 50) ** 2 + 2.0,
+    })
+    dataset = {
+        "name": "toy_regression", "task_type": "regression", "df": frame,
+        "continuous": ["x"], "categorical_features": [], "target": "target",
+    }
+    monkeypatch.setattr(utility, "ROOT", tmp_path)
+    monkeypatch.setattr(
+        utility,
+        "_sdv_baseline",
+        lambda train, features, target, n_rows, seed: train.copy(),
+    )
+
+    raw = utility.run_utility_benchmark(n_seeds=1, datasets=[dataset])
+    tstr = raw.loc[raw["condition"].eq("tstr")]
+
+    assert set(tstr["synthesizer"]) == {
+        "agentdataset", "copula_no_loop", "independent", "sdv_gaussian_copula",
+    }
+    assert set(tstr["extraction_method"]) == {"gold_train_summary"}
+    assert set(tstr["provider"]) == {"local"}
+    assert set(tstr["seed"]) == {0}
+    assert np.array_equal(
+        tstr["split_seed"].to_numpy(), tstr["synthesis_seed"].to_numpy()
+    )
+
+
+def test_baseline_contrasts_are_paired_with_declared_direction():
+    rows = []
+    values = {
+        "independent": 0.10,
+        "copula_no_loop": 0.40,
+        "agentdataset": 0.55,
+        "sdv_gaussian_copula": 0.70,
+    }
+    for synthesizer, value in values.items():
+        rows.append({
+            "dataset": "toy", "task_type": "classification",
+            "condition": "tstr", "model_family": "lr", "seed": 3,
+            "metric": "minority_f1", "synthesizer": synthesizer,
+            "value": value, "status": "ok",
+        })
+
+    contrasts = utility.build_baseline_contrasts(pd.DataFrame(rows))
+    observed = dict(zip(contrasts["synthesizer"], contrasts["value"]))
+
+    assert observed == pytest.approx({
+        "copula_no_loop_minus_independent": 0.30,
+        "agentdataset_minus_copula_no_loop": 0.15,
+        "sdv_gaussian_copula_minus_agentdataset": 0.15,
+    })
+    assert contrasts["run_id"].is_unique
+    assert set(contrasts["extraction_method"]) == {"gold_train_summary"}
 
 
 def test_extraction_scoring_separates_numeric_and_name_accuracy():

@@ -223,7 +223,7 @@ class Orchestrator:
 
         try:
             response = self.extractor.llm_call(
-                prompt
+                prompt, purpose="query_expansion"
             )  # Reusing extractor's LLM interface
             queries = [q.strip() for q in response.split("\n") if q.strip()]
             # Always include the original query for safety
@@ -297,7 +297,9 @@ class Orchestrator:
         )
 
         try:
-            response = self.extractor.llm_call(prompt).strip()
+            response = self.extractor.llm_call(
+                prompt, purpose="source_suggestion"
+            ).strip()
             if response.lower() == "none" or not response:
                 return []
             # Extract digits from the response
@@ -342,13 +344,18 @@ class Orchestrator:
         self.optimization_trace = []
 
         for i in range(iterations):
+            iteration_started = time.perf_counter()
             logger.info("Loop %d/%d (noise=%.4f)...", i + 1, iterations, noise_level)
 
             # Synthesis
+            synthesis_started = time.perf_counter()
             df = self.synthesizer.synthesize(current_params, noise_level=noise_level)
+            synthesis_seconds = time.perf_counter() - synthesis_started
 
             # Validation
+            validation_started = time.perf_counter()
             report = self.validator.validate(df, current_params)
+            validation_seconds = time.perf_counter() - validation_started
             logger.info("  Fidelity Score: %s", report.overall_score)
             improved = report.overall_score > self.best_score
             trace_row = {
@@ -363,6 +370,9 @@ class Orchestrator:
                 # ratchet accepted this iteration, so no pivot fired.
                 "phase": "keep",
                 "noise_after": noise_level,
+                "synthesis_seconds": synthesis_seconds,
+                "validation_seconds": validation_seconds,
+                "artifact_write_seconds": 0.0,
             }
             self.optimization_trace.append(trace_row)
 
@@ -375,6 +385,7 @@ class Orchestrator:
                 no_improve_streak = 0
 
                 # Save artifacts — I/O failure must not abort the loop / lose progress.
+                artifact_started = time.perf_counter()
                 try:
                     df.to_csv(Path(self.context.path) / "data.csv", index=False)
                     with open(Path(self.context.path) / "parameters.json", "w", encoding="utf-8") as f:
@@ -390,6 +401,10 @@ class Orchestrator:
                         self.context.path,
                         e,
                     )
+                finally:
+                    trace_row["artifact_write_seconds"] = (
+                        time.perf_counter() - artifact_started
+                    )
             else:
                 no_improve_streak += 1
                 noise_level, phase = next_noise(no_improve_streak, noise_level, cfg)
@@ -401,5 +416,14 @@ class Orchestrator:
                     phase,
                     noise_level,
                 )
+
+            trace_row["iteration_seconds"] = time.perf_counter() - iteration_started
+            trace_row["refinement_overhead_seconds"] = max(
+                0.0,
+                trace_row["iteration_seconds"]
+                - trace_row["synthesis_seconds"]
+                - trace_row["validation_seconds"]
+                - trace_row["artifact_write_seconds"],
+            )
 
         return self.best_score, self.best_data

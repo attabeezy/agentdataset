@@ -57,7 +57,22 @@ Files are only written for functions that ran and produced at least one row.
   deviation, and deterministic 10,000-resample bootstrap intervals. It covers
   three classification datasets with logistic regression and histogram
   gradient boosting, plus Concrete Compressive Strength regression with linear
-  regression and histogram gradient boosting.
+  regression and histogram gradient boosting. The summary-only arms are
+  independent marginals, a one-shot correlated copula at the shipped initial
+  noise (0.1), and AgentDataset's three-iteration loop; all receive parameters
+  computed from the training fold only. SDV and TRTR receive individual rows.
+- `p0_utility_baseline_contrasts_raw.csv` contains paired seed-level differences
+  for one-shot minus independent, AgentDataset minus one-shot, and SDV minus
+  AgentDataset. `p0_utility_baseline_contrasts.csv` summarizes those differences
+  with 10,000-resample bootstrap intervals. The SDV contrast is a descriptive
+  real-data-access/modeling gap, not a like-for-like treatment effect.
+- Correlations, rather than refinement, explain the summary-only gain. One-shot
+  improves over independence on every reported primary metric (for example,
+  Adult LR AUC +.341 [.284,.400] and Concrete LR $R^2$ +.612 [.584,.641]).
+  Agent-minus-one-shot intervals include zero for every classification primary
+  metric; only Concrete HGB has a small refinement gain ($R^2$ +.030
+  [.003,.059]). These runs hold extraction perfect (`gold_train_summary`), so
+  they measure the synthesis ceiling rather than end-to-end extraction utility.
 
 ## P1 reviewer-revision artifacts
 
@@ -335,6 +350,32 @@ changed. The self-refinement contribution bullet became an audit of the
 internal objective, and System Overview, Q1, Discussion, and the scoring
 appendix now state the score's scope.
 
+### End-to-end cost and latency (§9.8)
+
+- `end_to_end_cost_latency_raw.csv` records every live stage, individual search
+  request, LLM attempt, retry index, token count, cost-known flag, and local
+  timing repetition.
+- `end_to_end_cost_latency.csv` averages the three local timing repetitions
+  before producing per-paper and mean-one-dataset totals.
+- `end_to_end_cost_latency_run_manifest.json` records the command, model,
+  environment, seeds, spend/attempt limits, retained cost, and physical spend
+  including a superseded corrective run. The `_cached` counterparts are the
+  deterministic no-network/no-API path.
+
+Across the three real papers, one final dataset averages **$0.01686 and
+41.84 s** (ranges $0.01327--$0.02091 and 39.07--45.64 s). That comprises three
+LLM calls, 4,977 prompt tokens, and 442 completion tokens on average. Mean time
+is 7.80 s in LLM APIs, 33.06 s in search/fetch network activity, and 0.98 s in
+local work. The retained runs cost $0.05058 over nine successful, unretried
+calls; a corrected CDC source-selection rerun brought physical experiment
+spend to $0.057425 over 12 calls. Human source-review time is excluded.
+
+The harness refuses a new attempt at either $0.25 known spend or 12 attempts.
+Provider failures remain explicit even when their cost is unknown. Live mode
+requires network access and `OPENROUTER_API_KEY`; cached mode performs no paid
+calls. `--summarize-existing` regenerates the summary without rerunning any
+stage, while `--source ID --merge-existing` supports a scoped replacement.
+
 Reproduce the new studies with:
 
 ```powershell
@@ -355,6 +396,11 @@ Reproduce the new studies with:
 .venv\Scripts\python.exe analysis\noise_pivot_ablation.py --seeds 20       # full grid
 .venv\Scripts\python.exe analysis\noise_pivot_report.py                    # tests and tables
 .venv\Scripts\python.exe analysis\fidelity_validity_probe.py --seeds 5     # what the score certifies
+
+# Full workflow cost accounting (§9.8)
+.venv\Scripts\python.exe analysis\end_to_end_cost.py --mode cached         # deterministic, no API key
+.venv\Scripts\python.exe analysis\end_to_end_cost.py --mode live           # network + paid OpenRouter calls
+.venv\Scripts\python.exe analysis\end_to_end_cost.py --mode live --summarize-existing
 ```
 
 The utility benchmark computes parameters from each training fold only. Raw

@@ -1,0 +1,40 @@
+{
+  "recorded_at_utc": "2026-08-16T00:16:42.622710+00:00",
+  "git_commit": "5124636f85364b383d2e93a767ea34a0be29020f",
+  "git_dirty": true,
+  "python_version": "3.13.5",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "dependency_lock": "uv.lock",
+  "dependency_lock_sha256": "5ac40da015af432f039e096ad94c70714a353f8f24133f5eec51bcef98a1ea3c",
+  "command": "python analysis/end_to_end_cost.py --mode live --source cdc_nhanes_rural_urban --merge-existing",
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "provider": "openrouter",
+  "model": "openrouter/openai/gpt-4o",
+  "mode": "live",
+  "spend_cap_usd": 0.25,
+  "max_llm_attempts": 12,
+  "max_retries_per_call": 2,
+  "known_cost_usd": 0.05058,
+  "llm_attempts": 9,
+  "sources": [
+    "calerie_rct",
+    "cdc_nhanes_rural_urban",
+    "student_mental_health"
+  ],
+  "optimization_iterations": 3,
+  "timing_repetitions": [
+    0,
+    1,
+    2
+  ],
+  "human_source_review_time_included": false,
+  "physical_known_cost_usd_including_replaced_run": 0.057425,
+  "physical_llm_attempts_including_replaced_run": 12,
+  "replaced_sources": [
+    "cdc_nhanes_rural_urban"
+  ]
+}

@@ -269,6 +269,8 @@ class Extractor:
         self.call_history.append({
             "purpose": purpose,
             "model": model or self.model,
+            "status": "ok",
+            "error_type": None,
             "latency_seconds": time.perf_counter() - started_at,
             "prompt_tokens": getattr(usage, "prompt_tokens", None),
             "completion_tokens": getattr(usage, "completion_tokens", None),
@@ -458,7 +460,13 @@ class Extractor:
                 return name
         return f"var_{len(existing) + 1}"
 
-    def llm_call(self, prompt: str) -> str:
+    def llm_call(
+        self,
+        prompt: str,
+        *,
+        purpose: str = "general_llm",
+        num_retries: int = 2,
+    ) -> str:
         """General purpose LLM call for non-structured extraction tasks.
 
         Returns the raw text response from the LLM.
@@ -472,9 +480,9 @@ class Extractor:
             ],
             api_key=api_key,
             temperature=0,
-            num_retries=2,
+            num_retries=num_retries,
         )
-        self._record_completion(response, started_at, "general_llm")
+        self._record_completion(response, started_at, purpose)
         if not response.choices or response.choices[0].message.content is None:
             raise ValueError("LLM returned an empty response.")
         return response.choices[0].message.content

@@ -676,20 +676,55 @@ Numbers quoted in the paper are transcribed from `results/`, which stays here.
 
 ### 9.8 P1 — Baselines and cost accounting
 
-- [ ] **Add a fair summary-statistics-only baseline presentation.**
+- [x] **Add a fair summary-statistics-only baseline presentation.**
   - Keep independent marginals as the primary like-for-like baseline.
   - Consider adding a simple non-iterative copula synthesis baseline if it is meaningfully different from the current synthesizer.
   - Continue labeling SDV as a real-data-access upper bound, never as a directly comparable competitor.
   - State exactly which inputs each method receives in table captions.
   - **Done when:** readers can separate the value of correlations, optimization, extraction, and access to real records.
+  - **Result.** `analysis/p0_utility_benchmark.py` now adds a paired
+    `copula_no_loop` arm: the exact first synthesis call of the shipped loop
+    (same gold training-fold parameters, row count, seed, correlation policy,
+    and initial noise 0.1), but without validation or refinement. The 30-seed
+    rerun produced 12,960 successful metric rows with no failures, plus explicit
+    seed-level contrasts in `results/p0_utility_baseline_contrasts_raw.csv` and
+    deterministic bootstrap summaries in
+    `results/p0_utility_baseline_contrasts.csv`.
+  - **Correlations supply the benefit.** One-shot improves over independent on
+    every primary utility metric: Adult LR AUC +.341 [.284,.400], Pima LR AUC
+    +.405 [.322,.483], German LR AUC +.153 [.116,.192], and Concrete LR $R^2$
+    +.612 [.584,.641]. AgentDataset minus one-shot includes zero for every
+    classification primary metric. Only Concrete HGB shows a small refinement
+    benefit ($R^2$ +.030 [.003,.059]; RMSE -.347 [-.674,-.043]). The loop adds
+    no consistent downstream benefit at the shipped three-iteration budget.
+  - **Input access is now explicit.** Independent sees gold marginals only;
+    one-shot and AgentDataset see the same gold marginals plus pairwise
+    correlations; SDV and TRTR see individual real training rows. SDV remains
+    labeled a data-access upper bound, never a like-for-like competitor. The
+    paper table and appendix input audit state that extraction is held perfect
+    here, so Q2 measures a synthesis ceiling while Q1 evaluates extraction
+    separately. No paid API calls are involved.
 
-- [ ] **Report total end-to-end cost and latency.**
+- [x] **Report total end-to-end cost and latency.**
   - Instrument discovery query expansion, search/fetch, document parsing, extraction for every selected document, synthesis, validation, refinement, and retry/failure overhead.
   - Separate paid API cost from local compute time.
   - Report per-stage and total values for each real-paper pipeline run.
   - Include the number of LLM calls, input/output tokens, documents processed, and optimization iterations.
   - **Deliverable:** `results/end_to_end_cost_latency.csv`.
   - **Done when:** a practitioner can estimate the cost of producing one final dataset, not just one extraction call.
+  - **Result:** Three live real-paper runs exercised query expansion, web
+    search, source suggestion, fetch, parse, extraction, three synthesis /
+    validation / refinement iterations, and artifact writing. One finished
+    dataset averages **\$0.01686** and **41.84 s** (ranges \$0.01327--\$0.02091
+    and 39.07--45.64 s), with 3 LLM calls, 4,977 prompt tokens, and 442
+    completion tokens. Mean time separates into 7.80 s API, 33.06 s network,
+    and 0.98 s local compute; human source review is excluded.
+  - **Accounting guard:** All 9 retained calls succeeded without retries or
+    unknown-cost failures. The harness records every failed attempt and caps a
+    run at \$0.25 or 12 attempts. A corrected CDC source-selection rerun brought
+    physical experiment spend to \$0.057425 over 12 calls; the final retained
+    three-paper artifact is \$0.05058 over 9 calls. Cached mode reproduces the
+    accounting schema with zero API calls.
 
 ### 9.9 P2 — Paper presentation and clarity
 
@@ -759,7 +794,7 @@ If time is constrained, the minimum defensible response to this review is:
 - [ ] carefully scoped privacy claims, a disclosure-risk threat model, and relevant disclosure-control citations;
 - [ ] one nonlinear classifier and one regression task;
 - [x] Adult threshold/calibration results that avoid real-test-set tuning;
-- [ ] end-to-end rather than per-call cost reporting;
+- [x] end-to-end rather than per-call cost reporting;
 - [ ] an explicit limitations discussion for idealized extraction, pairwise dependence, sample size, and distribution shift;
 - [ ] updated paper tables, appendix details, reproducibility commands, and a clean final build.
 

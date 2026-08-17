@@ -332,3 +332,22 @@ def test_optimization_trace_records_phase(mock_orchestrator):
     phases = [row["phase"] for row in mock_orchestrator.optimization_trace]
     assert phases == ["keep", "explore", "exploit", "explore", "reset"]
     assert all("noise_after" in row for row in mock_orchestrator.optimization_trace)
+    timing_fields = {
+        "synthesis_seconds",
+        "validation_seconds",
+        "artifact_write_seconds",
+        "iteration_seconds",
+        "refinement_overhead_seconds",
+    }
+    assert all(
+        timing_fields <= row.keys() for row in mock_orchestrator.optimization_trace
+    )
+    for row in mock_orchestrator.optimization_trace:
+        assert all(row[field] >= 0 for field in timing_fields)
+        accounted = (
+            row["synthesis_seconds"]
+            + row["validation_seconds"]
+            + row["artifact_write_seconds"]
+            + row["refinement_overhead_seconds"]
+        )
+        assert accounted == pytest.approx(row["iteration_seconds"])

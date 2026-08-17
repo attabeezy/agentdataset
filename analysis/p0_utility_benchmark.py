@@ -26,7 +26,7 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OrdinalEncoder
 
-from agentdataset.core.orchestrator import Orchestrator
+from agentdataset.core.orchestrator import DEFAULT_PIVOT, Orchestrator
 from agentdataset.core.synthesizer import Synthesizer
 from agentdataset.evaluation import collect_provenance, summarize_long_results, write_json
 from agentdataset.models.schemas import CorrelationParams, MetaParams, Parameters, VariableParams
@@ -70,6 +70,18 @@ def _independent_marginals(params: Parameters, n_rows: int, seed: int) -> pd.Dat
     independent = params.model_copy(deep=True)
     independent.correlations = {}
     return Synthesizer(n_rows=n_rows, seed=seed).synthesize(independent)
+
+
+def _one_shot_copula(params: Parameters, n_rows: int, seed: int) -> pd.DataFrame:
+    """Synthesize once from the full summaries at the loop's initial noise.
+
+    This is the exact first synthesis call made by the shipped optimization
+    loop.  Holding the parameters, RNG seed, row count, repair policy, and
+    noise fixed makes the comparison with AgentDataset isolate the loop.
+    """
+    return Synthesizer(n_rows=n_rows, seed=seed).synthesize(
+        params, noise_level=DEFAULT_PIVOT.initial_noise
+    )
 
 
 def _sdv_baseline(train: pd.DataFrame, features: list[str], target: str, n_rows: int, seed: int):
@@ -179,6 +191,59 @@ def _add_metrics(rows: list[dict], base: dict, metrics: dict) -> None:
         rows.append({**base, "metric": metric, "value": float(value), "status": "ok", "failure_stage": None})
 
 
+BASELINE_CONTRASTS = (
+    ("copula_no_loop", "independent"),
+    ("agentdataset", "copula_no_loop"),
+    ("sdv_gaussian_copula", "agentdataset"),
+)
+
+
+def build_baseline_contrasts(raw: pd.DataFrame) -> pd.DataFrame:
+    """Return paired seed-level synthesizer deltas from successful TSTR rows."""
+    tstr = raw.loc[raw["condition"].eq("tstr") & raw["status"].eq("ok")].copy()
+    keys = ["dataset", "task_type", "model_family", "seed", "metric"]
+    rows = []
+    for minuend, subtrahend in BASELINE_CONTRASTS:
+        left = tstr.loc[tstr["synthesizer"].eq(minuend), [*keys, "value"]]
+        right = tstr.loc[tstr["synthesizer"].eq(subtrahend), [*keys, "value"]]
+        paired = left.merge(
+            right,
+            on=keys,
+            how="inner",
+            validate="one_to_one",
+            suffixes=("_minuend", "_subtrahend"),
+        )
+        comparison = f"{minuend}_minus_{subtrahend}"
+        for row in paired.itertuples(index=False):
+            rows.append({
+                "experiment_id": "p0_utility_v2",
+                "run_id": (
+                    f"{row.dataset}:{comparison}:{row.model_family}:"
+                    f"{row.seed}:{row.metric}"
+                ),
+                "experiment_type": "downstream_utility_baseline_contrast",
+                "source_id": None,
+                "dataset": row.dataset,
+                "task_type": row.task_type,
+                "condition": "paired_synth_delta",
+                "model_family": row.model_family,
+                "synthesizer": comparison,
+                "minuend_synthesizer": minuend,
+                "subtrahend_synthesizer": subtrahend,
+                "seed": row.seed,
+                "split_seed": row.seed,
+                "synthesis_seed": row.seed,
+                "metric": row.metric,
+                "value": float(row.value_minuend - row.value_subtrahend),
+                "status": "ok",
+                "failure_stage": None,
+                "extraction_method": "gold_train_summary",
+                "provider": "local",
+                "model": None,
+            })
+    return pd.DataFrame(rows)
+
+
 def run_utility_benchmark(n_seeds: int = 30, datasets: list[dict] | None = None) -> pd.DataFrame:
     if datasets is None:
         datasets = [*_classification_datasets(), _load_concrete()]
@@ -198,6 +263,7 @@ def run_utility_benchmark(n_seeds: int = 30, datasets: list[dict] | None = None)
             _, agent_frame = orchestrator.run_optimization_loop(params, iterations=3)
             synth_frames = {
                 "agentdataset": agent_frame,
+                "copula_no_loop": _one_shot_copula(params, len(train), seed),
                 "independent": _independent_marginals(params, len(train), seed),
                 "sdv_gaussian_copula": _sdv_baseline(train, feature_columns, target, len(train), seed),
             }
@@ -224,7 +290,7 @@ def run_utility_benchmark(n_seeds: int = 30, datasets: list[dict] | None = None)
                 trtr = scorer(factory(), x_real, y_real, x_test, y_test)
                 trtr_by_model[model_name] = trtr
                 base = {
-                    "experiment_id": "p0_utility_v1", "run_id": f"{dataset['name']}:trtr:{model_name}:{seed}",
+                    "experiment_id": "p0_utility_v2", "run_id": f"{dataset['name']}:trtr:{model_name}:{seed}",
                     "experiment_type": "downstream_utility", "source_id": None,
                     "dataset": dataset["name"], "task_type": dataset["task_type"],
                     "condition": "trtr", "model_family": model_name, "synthesizer": "real",
@@ -245,7 +311,7 @@ def run_utility_benchmark(n_seeds: int = 30, datasets: list[dict] | None = None)
                     for model_name, factory in model_factories.items():
                         metrics = scorer(factory(), x_synth, y_synth, x_test, y_test)
                         base = {
-                            "experiment_id": "p0_utility_v1", "run_id": f"{dataset['name']}:{synthesizer}:{model_name}:{seed}",
+                            "experiment_id": "p0_utility_v2", "run_id": f"{dataset['name']}:{synthesizer}:{model_name}:{seed}",
                             "experiment_type": "downstream_utility", "source_id": None,
                             "dataset": dataset["name"], "task_type": dataset["task_type"],
                             "condition": "tstr", "model_family": model_name, "synthesizer": synthesizer,
@@ -257,7 +323,7 @@ def run_utility_benchmark(n_seeds: int = 30, datasets: list[dict] | None = None)
                         _add_metrics(rows, {**base, "run_id": base["run_id"] + ":delta", "condition": "tstr_minus_trtr"}, delta)
                 except Exception as exc:
                     rows.append({
-                        "experiment_id": "p0_utility_v1", "run_id": f"{dataset['name']}:{synthesizer}:failed:{seed}",
+                        "experiment_id": "p0_utility_v2", "run_id": f"{dataset['name']}:{synthesizer}:failed:{seed}",
                         "experiment_type": "downstream_utility", "source_id": None,
                         "dataset": dataset["name"], "task_type": dataset["task_type"],
                         "condition": "tstr", "model_family": None, "synthesizer": synthesizer,
@@ -283,6 +349,18 @@ def main(n_seeds: int) -> None:
         raw, ["dataset", "task_type", "condition", "model_family", "synthesizer", "extraction_method"]
     )
     summary.to_csv(RESULTS_DIR / "p0_utility_summary.csv", index=False)
+    contrasts = build_baseline_contrasts(raw)
+    contrasts.to_csv(RESULTS_DIR / "p0_utility_baseline_contrasts_raw.csv", index=False)
+    contrast_summary = summarize_long_results(
+        contrasts,
+        [
+            "dataset", "task_type", "condition", "model_family", "synthesizer",
+            "minuend_synthesizer", "subtrahend_synthesizer", "extraction_method",
+        ],
+    )
+    contrast_summary.to_csv(
+        RESULTS_DIR / "p0_utility_baseline_contrasts.csv", index=False
+    )
     write_json(RESULTS_DIR / "p0_utility_run_manifest.json", {
         **provenance,
         "primary_metrics": {
@@ -291,6 +369,23 @@ def main(n_seeds: int) -> None:
         },
         "bootstrap_resamples": 10_000,
         "summary_parameter_scope": "training split only",
+        "baseline_arms": {
+            "independent": "gold marginals and category proportions only",
+            "copula_no_loop": (
+                "gold marginals, category proportions, and pairwise correlations; "
+                "one synthesis call at noise 0.1"
+            ),
+            "agentdataset": (
+                "same gold summaries as copula_no_loop; three-iteration shipped loop"
+            ),
+            "sdv_gaussian_copula": "individual real training records",
+            "real": "individual real training records",
+        },
+        "one_shot_noise": DEFAULT_PIVOT.initial_noise,
+        "agentdataset_iterations": 3,
+        "baseline_contrasts": [
+            f"{left}_minus_{right}" for left, right in BASELINE_CONTRASTS
+        ],
     })
 
 

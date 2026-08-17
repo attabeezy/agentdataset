@@ -1,6 +1,6 @@
 {
-  "recorded_at_utc": "2026-08-02T16:48:15.322747+00:00",
-  "git_commit": "08852c2cfe6c68bb46cc45aad95e58a8f26b54c4",
+  "recorded_at_utc": "2026-08-15T22:59:59.216131+00:00",
+  "git_commit": "5124636f85364b383d2e93a767ea34a0be29020f",
   "git_dirty": true,
   "python_version": "3.13.5",
   "platform": "Windows-11-10.0.26200-SP0",
@@ -50,5 +50,19 @@
     ]
   },
   "bootstrap_resamples": 10000,
-  "summary_parameter_scope": "training split only"
+  "summary_parameter_scope": "training split only",
+  "baseline_arms": {
+    "independent": "gold marginals and category proportions only",
+    "copula_no_loop": "gold marginals, category proportions, and pairwise correlations; one synthesis call at noise 0.1",
+    "agentdataset": "same gold summaries as copula_no_loop; three-iteration shipped loop",
+    "sdv_gaussian_copula": "individual real training records",
+    "real": "individual real training records"
+  },
+  "one_shot_noise": 0.1,
+  "agentdataset_iterations": 3,
+  "baseline_contrasts": [
+    "copula_no_loop_minus_independent",
+    "agentdataset_minus_copula_no_loop",
+    "sdv_gaussian_copula_minus_agentdataset"
+  ]
 }
