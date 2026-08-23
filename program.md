@@ -62,6 +62,31 @@ Each iteration:
 
 ---
 
+## What Each Phase Costs
+
+`analysis/end_to_end_cost.py` measures the full workflow over three real papers
+with GPT-4o via OpenRouter, three local timing repetitions, and three refinement
+iterations. Mean cost for one finished dataset is:
+
+| Phase | Stage | API ($) | API (s) | Network (s) | Local (s) |
+|---|---|---:|---:|---:|---:|
+| 0 | Query expansion | .00094 | 2.22 | — | — |
+| 0 | Web search | — | — | 27.97 | — |
+| 0 | Source suggestion | .00647 | 1.90 | — | — |
+| 1 | Fetch | — | — | 5.09 | — |
+| 1 | Parse | — | — | — | .63 |
+| 1 | Extraction | .00945 | 3.69 | — | — |
+| 2–3 | Synthesis, validation, refinement, artifact writing | — | — | — | .34 |
+| | **One dataset** | **.01686** | **7.80** | **33.06** | **.98** |
+
+Search and fetch dominate the 41.8-second wall time. The three LLM stages—not
+just extraction—must be included when budgeting a completed dataset. Human
+source-review time is outside the measurement. Raw stage rows and retained-run
+provenance live in `results/end_to_end_cost_latency.csv` and
+`results/end_to_end_cost_latency_run_manifest.json`.
+
+---
+
 ## Output Artifacts
 
 Written to `.agentdataset_cache/sessions/<run_id>/` on each improvement:

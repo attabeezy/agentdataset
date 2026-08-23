@@ -352,6 +352,9 @@ appendix now state the score's scope.
 
 ### End-to-end cost and latency (§9.8)
 
+The paper's quantitative claims and their re-derivation paths are indexed in
+`analysis/EVIDENCE_TO_CLAIM_MAP.md`.
+
 - `end_to_end_cost_latency_raw.csv` records every live stage, individual search
   request, LLM attempt, retry index, token count, cost-known flag, and local
   timing repetition.

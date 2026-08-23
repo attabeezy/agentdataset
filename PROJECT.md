@@ -244,6 +244,7 @@ The work below is ordered by submission impact. A checkbox should be marked comp
   - For each abstract, introduction, and conclusion claim, identify the experiment or analysis that supports it.
   - Downgrade claims that are supported only by templated inputs, data-access baselines, or descriptive evidence.
   - **Done when:** there are no claims of demonstrated autonomous web-to-dataset performance unless the real-paper study succeeds.
+  - **Deliverable:** `analysis/EVIDENCE_TO_CLAIM_MAP.md`, updated for the canonical NeurIPS manuscript and the final §9.8 artifacts.
 
 ### 9.2 P0 — Real-paper end-to-end study
 

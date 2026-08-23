@@ -36,6 +36,29 @@ Query → Discovery → Extraction → Synthesis ⇄ Validation → data.csv + D
 
 ---
 
+## What It Costs
+
+Producing **one finished dataset** from a real paper averages **$0.0169 in API
+spend and 41.8 seconds**, measured end to end over three real papers with GPT-4o
+via OpenRouter:
+
+| Stage | API ($) | API (s) | Network (s) | Local (s) |
+|---|---:|---:|---:|---:|
+| Query expansion | .00094 | 2.22 | — | — |
+| Web search | — | — | 27.97 | — |
+| Source suggestion | .00647 | 1.90 | — | — |
+| Fetch and parse | — | — | 5.09 | .63 |
+| Extraction | .00945 | 3.69 | — | — |
+| Synthesis, validation, refinement, and writing | — | — | — | .34 |
+| **One dataset** | **.01686** | **7.80** | **33.06** | **.98** |
+
+Search and fetch dominate wall time. The retained experiment cost $0.05058
+over nine successful LLM calls; human source-review time is excluded. See
+`results/end_to_end_cost_latency.csv` and the evidence-to-claim map in
+`analysis/EVIDENCE_TO_CLAIM_MAP.md` for provenance and re-derivation.
+
+---
+
 ## Supported API Providers
 
 Select in the sidebar on app load. The correct env var is pre-filled automatically.
