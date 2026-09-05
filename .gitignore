@@ -49,11 +49,7 @@ htmlcov/
 
 # AgentDataset generated/runtime files
 .agentdataset_cache/
-docs/*
-!docs/neurips/
-
-# The migrated NeurIPS paper is selectively tracked by docs/neurips/.gitignore.
-AuthorKit27/
+docs/
 output/
 
 # OS

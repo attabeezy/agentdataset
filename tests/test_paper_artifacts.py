@@ -5,12 +5,18 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 from analysis import paper_artifacts
 
 
 ROOT = Path(__file__).resolve().parents[1]
 PAPER = ROOT / "docs" / "neurips" / "neurips_2026.tex"
 FIGURE = ROOT / "docs" / "neurips" / "Figures" / "architecture.tex"
+
+pytestmark = pytest.mark.skipif(
+    not PAPER.exists(), reason="private paper artifacts are not present"
+)
 
 
 def test_generated_tables_match_committed_results():
@@ -77,11 +83,9 @@ def test_live_web_test_remains_separate_from_default_suite():
     assert 'not live_e2e' in config
 
 
-def test_paper_uses_neurips_template_and_completed_checklist():
+def test_paper_uses_workshop_submission_format():
     text = PAPER.read_text(encoding="utf-8")
-    checklist = (PAPER.parent / "checklist.tex").read_text(encoding="utf-8")
     assert r"\usepackage{neurips_2026}" in text
-    assert r"\input{checklist.tex}" in text
+    assert "Submitted to the AI for Science workshop (NeurIPS 2026)." in text
+    assert r"\input{checklist.tex}" not in text
     assert "aaai2027" not in text
-    assert r"\answerTODO" not in checklist
-    assert r"\justificationTODO" not in checklist
