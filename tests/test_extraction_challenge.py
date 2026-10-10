@@ -555,7 +555,8 @@ def test_fivelab_providers_shape():
     assert all(p["key_env"] == "OPENROUTER_API_KEY" for p in benchmark._FIVELAB_PROVIDERS)
     # Legacy list untouched: frozen cost/latency artifact keeps its provider set.
     assert [p["name"] for p in benchmark._COST_LATENCY_PROVIDERS] == ["OpenAI", "Anthropic", "Google"]
-    assert len(benchmark._ALL_PROVIDERS) == 8
+    assert [p["name"] for p in benchmark._BUDGET_PROVIDERS] == ["Luna", "GLMFlash"]
+    assert len(benchmark._ALL_PROVIDERS) == 10
 
 
 def test_ablation_tagged_filename():

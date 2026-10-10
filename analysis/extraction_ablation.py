@@ -192,7 +192,7 @@ if __name__ == "__main__":
                         help="Repetitions per (case, LLM arm, model). Default 5.")
     parser.add_argument("--models", nargs="*", default=None,
                          help="Provider names to include (openai, anthropic, google, "
-                              "deepseek, glm, gpt, claude, gemini). "
+                              "deepseek, glm, gpt, claude, gemini, luna, glmflash). "
                               "Default: all, all routed through OpenRouter.")
     parser.add_argument("--tag", default="",
                         help="Suffix for output filenames (e.g. fivelab_gpt). "

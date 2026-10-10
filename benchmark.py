@@ -1199,8 +1199,16 @@ _FIVELAB_PROVIDERS = [
     {"name": "Gemini", "model": "openrouter/google/gemini-3.8-flash", "key_env": "OPENROUTER_API_KEY"},
 ]
 
+# Budget tier (Oct 2026 assessment): Flash-class models to test whether cheap,
+# non-reasoning instruct models ground as well as the mid tier. IDs verified
+# live via GET /api/v1/models on 2026-10-10.
+_BUDGET_PROVIDERS = [
+    {"name": "Luna", "model": "openrouter/openai/gpt-6-luna", "key_env": "OPENROUTER_API_KEY"},
+    {"name": "GLMFlash", "model": "openrouter/z-ai/glm-5.3-flash", "key_env": "OPENROUTER_API_KEY"},
+]
+
 # Every provider any CLI can address by short --models name.
-_ALL_PROVIDERS = _COST_LATENCY_PROVIDERS + _FIVELAB_PROVIDERS
+_ALL_PROVIDERS = _COST_LATENCY_PROVIDERS + _FIVELAB_PROVIDERS + _BUDGET_PROVIDERS
 
 # The natural-language prompt now lives with the extractor, because it *is* the
 # production prompt (switched from CAVEMAN_PROMPT on the strength of the §9.6
