@@ -99,16 +99,21 @@ def to_long(raw: pd.DataFrame) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True)
 
 
+def tagged_filename(stem: str, tag: str) -> str:
+    """Append a run tag before the extension: ("raw", "fivelab_gpt") -> "raw_fivelab_gpt"."""
+    return f"{stem}_{tag}" if tag else stem
+
+
 def main(reps: int, model_names: list[str] | None, categories: list[str] | None,
-         dry_run: bool) -> None:
+         dry_run: bool, tag: str = "") -> None:
     load_env()
 
-    providers = benchmark._COST_LATENCY_PROVIDERS
+    providers = benchmark._ALL_PROVIDERS
     if model_names:
         wanted = {name.lower() for name in model_names}
         providers = [p for p in providers if p["name"].lower() in wanted]
         if not providers:
-            available = ", ".join(p["name"] for p in benchmark._COST_LATENCY_PROVIDERS)
+            available = ", ".join(p["name"] for p in benchmark._ALL_PROVIDERS)
             raise SystemExit(f"No providers matched {sorted(wanted)}. Available: {available}")
 
     cases = benchmark.load_challenge_set(CHALLENGE_SET, categories=categories)
@@ -134,19 +139,19 @@ def main(reps: int, model_names: list[str] | None, categories: list[str] | None,
         raise SystemExit("No results collected.")
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    raw_path = RESULTS_DIR / "extraction_challenge_raw.csv"
+    raw_path = RESULTS_DIR / f"{tagged_filename('extraction_challenge_raw', tag)}.csv"
     raw.to_csv(raw_path, index=False)
 
     long = to_long(raw)
     summary = summarize_long_results(long, ["condition", "model_family"])
-    summary_path = RESULTS_DIR / "extraction_challenge_summary.csv"
+    summary_path = RESULTS_DIR / f"{tagged_filename('extraction_challenge_summary', tag)}.csv"
     summary.to_csv(summary_path, index=False)
 
     by_category = summarize_long_results(long, ["condition", "dataset"])
     by_category = by_category[by_category["metric"].isin(
         ["f1", "precision", "recall", "hallucination_rate", "context_error_rate"]
     )]
-    category_path = RESULTS_DIR / "extraction_challenge_by_category.csv"
+    category_path = RESULTS_DIR / f"{tagged_filename('extraction_challenge_by_category', tag)}.csv"
     by_category.to_csv(category_path, index=False)
 
     manifest = {
@@ -170,7 +175,7 @@ def main(reps: int, model_names: list[str] | None, categories: list[str] | None,
         "total_cost_usd": float(pd.to_numeric(raw["cost_usd"], errors="coerce").sum()),
         "llm_calls": extractor.call_history,
     }
-    manifest_path = RESULTS_DIR / "extraction_challenge_run_manifest.json"
+    manifest_path = RESULTS_DIR / f"{tagged_filename('extraction_challenge_run_manifest', tag)}.json"
     write_json(manifest_path, manifest)
 
     for path in (raw_path, summary_path, category_path, manifest_path):
@@ -186,11 +191,15 @@ if __name__ == "__main__":
     parser.add_argument("--reps", type=int, default=5,
                         help="Repetitions per (case, LLM arm, model). Default 5.")
     parser.add_argument("--models", nargs="*", default=None,
-                        help="Provider names to include (openai, anthropic, google). "
-                             "Default: all, all routed through OpenRouter.")
+                         help="Provider names to include (openai, anthropic, google, "
+                              "deepseek, glm, gpt, claude, gemini). "
+                              "Default: all, all routed through OpenRouter.")
+    parser.add_argument("--tag", default="",
+                        help="Suffix for output filenames (e.g. fivelab_gpt). "
+                             "Empty keeps the committed filenames.")
     parser.add_argument("--cases", nargs="*", default=None, dest="categories",
                         help="Restrict to these taxonomy categories (cheap smoke runs).")
     parser.add_argument("--dry-run", action="store_true",
                         help="Regex arm only; makes no API calls and needs no key.")
     args = parser.parse_args()
-    main(args.reps, args.models, args.categories, args.dry_run)
+    main(args.reps, args.models, args.categories, args.dry_run, args.tag)

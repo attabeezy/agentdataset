@@ -541,3 +541,30 @@ def test_legacy_ablation_signature_still_works():
     assert isinstance(df, pd.DataFrame)
     assert set(df["method"]) == {"regex"}
     assert "success_rate" in df.columns
+
+# --------------------------------------------------------------------------
+# Five-lab harness (docs/experiment.md): additive only, no frozen behavior moves
+# --------------------------------------------------------------------------
+
+def test_fivelab_providers_shape():
+    assert len(benchmark._FIVELAB_PROVIDERS) == 5
+    names = [p["name"] for p in benchmark._FIVELAB_PROVIDERS]
+    assert names == ["DeepSeek", "GLM", "GPT", "Claude", "Gemini"]
+    models = [p["model"] for p in benchmark._FIVELAB_PROVIDERS]
+    assert len(set(models)) == 5
+    assert all(p["key_env"] == "OPENROUTER_API_KEY" for p in benchmark._FIVELAB_PROVIDERS)
+    # Legacy list untouched: frozen cost/latency artifact keeps its provider set.
+    assert [p["name"] for p in benchmark._COST_LATENCY_PROVIDERS] == ["OpenAI", "Anthropic", "Google"]
+    assert len(benchmark._ALL_PROVIDERS) == 8
+
+
+def test_ablation_tagged_filename():
+    from analysis.extraction_ablation import tagged_filename
+    assert tagged_filename("extraction_challenge_raw", "") == "extraction_challenge_raw"
+    assert tagged_filename("extraction_challenge_raw", "fivelab_gpt") == "extraction_challenge_raw_fivelab_gpt"
+
+
+def test_real_paper_tagged_filename():
+    from analysis.real_paper_eval import _tagged
+    assert _tagged("real_paper_extraction.csv", "") == "real_paper_extraction.csv"
+    assert _tagged("real_paper_extraction.csv", "fivelab_gpt") == "real_paper_extraction_fivelab_gpt.csv"

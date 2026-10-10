@@ -376,7 +376,16 @@ def _summarize_extraction(extraction: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def run(mode: str, refresh_sources: set[str] | None = None) -> None:
+def _tagged(filename: str, tag: str) -> str:
+    """Insert a run tag before the extension: ("a.csv", "t") -> "a_t.csv"."""
+    if not tag:
+        return filename
+    stem, ext = filename.rsplit(".", 1)
+    return f"{stem}_{tag}.{ext}"
+
+
+def run(mode: str, refresh_sources: set[str] | None = None,
+        model: str = MODEL, tag: str = "") -> None:
     load_env_safely()
     manifest = pd.read_csv(MANIFEST_PATH)
     gold = pd.read_csv(GOLD_PATH)
@@ -388,18 +397,23 @@ def run(mode: str, refresh_sources: set[str] | None = None) -> None:
     # sitting in the working tree by then.
     provenance = collect_provenance(
         f"python analysis/real_paper_eval.py --mode {mode}" +
-        "".join(f" --refresh-source {source}" for source in sorted(refresh_sources or set())),
+        "".join(f" --refresh-source {source}" for source in sorted(refresh_sources or set())) +
+        (f" --model {model}" if model != MODEL else "") +
+        (f" --tag {tag}" if tag else ""),
         SEEDS,
     )
 
-    extractor = Extractor(model=MODEL, env_var=ENV_VAR)
-    if mode == "live":
+    extractor = Extractor(model=model, env_var=ENV_VAR)
+    if mode == "live" and not tag:
         discovery = run_discovery_study(manifest, extractor)
         discovery.to_csv(ANALYSIS_DIR / "real_paper_discovery.csv", index=False)
         _summarize_discovery(discovery).to_csv(ANALYSIS_DIR / "real_paper_discovery_summary.csv", index=False)
     elif (ANALYSIS_DIR / "real_paper_discovery.csv").exists():
+        # Shared discovery input: tagged runs read it but never rewrite it,
+        # so committed discovery files cannot be clobbered by a model sweep.
         discovery = pd.read_csv(ANALYSIS_DIR / "real_paper_discovery.csv")
-        _summarize_discovery(discovery).to_csv(ANALYSIS_DIR / "real_paper_discovery_summary.csv", index=False)
+        if not tag:
+            _summarize_discovery(discovery).to_csv(ANALYSIS_DIR / "real_paper_discovery_summary.csv", index=False)
 
     extraction_rows, error_frames, raw_frames, trace_frames = [], [], [], []
     for _, source in manifest.iterrows():
@@ -432,19 +446,19 @@ def run(mode: str, refresh_sources: set[str] | None = None) -> None:
         trace_frames.append(traces)
 
     extraction = pd.DataFrame(extraction_rows)
-    extraction.to_csv(ANALYSIS_DIR / "real_paper_extraction.csv", index=False)
-    _summarize_extraction(extraction).to_csv(ANALYSIS_DIR / "real_paper_extraction_summary.csv", index=False)
-    pd.concat(error_frames, ignore_index=True).to_csv(ANALYSIS_DIR / "real_paper_errors.csv", index=False) if error_frames else None
+    extraction.to_csv(ANALYSIS_DIR / _tagged("real_paper_extraction.csv", tag), index=False)
+    _summarize_extraction(extraction).to_csv(ANALYSIS_DIR / _tagged("real_paper_extraction_summary.csv", tag), index=False)
+    pd.concat(error_frames, ignore_index=True).to_csv(ANALYSIS_DIR / _tagged("real_paper_errors.csv", tag), index=False) if error_frames else None
     if raw_frames:
         raw = pd.concat(raw_frames, ignore_index=True)
-        raw.to_csv(RESULTS_DIR / "real_paper_pipeline_raw.csv", index=False)
+        raw.to_csv(RESULTS_DIR / _tagged("real_paper_pipeline_raw.csv", tag), index=False)
         summary = summarize_long_results(raw, ["source_id", "condition", "synthesizer", "extraction_method"])
-        summary.to_csv(RESULTS_DIR / "real_paper_pipeline_summary.csv", index=False)
+        summary.to_csv(RESULTS_DIR / _tagged("real_paper_pipeline_summary.csv", tag), index=False)
     if trace_frames:
-        pd.concat(trace_frames, ignore_index=True).to_csv(RESULTS_DIR / "real_paper_optimization_traces.csv", index=False)
-    write_json(RESULTS_DIR / "real_paper_run_manifest.json", {
+        pd.concat(trace_frames, ignore_index=True).to_csv(RESULTS_DIR / _tagged("real_paper_optimization_traces.csv", tag), index=False)
+    write_json(RESULTS_DIR / _tagged("real_paper_run_manifest.json", tag), {
         **provenance,
-        "provider": "openrouter", "model": MODEL,
+        "provider": "openrouter", "model": model, "tag": tag,
         "extraction_route": "llm and forced regex on identical parsed text",
         "llm_calls": extractor.call_history,
     })
@@ -454,5 +468,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=("live", "cached"), default="cached")
     parser.add_argument("--refresh-source", action="append", default=[])
+    parser.add_argument("--model", default=MODEL,
+                        help="OpenRouter model for LLM extraction. Default is the "
+                             "committed study model; tagged runs write suffixed outputs.")
+    parser.add_argument("--tag", default="",
+                        help="Suffix for output filenames (e.g. fivelab_gpt). Empty "
+                             "keeps the committed filenames; tagged runs never "
+                             "rewrite shared discovery files.")
     args = parser.parse_args()
-    run(args.mode, set(args.refresh_source))
+    run(args.mode, set(args.refresh_source), model=args.model, tag=args.tag)

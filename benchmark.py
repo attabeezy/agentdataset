@@ -1183,6 +1183,22 @@ _COST_LATENCY_PROVIDERS = [
     {"name": "Google", "model": "openrouter/google/gemini-2.5-flash", "key_env": "OPENROUTER_API_KEY"},
 ]
 
+# Five-lab panel (Oct 2026 rerun, see docs/experiment.md): one fairly-priced,
+# near-flagship model per lab, all routed through OpenRouter. Kept separate
+# from _COST_LATENCY_PROVIDERS so the frozen cost/latency artifact and every
+# committed comparison keep their exact provider set. IDs verified live via
+# GET /api/v1/models on 2026-10-10.
+_FIVELAB_PROVIDERS = [
+    {"name": "DeepSeek", "model": "deepseek/deepseek-v4-pro", "key_env": "OPENROUTER_API_KEY"},
+    {"name": "GLM", "model": "z-ai/glm-5.3", "key_env": "OPENROUTER_API_KEY"},
+    {"name": "GPT", "model": "openai/gpt-6.1-sol", "key_env": "OPENROUTER_API_KEY"},
+    {"name": "Claude", "model": "anthropic/claude-sonnet-5.5", "key_env": "OPENROUTER_API_KEY"},
+    {"name": "Gemini", "model": "google/gemini-3.8-flash", "key_env": "OPENROUTER_API_KEY"},
+]
+
+# Every provider any CLI can address by short --models name.
+_ALL_PROVIDERS = _COST_LATENCY_PROVIDERS + _FIVELAB_PROVIDERS
+
 # The natural-language prompt now lives with the extractor, because it *is* the
 # production prompt (switched from CAVEMAN_PROMPT on the strength of the §9.6
 # ablation). This alias keeps the benchmark's vocabulary — "verbose" is the
