@@ -1,0 +1,35 @@
+{
+  "recorded_at_utc": "2026-10-10T20:00:50.100956+00:00",
+  "git_commit": "d752986b890a73a4c318effbafe3cdfc9d9ab556",
+  "git_dirty": true,
+  "python_version": "3.13.5",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "dependency_lock": "uv.lock",
+  "dependency_lock_sha256": "5ac40da015af432f039e096ad94c70714a353f8f24133f5eec51bcef98a1ea3c",
+  "command": "python analysis/end_to_end_cost.py --mode live",
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "provider": "openrouter",
+  "model": "openrouter/openai/gpt-4o",
+  "mode": "live",
+  "spend_cap_usd": 0.25,
+  "max_llm_attempts": 12,
+  "max_retries_per_call": 2,
+  "known_cost_usd": 0.1058675,
+  "llm_attempts": 12,
+  "sources": [
+    "cdc_nhanes_rural_urban",
+    "calerie_rct",
+    "student_mental_health"
+  ],
+  "optimization_iterations": 3,
+  "timing_repetitions": [
+    0,
+    1,
+    2
+  ],
+  "human_source_review_time_included": false
+}

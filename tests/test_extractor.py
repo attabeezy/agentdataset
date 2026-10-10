@@ -410,3 +410,16 @@ def test_llm_resolution_makes_correlation_apply_in_synthesis():
     synth.synthesize(params)
     assert synth.last_diagnostics.n_pairs_applied == 1
     assert synth.last_diagnostics.n_pairs_skipped_unknown_var == 0
+
+def test_record_completion_falls_back_to_usage_cost():
+    """Unmapped OpenRouter IDs raise in completion_cost; upstream usage.cost kept."""
+    from unittest.mock import MagicMock, patch
+    ext = Extractor(model="openrouter/google/gemini-3.8-flash", api_key="sk-test")
+    response = MagicMock()
+    response.usage.prompt_tokens = 400
+    response.usage.completion_tokens = 150
+    response.usage.total_tokens = 550
+    response.usage.cost = 0.0009
+    with patch("agentdataset.core.extractor.litellm.completion_cost", side_effect=Exception("not mapped")):
+        ext._record_completion(response, started_at=0.0, purpose="test")
+    assert ext.call_history[-1]["cost_usd"] == 0.0009

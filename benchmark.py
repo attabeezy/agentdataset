@@ -1189,11 +1189,14 @@ _COST_LATENCY_PROVIDERS = [
 # committed comparison keep their exact provider set. IDs verified live via
 # GET /api/v1/models on 2026-10-10.
 _FIVELAB_PROVIDERS = [
-    {"name": "DeepSeek", "model": "deepseek/deepseek-v4-pro", "key_env": "OPENROUTER_API_KEY"},
-    {"name": "GLM", "model": "z-ai/glm-5.3", "key_env": "OPENROUTER_API_KEY"},
-    {"name": "GPT", "model": "openai/gpt-6.1-sol", "key_env": "OPENROUTER_API_KEY"},
-    {"name": "Claude", "model": "anthropic/claude-sonnet-5.5", "key_env": "OPENROUTER_API_KEY"},
-    {"name": "Gemini", "model": "google/gemini-3.8-flash", "key_env": "OPENROUTER_API_KEY"},
+    # V4 Pro was measured at ~57 s and ~2.4 k completion tokens per 8 k-char
+    # chunk (single datapoint, 2026-10-10) — infeasible for 300-call sweeps —
+    # so the DeepSeek seat goes to the fast V4.1 Flash.
+    {"name": "DeepSeek", "model": "openrouter/deepseek/deepseek-v4.1-flash", "key_env": "OPENROUTER_API_KEY"},
+    {"name": "GLM", "model": "openrouter/z-ai/glm-5.3", "key_env": "OPENROUTER_API_KEY"},
+    {"name": "GPT", "model": "openrouter/openai/gpt-6.1-sol", "key_env": "OPENROUTER_API_KEY"},
+    {"name": "Claude", "model": "openrouter/anthropic/claude-sonnet-5.5", "key_env": "OPENROUTER_API_KEY"},
+    {"name": "Gemini", "model": "openrouter/google/gemini-3.8-flash", "key_env": "OPENROUTER_API_KEY"},
 ]
 
 # Every provider any CLI can address by short --models name.

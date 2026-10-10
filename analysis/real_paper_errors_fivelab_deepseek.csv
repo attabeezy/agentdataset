@@ -1,0 +1,258 @@
+source_id,condition,gold_id,error_category,detail
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,rural_resident_percent:mean=27.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,rural_resident_percent:std=4.7
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,nonmicropolitan_rural_percent:mean=13.2
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,nonmicropolitan_rural_percent:std=4.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,micropolitan_rural_percent:mean=13.8
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,micropolitan_rural_percent:std=3.6
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,urban_resident_percent:mean=73.0
+cdc_nhanes_rural_urban,llm,,unsupported_or_out_of_scope,urban_resident_percent:std=4.7
+cdc_nhanes_rural_urban,llm,cdc_001,no_extraction,Physical activity in >=10 min bouts >=2020 CPM
+cdc_nhanes_rural_urban,llm,cdc_002,no_extraction,Physical activity in >=10 min bouts >=2020 CPM
+cdc_nhanes_rural_urban,llm,cdc_003,no_extraction,Physical activity in any bout length >=2020 CPM
+cdc_nhanes_rural_urban,llm,cdc_004,no_extraction,Physical activity in any bout length >=2020 CPM
+cdc_nhanes_rural_urban,llm,cdc_005,no_extraction,Age
+cdc_nhanes_rural_urban,llm,cdc_006,no_extraction,Age
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_1:mean=42.5
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_1:std=6.2
+cdc_nhanes_rural_urban,regex,cdc_001,variable,var_2
+cdc_nhanes_rural_urban,regex,cdc_002,variable,var_2
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_3:mean=438.3
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_3:std=35.3
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_4:mean=371.2
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_4:std=12.5
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_5:mean=32.9
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_5:std=4.6
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_6:mean=52.6
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_6:std=8.0
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_7:mean=201.6
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_7:std=26.3
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_8:mean=124.4
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_8:std=8.8
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_9:mean=495.9
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_9:std=49.6
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_10:mean=383.2
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_10:std=23.3
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_11:mean=80.0
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_11:std=24.9
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_12:mean=107.2
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_12:std=42.1
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_13:mean=14.0
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_13:std=6.3
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_14:mean=25.6
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_14:std=9.9
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_15:mean=15.5
+cdc_nhanes_rural_urban,regex,,unsupported_or_out_of_scope,var_15:std=8.2
+cdc_nhanes_rural_urban,regex,cdc_003,no_extraction,Physical activity in any bout length >=2020 CPM
+cdc_nhanes_rural_urban,regex,cdc_004,no_extraction,Physical activity in any bout length >=2020 CPM
+cdc_nhanes_rural_urban,regex,cdc_005,no_extraction,Age
+cdc_nhanes_rural_urban,regex,cdc_006,no_extraction,Age
+calerie_rct,llm,calerie_001,variable,Age_CR
+calerie_rct,llm,calerie_002,variable,Age_CR
+calerie_rct,llm,,unsupported_or_out_of_scope,Age_AL:mean=37.9
+calerie_rct,llm,,unsupported_or_out_of_scope,Age_AL:std=6.9
+calerie_rct,llm,,unsupported_or_out_of_scope,Height_CR:mean=168.9
+calerie_rct,llm,,unsupported_or_out_of_scope,Height_CR:std=8.6
+calerie_rct,llm,,unsupported_or_out_of_scope,Height_AL:mean=168.4
+calerie_rct,llm,,unsupported_or_out_of_scope,Height_AL:std=8.3
+calerie_rct,llm,,unsupported_or_out_of_scope,BaselineWeight_CR:mean=71.8
+calerie_rct,llm,,unsupported_or_out_of_scope,BaselineWeight_CR:std=9.2
+calerie_rct,llm,,unsupported_or_out_of_scope,BaselineWeight_AL:mean=71.3
+calerie_rct,llm,,unsupported_or_out_of_scope,BaselineWeight_AL:std=8.6
+calerie_rct,llm,,unsupported_or_out_of_scope,BaselineBMI_CR:mean=25.1
+calerie_rct,llm,,unsupported_or_out_of_scope,BaselineBMI_CR:std=1.7
+calerie_rct,llm,,unsupported_or_out_of_scope,BaselineBMI_AL:mean=25.1
+calerie_rct,llm,,unsupported_or_out_of_scope,BaselineBMI_AL:std=1.6
+calerie_rct,llm,,unsupported_or_out_of_scope,BodyFat_CR:mean=33.6
+calerie_rct,llm,,unsupported_or_out_of_scope,BodyFat_CR:std=6.6
+calerie_rct,llm,,unsupported_or_out_of_scope,BodyFat_AL:mean=32.9
+calerie_rct,llm,,unsupported_or_out_of_scope,BodyFat_AL:std=6.1
+calerie_rct,llm,,unsupported_or_out_of_scope,SBP_CR:mean=112.0
+calerie_rct,llm,,unsupported_or_out_of_scope,SBP_CR:std=9.9
+calerie_rct,llm,,unsupported_or_out_of_scope,SBP_AL:mean=111.0
+calerie_rct,llm,,unsupported_or_out_of_scope,SBP_AL:std=9.9
+calerie_rct,llm,,unsupported_or_out_of_scope,DBP_CR:mean=72.1
+calerie_rct,llm,,unsupported_or_out_of_scope,DBP_CR:std=7.5
+calerie_rct,llm,,unsupported_or_out_of_scope,DBP_AL:mean=71.2
+calerie_rct,llm,,unsupported_or_out_of_scope,DBP_AL:std=7.1
+calerie_rct,llm,,unsupported_or_out_of_scope,Glucose_CR:mean=81.9
+calerie_rct,llm,,unsupported_or_out_of_scope,Glucose_CR:std=5.6
+calerie_rct,llm,,unsupported_or_out_of_scope,Glucose_AL:mean=83.6
+calerie_rct,llm,,unsupported_or_out_of_scope,Glucose_AL:std=6.1
+calerie_rct,llm,,unsupported_or_out_of_scope,Insulin_CR:mean=5.4
+calerie_rct,llm,,unsupported_or_out_of_scope,Insulin_CR:std=0.2
+calerie_rct,llm,,unsupported_or_out_of_scope,Insulin_AL:mean=5.8
+calerie_rct,llm,,unsupported_or_out_of_scope,Insulin_AL:std=0.3
+calerie_rct,llm,,unsupported_or_out_of_scope,HDL_C_CR:mean=49.1
+calerie_rct,llm,,unsupported_or_out_of_scope,HDL_C_CR:std=13.3
+calerie_rct,llm,,unsupported_or_out_of_scope,HDL_C_AL:mean=49.2
+calerie_rct,llm,,unsupported_or_out_of_scope,HDL_C_AL:std=11.7
+calerie_rct,llm,,unsupported_or_out_of_scope,LDL_C_CR:mean=98.0
+calerie_rct,llm,,unsupported_or_out_of_scope,LDL_C_CR:std=26.5
+calerie_rct,llm,,unsupported_or_out_of_scope,LDL_C_AL:mean=105.6
+calerie_rct,llm,,unsupported_or_out_of_scope,LDL_C_AL:std=28.6
+calerie_rct,llm,,unsupported_or_out_of_scope,Tg_CR:mean=103.5
+calerie_rct,llm,,unsupported_or_out_of_scope,Tg_CR:std=50.5
+calerie_rct,llm,,unsupported_or_out_of_scope,Tg_AL:mean=106.8
+calerie_rct,llm,,unsupported_or_out_of_scope,Tg_AL:std=59.7
+calerie_rct,llm,calerie_003,variable,Race_CR
+calerie_rct,llm,calerie_004,variable,Race_CR
+calerie_rct,llm,calerie_005,variable,Race_CR
+calerie_rct,llm,,unsupported_or_out_of_scope,Race_AL:probability=0.76
+calerie_rct,llm,,unsupported_or_out_of_scope,Race_AL:probability=0.147
+calerie_rct,llm,,unsupported_or_out_of_scope,Race_AL:probability=0.093
+calerie_rct,llm,,unsupported_or_out_of_scope,EnergyIntakeReduction_CR:mean=9.1
+calerie_rct,llm,,unsupported_or_out_of_scope,EnergyIntakeReduction_CR:std=0.7
+calerie_rct,llm,,unsupported_or_out_of_scope,BodyWeightChange_1y_CR:mean=8.3
+calerie_rct,llm,,unsupported_or_out_of_scope,BodyWeightChange_1y_CR:std=0.3
+calerie_rct,llm,,unsupported_or_out_of_scope,BodyWeightChange_2y_CR:mean=7.6
+calerie_rct,llm,,unsupported_or_out_of_scope,BodyWeightChange_2y_CR:std=0.3
+calerie_rct,llm,,unsupported_or_out_of_scope,FatMassChange_1y_CR:mean=6.1
+calerie_rct,llm,,unsupported_or_out_of_scope,FatMassChange_1y_CR:std=0.2
+calerie_rct,llm,,unsupported_or_out_of_scope,FatMassChange_2y_CR:mean=5.3
+calerie_rct,llm,,unsupported_or_out_of_scope,FatMassChange_2y_CR:std=0.3
+calerie_rct,llm,calerie_006,no_extraction,Sex Female
+calerie_rct,llm,calerie_007,no_extraction,Sex Male
+calerie_rct,regex,,unsupported_or_out_of_scope,var_1:mean=3.2
+calerie_rct,regex,,unsupported_or_out_of_scope,var_1:std=2.5
+calerie_rct,regex,,unsupported_or_out_of_scope,var_2:mean=6.1
+calerie_rct,regex,,unsupported_or_out_of_scope,var_2:std=1.7
+calerie_rct,regex,,unsupported_or_out_of_scope,var_3:mean=6.4
+calerie_rct,regex,,unsupported_or_out_of_scope,var_3:std=2.1
+calerie_rct,regex,,unsupported_or_out_of_scope,var_4:mean=4.3
+calerie_rct,regex,,unsupported_or_out_of_scope,var_4:std=1.5
+calerie_rct,regex,,unsupported_or_out_of_scope,var_5:mean=8.0
+calerie_rct,regex,,unsupported_or_out_of_scope,var_5:std=4.4
+calerie_rct,regex,,unsupported_or_out_of_scope,var_6:mean=8.7
+calerie_rct,regex,,unsupported_or_out_of_scope,var_6:std=3.9
+calerie_rct,regex,,unsupported_or_out_of_scope,var_7:mean=7.9
+calerie_rct,regex,,unsupported_or_out_of_scope,var_7:std=3.1
+calerie_rct,regex,,unsupported_or_out_of_scope,var_8:mean=8.2
+calerie_rct,regex,,unsupported_or_out_of_scope,var_8:std=1.2
+calerie_rct,regex,,unsupported_or_out_of_scope,var_9:mean=1.9
+calerie_rct,regex,,unsupported_or_out_of_scope,var_9:std=1.4
+calerie_rct,regex,calerie_001,no_extraction,Age
+calerie_rct,regex,calerie_002,no_extraction,Age
+calerie_rct,regex,calerie_003,no_extraction,Race White
+calerie_rct,regex,calerie_004,no_extraction,Race African American
+calerie_rct,regex,calerie_005,no_extraction,Race Other
+calerie_rct,regex,calerie_006,no_extraction,Sex Female
+calerie_rct,regex,calerie_007,no_extraction,Sex Male
+student_mental_health,llm,student_001,numeric_value,gold=35.71;predicted=35.7
+student_mental_health,llm,student_002,numeric_value,gold=8.88;predicted=8.9
+student_mental_health,llm,student_003,numeric_value,gold=13.11;predicted=13.1
+student_mental_health,llm,student_004,numeric_value,gold=4.83;predicted=4.8
+student_mental_health,llm,,unsupported_or_out_of_scope,Internet addiction prevalence (Asian college students including Vietnamese):probability=0.243
+student_mental_health,llm,,unsupported_or_out_of_scope,Internet addiction prevalence (Asian college students including Vietnamese):probability=0.757
+student_mental_health,llm,,unsupported_or_out_of_scope,Internet addiction prevalence (Vietnamese young people):probability=0.212
+student_mental_health,llm,,unsupported_or_out_of_scope,Internet addiction prevalence (Vietnamese young people):probability=0.788
+student_mental_health,llm,,unsupported_or_out_of_scope,Academic major among male students:probability=0.622
+student_mental_health,llm,,unsupported_or_out_of_scope,Academic major among male students:probability=0.25
+student_mental_health,llm,,unsupported_or_out_of_scope,Academic major among male students:probability=0.128
+student_mental_health,llm,,unsupported_or_out_of_scope,Academic major among female students:probability=0.219
+student_mental_health,llm,,unsupported_or_out_of_scope,Academic major among female students:probability=0.512
+student_mental_health,llm,,unsupported_or_out_of_scope,Academic major among female students:probability=0.269
+student_mental_health,llm,,unsupported_or_out_of_scope,Age:mean=21.01
+student_mental_health,llm,,unsupported_or_out_of_scope,Age:std=1.72
+student_mental_health,llm,,unsupported_or_out_of_scope,Grade point average:mean=7.03
+student_mental_health,llm,,unsupported_or_out_of_scope,Grade point average:std=0.96
+student_mental_health,llm,,unsupported_or_out_of_scope,Smartphone Addiction Scale – Short Version (SAS-SV):mean=35.71
+student_mental_health,llm,,unsupported_or_out_of_scope,Smartphone Addiction Scale – Short Version (SAS-SV):std=8.88
+student_mental_health,llm,,unsupported_or_out_of_scope,Internet Addiction Test – Short Form (IAT-6):mean=13.11
+student_mental_health,llm,,unsupported_or_out_of_scope,Internet Addiction Test – Short Form (IAT-6):std=4.83
+student_mental_health,llm,,unsupported_or_out_of_scope,eHealth Literacy Scale (eHEALS):mean=28.6
+student_mental_health,llm,,unsupported_or_out_of_scope,eHealth Literacy Scale (eHEALS):std=4.73
+student_mental_health,llm,student_012,variable,Duke/UNC Functional Social Support Questionnaire (DUFSSQ-8)
+student_mental_health,llm,,unsupported_or_out_of_scope,Duke/UNC Functional Social Support Questionnaire (DUFSSQ-8):std=7.03
+student_mental_health,llm,student_005,variable,UCLA 3-Item Loneliness Scale (UCLA-3)
+student_mental_health,llm,student_006,variable,UCLA 3-Item Loneliness Scale (UCLA-3)
+student_mental_health,llm,student_007,variable,Patient Health Questionnaire (PHQ-9)
+student_mental_health,llm,student_008,variable,Patient Health Questionnaire (PHQ-9)
+student_mental_health,llm,,unsupported_or_out_of_scope,Brief Pittsburgh Sleep Quality Index (B-PSQI):mean=2.81
+student_mental_health,llm,,unsupported_or_out_of_scope,Brief Pittsburgh Sleep Quality Index (B-PSQI):std=2.83
+student_mental_health,llm,,unsupported_or_out_of_scope,smartphone addiction score:mean=35.71
+student_mental_health,llm,,unsupported_or_out_of_scope,smartphone addiction score:std=8.88
+student_mental_health,llm,,unsupported_or_out_of_scope,smartphone addiction score (Turkish medical students):mean=31.89
+student_mental_health,llm,,unsupported_or_out_of_scope,smartphone addiction score (Turkish medical students):std=9.9
+student_mental_health,llm,,unsupported_or_out_of_scope,IAT-6 score:mean=13.11
+student_mental_health,llm,,unsupported_or_out_of_scope,IAT-6 score:std=4.83
+student_mental_health,llm,student_009,variable,Smartphone Addiction Scale – Short Version (SAS-SV)__Internet Addiction Test – Short Form (IAT-6)
+student_mental_health,llm,,unsupported_or_out_of_scope,Smartphone Addiction Scale – Short Version (SAS-SV)__eHealth Literacy Scale (eHEALS):correlation=0.22
+student_mental_health,llm,,unsupported_or_out_of_scope,Smartphone Addiction Scale – Short Version (SAS-SV)__Duke/UNC Functional Social Support Questionnaire (DUFSSQ-8):correlation=-0.18
+student_mental_health,llm,,unsupported_or_out_of_scope,Smartphone Addiction Scale – Short Version (SAS-SV)__UCLA 3-Item Loneliness Scale (UCLA-3):correlation=0.28
+student_mental_health,llm,,unsupported_or_out_of_scope,Smartphone Addiction Scale – Short Version (SAS-SV)__Patient Health Questionnaire (PHQ-9):correlation=0.23
+student_mental_health,llm,,unsupported_or_out_of_scope,Smartphone Addiction Scale – Short Version (SAS-SV)__Brief Pittsburgh Sleep Quality Index (B-PSQI):correlation=0.17
+student_mental_health,llm,,unsupported_or_out_of_scope,Internet Addiction Test – Short Form (IAT-6)__Duke/UNC Functional Social Support Questionnaire (DUFSSQ-8):correlation=-0.24
+student_mental_health,llm,,unsupported_or_out_of_scope,Internet Addiction Test – Short Form (IAT-6)__UCLA 3-Item Loneliness Scale (UCLA-3):correlation=0.31
+student_mental_health,llm,student_010,variable,Internet Addiction Test – Short Form (IAT-6)__Patient Health Questionnaire (PHQ-9)
+student_mental_health,llm,,unsupported_or_out_of_scope,Internet Addiction Test – Short Form (IAT-6)__Brief Pittsburgh Sleep Quality Index (B-PSQI):correlation=0.31
+student_mental_health,llm,,unsupported_or_out_of_scope,Duke/UNC Functional Social Support Questionnaire (DUFSSQ-8)__UCLA 3-Item Loneliness Scale (UCLA-3):correlation=-0.57
+student_mental_health,llm,,unsupported_or_out_of_scope,Duke/UNC Functional Social Support Questionnaire (DUFSSQ-8)__Patient Health Questionnaire (PHQ-9):correlation=-0.37
+student_mental_health,llm,,unsupported_or_out_of_scope,Duke/UNC Functional Social Support Questionnaire (DUFSSQ-8)__Brief Pittsburgh Sleep Quality Index (B-PSQI):correlation=-0.28
+student_mental_health,llm,student_011,variable,UCLA 3-Item Loneliness Scale (UCLA-3)__Patient Health Questionnaire (PHQ-9)
+student_mental_health,llm,,unsupported_or_out_of_scope,UCLA 3-Item Loneliness Scale (UCLA-3)__Brief Pittsburgh Sleep Quality Index (B-PSQI):correlation=0.35
+student_mental_health,llm,,unsupported_or_out_of_scope,Patient Health Questionnaire (PHQ-9)__Brief Pittsburgh Sleep Quality Index (B-PSQI):correlation=0.62
+student_mental_health,llm,,unsupported_or_out_of_scope,smartphone addiction score__IAT-6 score:correlation=0.64
+student_mental_health,regex,,unsupported_or_out_of_scope,var_1:mean=35.7
+student_mental_health,regex,,unsupported_or_out_of_scope,var_1:std=8.9
+student_mental_health,regex,,unsupported_or_out_of_scope,var_2:mean=13.1
+student_mental_health,regex,,unsupported_or_out_of_scope,var_2:std=4.8
+student_mental_health,regex,,unsupported_or_out_of_scope,var_3:mean=7.14
+student_mental_health,regex,,unsupported_or_out_of_scope,var_3:std=0.93
+student_mental_health,regex,,unsupported_or_out_of_scope,var_4:mean=6.83
+student_mental_health,regex,,unsupported_or_out_of_scope,var_4:std=0.99
+student_mental_health,regex,,unsupported_or_out_of_scope,var_5:mean=20.85
+student_mental_health,regex,,unsupported_or_out_of_scope,var_5:std=1.8
+student_mental_health,regex,,unsupported_or_out_of_scope,var_6:mean=21.11
+student_mental_health,regex,,unsupported_or_out_of_scope,var_6:std=1.67
+student_mental_health,regex,,unsupported_or_out_of_scope,var_7:mean=21.01
+student_mental_health,regex,,unsupported_or_out_of_scope,var_7:std=1.72
+student_mental_health,regex,,unsupported_or_out_of_scope,var_8:mean=7.03
+student_mental_health,regex,,unsupported_or_out_of_scope,var_8:std=0.96
+student_mental_health,regex,student_001,variable,var_9
+student_mental_health,regex,student_002,variable,var_9
+student_mental_health,regex,student_003,variable,var_10
+student_mental_health,regex,student_004,variable,var_10
+student_mental_health,regex,,unsupported_or_out_of_scope,var_11:mean=28.6
+student_mental_health,regex,,unsupported_or_out_of_scope,var_11:std=4.73
+student_mental_health,regex,student_012,variable,var_12
+student_mental_health,regex,,unsupported_or_out_of_scope,var_12:std=7.03
+student_mental_health,regex,student_005,variable,var_13
+student_mental_health,regex,student_006,variable,var_13
+student_mental_health,regex,student_007,variable,var_14
+student_mental_health,regex,student_008,variable,var_14
+student_mental_health,regex,,unsupported_or_out_of_scope,var_15:mean=2.81
+student_mental_health,regex,,unsupported_or_out_of_scope,var_15:std=2.83
+student_mental_health,regex,,unsupported_or_out_of_scope,var_16:mean=34.63
+student_mental_health,regex,,unsupported_or_out_of_scope,var_16:std=9.48
+student_mental_health,regex,,unsupported_or_out_of_scope,var_17:mean=36.33
+student_mental_health,regex,,unsupported_or_out_of_scope,var_17:std=8.47
+student_mental_health,regex,,unsupported_or_out_of_scope,var_18:mean=13.1
+student_mental_health,regex,,unsupported_or_out_of_scope,var_18:std=5.17
+student_mental_health,regex,,unsupported_or_out_of_scope,var_19:mean=13.12
+student_mental_health,regex,,unsupported_or_out_of_scope,var_19:std=4.64
+student_mental_health,regex,,unsupported_or_out_of_scope,var_20:mean=28.47
+student_mental_health,regex,,unsupported_or_out_of_scope,var_20:std=5.42
+student_mental_health,regex,,unsupported_or_out_of_scope,var_21:mean=28.72
+student_mental_health,regex,,unsupported_or_out_of_scope,var_21:std=4.3
+student_mental_health,regex,,unsupported_or_out_of_scope,var_22:mean=42.27
+student_mental_health,regex,,unsupported_or_out_of_scope,var_22:std=8.56
+student_mental_health,regex,,unsupported_or_out_of_scope,var_23:mean=40.48
+student_mental_health,regex,,unsupported_or_out_of_scope,var_23:std=8.46
+student_mental_health,regex,,unsupported_or_out_of_scope,var_24:mean=4.92
+student_mental_health,regex,,unsupported_or_out_of_scope,var_24:std=1.78
+student_mental_health,regex,,unsupported_or_out_of_scope,var_25:mean=4.84
+student_mental_health,regex,,unsupported_or_out_of_scope,var_25:std=1.58
+student_mental_health,regex,,unsupported_or_out_of_scope,var_26:mean=6.56
+student_mental_health,regex,,unsupported_or_out_of_scope,var_26:std=6.33
+student_mental_health,regex,,unsupported_or_out_of_scope,var_27:mean=6.3
+student_mental_health,regex,,unsupported_or_out_of_scope,var_27:std=5.69
+student_mental_health,regex,,unsupported_or_out_of_scope,var_28:mean=2.94
+student_mental_health,regex,,unsupported_or_out_of_scope,var_28:std=2.96
+student_mental_health,regex,,unsupported_or_out_of_scope,var_29:mean=2.9
+student_mental_health,regex,,unsupported_or_out_of_scope,var_29:std=2.85
+student_mental_health,regex,,unsupported_or_out_of_scope,var_30:mean=31.89
+student_mental_health,regex,,unsupported_or_out_of_scope,var_30:std=9.9
+student_mental_health,regex,student_009,no_extraction,SAS-SV with IAT-6
+student_mental_health,regex,student_010,no_extraction,IAT-6 with PHQ-9
+student_mental_health,regex,student_011,no_extraction,UCLA-3 with PHQ-9

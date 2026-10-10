@@ -351,7 +351,13 @@ class Extractor:
         try:
             cost = float(litellm.completion_cost(completion_response=response))
         except Exception:
-            cost = float("nan")
+            # Unmapped models (new OpenRouter IDs in old litellm) raise here;
+            # OpenRouter itself reports upstream cost on usage, so prefer that
+            # over recording NaN and losing the spend signal.
+            try:
+                cost = float(usage.cost)
+            except (TypeError, ValueError, AttributeError):
+                cost = float("nan")
         self.call_history.append({
             "purpose": purpose,
             "model": model or self.model,

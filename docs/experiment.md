@@ -15,7 +15,7 @@ tuner) produce promising results on current models?
 
 | Lab | Model | Rationale |
 |---|---|---|
-| DeepSeek | `deepseek-v4-pro` (fallback `v4.1-flash`) | Best open-weight (MIT) |
+| DeepSeek | `deepseek-v4.1-flash` | Best fast open-weight (V4 Pro measured ~57 s/chunk — infeasible for sweeps) |
 | GLM (Z.ai) | `glm-5.3` | Full model, not the Flash cut-down |
 | OpenAI | `gpt-6.1-sol` | Value-frontier, near-Astra at 1/5 price |
 | Anthropic | `claude-sonnet-5.5` | One step below Opus 5.5, Sep 2026 fresh |

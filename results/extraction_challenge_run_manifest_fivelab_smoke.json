@@ -1,0 +1,59 @@
+{
+  "provenance": {
+    "recorded_at_utc": "2026-10-10T16:11:03.171109+00:00",
+    "git_commit": "d752986b890a73a4c318effbafe3cdfc9d9ab556",
+    "git_dirty": false,
+    "python_version": "3.13.5",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "dependency_lock": "uv.lock",
+    "dependency_lock_sha256": "5ac40da015af432f039e096ad94c70714a353f8f24133f5eec51bcef98a1ea3c",
+    "command": "python analysis/extraction_ablation.py --dry-run --tag fivelab_smoke",
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ]
+  },
+  "challenge_set": {
+    "path": "analysis\\extraction_challenge_set.json",
+    "sha256": "fba4afb1994d84cf6678b92966cce6b6502dde3bd3b853d29570dddce3a26ed3",
+    "n_cases": 30,
+    "n_real": 11,
+    "n_constructed": 19,
+    "categories": [
+      "confidence_intervals",
+      "conflicting_sections",
+      "irrelevant_numbers",
+      "multiple_populations",
+      "negated_finding",
+      "repeated_timepoints",
+      "scientific_notation",
+      "sd_vs_se",
+      "table_footnotes",
+      "units_mismatch"
+    ]
+  },
+  "arms": [
+    "regex"
+  ],
+  "models": [
+    "openrouter/openai/gpt-4o",
+    "openrouter/anthropic/claude-sonnet-4.5",
+    "openrouter/google/gemini-2.5-flash",
+    "deepseek/deepseek-v4-pro",
+    "z-ai/glm-5.3",
+    "openai/gpt-6.1-sol",
+    "anthropic/claude-sonnet-5.5",
+    "google/gemini-3.8-flash"
+  ],
+  "gateway": "openrouter",
+  "reps_per_llm_arm": 5,
+  "response_format": "json_object (production setting; malformed rate is schema-level)",
+  "num_retries": 0,
+  "n_extractions": 30,
+  "n_api_errors": 0,
+  "total_cost_usd": 0.0,
+  "llm_calls": []
+}

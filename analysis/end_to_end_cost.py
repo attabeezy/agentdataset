@@ -42,8 +42,13 @@ from analysis.real_paper_eval import (
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = ROOT / "results"
 CACHE_DIR = ROOT / ".agentdataset_cache" / "end_to_end_cost"
-SPEND_CAP_USD = 0.25
-MAX_LLM_ATTEMPTS = 12
+# Caps raised 2026-10-10 for chunked extraction: one paper is ~6 LLM chunk
+# calls plus query-expansion/suggestion (~8/paper, ~24 for three), so the old
+# 12-attempt budget starved the 2nd and 3rd papers (BudgetStopped, $0 rows).
+# A 2026-10-10 live run demonstrated the failure and is kept as
+# end_to_end_cost_latency_*_fivelab_partial.* evidence.
+SPEND_CAP_USD = 1.00
+MAX_LLM_ATTEMPTS = 40
 MAX_RETRIES_PER_CALL = 2
 TIMING_REPETITIONS = (0, 1, 2)
 OPTIMIZATION_ITERATIONS = 3
