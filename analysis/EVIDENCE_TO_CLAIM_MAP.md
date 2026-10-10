@@ -1,6 +1,6 @@
 # Evidence-to-Claim Map
 
-This map implements PROJECT.md §9.1 for the canonical manuscript at
+This map implements docs/PROJECT.md §9.1 for the canonical manuscript at
 `docs/neurips/neurips_2026.tex`. Locations use stable section and table names
 rather than line numbers. A claim without a reproducible artifact or an
 inspectable code path is not treated as empirical evidence.

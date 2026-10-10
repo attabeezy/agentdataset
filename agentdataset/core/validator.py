@@ -3,15 +3,24 @@ AgentDataset Validator
 Data + Parameters -> FidelityReport
 """
 
+import re
+
 import numpy as np
 import pandas as pd
 from scipy import stats
 from scipy.spatial.distance import cdist
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from agentdataset.models.schemas import Parameters, FidelityReport
 
 MIN_KS_PVALUE = 0.05
 MIN_FIDELITY_SCORE = 90.0
+
+
+def _to_float(s: str) -> float | None:
+    try:
+        return float(s)
+    except (TypeError, ValueError):
+        return None
 
 class Validator:
     def __init__(self, thresholds: Dict[str, float] = None):
@@ -107,6 +116,100 @@ class Validator:
         mean_abs_err = float(np.mean(np.abs(synth_off - target_off)))
         return float(max(0.0, min(1.0, 1.0 - mean_abs_err / 2.0)))
 
+    def compute_plausibility(self, parameters: Parameters) -> Dict[str, Any]:
+        """Score whether the declared parameters look trustworthy on their own.
+
+        The KS/bias terms compare synthetic data against the same declared
+        params used to draw them, so they are invariant to parameter error by
+        construction. This check inspects the params themselves and penalizes:
+        non-positive std, min>=max, placeholder (0.0, 1.0) defaults the parser
+        emits when the LLM omits numbers, correlations naming missing variables,
+        duplicate names after normalization, and non-PD correlation structure.
+        Returns {"score": 0-100, "issues": [...]}, score starts at 100 and
+        loses 15-25 per issue class present.
+        """
+        issues: list[str] = []
+        variables = parameters.variables or {}
+        correlations = parameters.correlations or {}
+
+        for name, vp in variables.items():
+            if vp.distribution != "categorical" and (vp.std is None or vp.std <= 0):
+                issues.append(f"{name}: non-positive std {vp.std}")
+            if vp.min is not None and vp.max is not None and vp.min >= vp.max:
+                issues.append(f"{name}: min {vp.min} >= max {vp.max}")
+            if (
+                vp.distribution != "categorical"
+                and vp.mean == 0.0 and vp.std == 1.0
+                and not vp.categories
+            ):
+                issues.append(f"{name}: placeholder mean=0/std=1 (number likely omitted)")
+            if vp.distribution == "categorical" and not vp.categories:
+                issues.append(f"{name}: categorical without categories")
+
+        seen_norm: dict[str, str] = {}
+        for name in variables:
+            norm = re.sub(r"[^a-z0-9_]+", "_", name.strip().lower()).strip("_")
+            if norm in seen_norm:
+                issues.append(f"duplicate normalized name: {name} collides with {seen_norm[norm]}")
+            else:
+                seen_norm[norm] = name
+
+        missing_corr = 0
+        for key, cp in correlations.items():
+            if cp.var1 not in variables or cp.var2 not in variables:
+                missing_corr += 1
+        if missing_corr:
+            issues.append(f"{missing_corr} correlation(s) name undeclared variables")
+
+        score = 100.0
+        # One penalty per issue class, capped so a single bad param cannot zero out.
+        if any("non-positive std" in i for i in issues):
+            score -= 25
+        if any("placeholder" in i for i in issues):
+            score -= 25
+        if any("undeclared variables" in i for i in issues):
+            score -= 20
+        if any("min " in i and ">=" in i for i in issues):
+            score -= 15
+        if any("duplicate normalized" in i for i in issues):
+            score -= 15
+        if any("without categories" in i for i in issues):
+            score -= 15
+        return {"score": float(max(0.0, score)), "issues": issues}
+
+    def compute_grounding(
+        self, parameters: Parameters, source_text: str | None
+    ) -> Dict[str, Any]:
+        """Score whether declared numbers actually appear in the source text.
+
+        For each continuous variable, its mean must appear numerically (within
+        1% relative or 1e-6 absolute tolerance of any number in the text) AND
+        its name (normalized, underscores<->spaces) must appear as a substring.
+        Categorical variables only need the name. Fraction grounded * 100 is the
+        score. With no source_text, returns 100 so old callers are unaffected.
+        """
+        if not source_text:
+            return {"score": 100.0, "details": {"skipped": True}}
+        import re as _re
+
+        text_low = source_text.lower().replace("_", " ")
+        numbers = [_f for _f in (_to_float(m) for m in _re.findall(r"-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?", source_text)) if _f is not None]
+        grounded = 0
+        total = len(parameters.variables) or 1
+        per_var: dict[str, bool] = {}
+        for name, vp in parameters.variables.items():
+            name_hit = name.lower().replace("_", " ") in text_low
+            if vp.distribution == "categorical":
+                ok = name_hit
+            else:
+                num_hit = any(
+                    abs(n - vp.mean) <= max(1e-6, 0.01 * abs(vp.mean)) for n in numbers
+                )
+                ok = name_hit and num_hit
+            per_var[name] = ok
+            grounded += 1 if ok else 0
+        return {"score": 100.0 * grounded / total, "details": per_var}
+
     def compute_row_dispersion(self, df: pd.DataFrame, sample_size: int = 500) -> Dict[str, Any]:
         """Describe nearest-neighbour spacing among generated numeric rows.
 
@@ -163,8 +266,18 @@ class Validator:
         """Deprecated alias for :meth:`compute_row_dispersion`."""
         return self.compute_row_dispersion(df, sample_size=sample_size)
 
-    def validate(self, df: pd.DataFrame, parameters: Parameters) -> FidelityReport:
-        """Run full validation suite."""
+    def validate(
+        self,
+        df: pd.DataFrame,
+        parameters: Parameters,
+        source_text: Optional[str] = None,
+    ) -> FidelityReport:
+        """Run full validation suite.
+
+        `overall_score` is unchanged (synthesis diagnostic). `trust_score`
+        catches parameter error: 0.5*overall + 0.3*grounding + 0.2*plausibility.
+        Without source_text, grounding defaults to 100 so behavior is unchanged.
+        """
         ks_pvalues = self.compute_ks_test(df, parameters)
         corr_sim = self.compute_correlation_similarity(df, parameters)
         
@@ -191,7 +304,13 @@ class Validator:
         passing = sum(1 for p in ks_pvalues.values() if p >= self.thresholds["ks_pvalue"])
         ks_score = (passing / len(ks_pvalues)) * 100 if ks_pvalues else 100.0
         overall_score = 0.4 * ks_score + 0.4 * (corr_sim * 100) + 0.2 * (bias_score * 100)
-        
+
+        plaus = self.compute_plausibility(parameters)
+        ground = self.compute_grounding(parameters, source_text)
+        trust_score = round(
+            0.5 * overall_score + 0.3 * ground["score"] + 0.2 * plaus["score"], 2
+        )
+
         return FidelityReport(
             overall_score=round(overall_score, 2),
             ks_score=round(ks_score, 2),
@@ -200,7 +319,11 @@ class Validator:
             ks_pvalues=ks_pvalues,
             bias_details={},
             dispersion_details=self.compute_row_dispersion(df),
-            approved=overall_score >= self.thresholds["fidelity_score"]
+            approved=overall_score >= self.thresholds["fidelity_score"],
+            plausibility_score=round(plaus["score"], 2),
+            grounding_score=round(ground["score"], 2),
+            trust_score=trust_score,
+            issues=plaus["issues"],
         )
 
     def generate_datacard(self, report: FidelityReport, parameters: Parameters, df: pd.DataFrame) -> str:
@@ -235,6 +358,13 @@ class Validator:
 
 ## Bias Detection
 **Bias Score**: {report.bias_score:.2f}%
+
+## Trust Score (catches parameter error)
+**Trust Score**: **{report.trust_score}**/100 (fidelity {report.overall_score}, grounding {report.grounding_score}, plausibility {report.plausibility_score})
+{"Parameter issues: " + "; ".join(report.issues) if report.issues else "No parameter issues flagged."}
+Grounding checks each declared mean against numbers in the source text; a low
+score means the extraction likely hallucinated or misread values even when
+fidelity is high.
 
 ## Synthetic-row dispersion diagnostic (not a privacy audit)
 **Average nearest-neighbour distance**: {report.dispersion_details.get("avg_nearest_neighbor_distance", "n/a")}

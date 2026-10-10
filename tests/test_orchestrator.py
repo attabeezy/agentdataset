@@ -165,7 +165,7 @@ def test_optimization_artifacts_support_unicode(mock_orchestrator):
 
 def test_noise_pivot_strategy(mock_orchestrator):
     """Streak counter drives explore → exploit → reset transitions."""
-    from agentdataset.core.orchestrator import PATIENCE, MAX_NOISE, MIN_NOISE
+    from agentdataset.core.orchestrator import PATIENCE, MAX_NOISE, MIN_NOISE, INITIAL_NOISE, EXPLORE_MULT
 
     params = Parameters(
         variables={"v1": VariableParams(name="v1")},
@@ -192,19 +192,19 @@ def test_noise_pivot_strategy(mock_orchestrator):
 
     mock_orchestrator.run_optimization_loop(params, iterations=5)
 
-    initial = 0.1
-    # iter 0: noise = 0.1, score 95 → keep, streak resets to 0
+    initial = INITIAL_NOISE
+    # iter 0: noise = initial, score 95 → keep, streak resets to 0
     assert noise_calls[0] == pytest.approx(initial)
-    # iter 1: streak=1 (explore) → noise *= 1.1
+    # iter 1: streak=1 (explore) → noise *= explore_mult
     assert noise_calls[1] == pytest.approx(initial)
-    explore_noise = initial * 1.1
+    explore_noise = initial * EXPLORE_MULT
     # iter 2: streak=2 (exploit, streak % PATIENCE == 0) → noise *= 0.5
     assert noise_calls[2] == pytest.approx(explore_noise)
     exploit_noise = max(explore_noise * 0.5, MIN_NOISE)
     # iter 3: streak=3 (explore again)
     assert noise_calls[3] == pytest.approx(exploit_noise)
     # iter 4: streak=4 (full cycle, streak % (PATIENCE*2) == 0) → reset
-    assert noise_calls[4] == pytest.approx(min(exploit_noise * 1.1, MAX_NOISE))
+    assert noise_calls[4] == pytest.approx(min(exploit_noise * EXPLORE_MULT, MAX_NOISE))
 
 
 # --- §9.7: the pivot schedule as configurable, testable surface ---------------
@@ -239,18 +239,23 @@ def test_next_noise_explore_exploit_reset():
     from agentdataset.core.orchestrator import NoisePivotConfig, next_noise
 
     cfg = NoisePivotConfig()  # patience 2, reset_multiple 2 → full cycle 4
+    init = cfg.initial_noise
 
-    noise, phase = next_noise(1, 0.1, cfg)
-    assert phase == "explore" and noise == pytest.approx(0.11)
+    noise, phase = next_noise(1, init, cfg)
+    assert phase == "explore" and noise == pytest.approx(init * cfg.explore_mult)
 
-    noise, phase = next_noise(2, 0.11, cfg)
-    assert phase == "exploit" and noise == pytest.approx(0.055)
+    noise2, phase = next_noise(2, noise, cfg)
+    assert phase == "exploit" and noise2 == pytest.approx(
+        max(noise * cfg.exploit_factor, cfg.min_noise)
+    )
 
-    noise, phase = next_noise(3, 0.055, cfg)
-    assert phase == "explore" and noise == pytest.approx(0.0605)
+    noise3, phase = next_noise(3, noise2, cfg)
+    assert phase == "explore" and noise3 == pytest.approx(
+        min(noise2 * cfg.explore_mult, cfg.max_noise)
+    )
 
-    noise, phase = next_noise(4, 0.0605, cfg)
-    assert phase == "reset" and noise == pytest.approx(cfg.initial_noise)
+    noise4, phase = next_noise(4, noise3, cfg)
+    assert phase == "reset" and noise4 == pytest.approx(cfg.initial_noise)
 
 
 def test_next_noise_respects_bounds():

@@ -58,11 +58,26 @@ NATURAL_LANGUAGE_PROMPT = """
 You are an expert statistician with many years of experience analyzing research
 papers and extracting statistical information from them. Please carefully read
 through the following text and identify all of the statistical variables that
-are mentioned, along with their probability distributions (such as normal,
-uniform, gamma, or categorical), their means, and their standard deviations.
-Also, please identify any correlations that are described between pairs of
-variables, including the strength and direction (positive or negative) of each
-correlation.
+are explicitly reported with numbers, along with their probability distributions
+(such as normal, uniform, gamma, or categorical), their means, and their
+standard deviations. Also, please identify any correlations that are described
+between pairs of variables, including the strength and direction (positive or
+negative) of each correlation.
+
+Grounding rules — follow these strictly:
+- Extract a statistic ONLY if a numeric value is explicitly stated in the text.
+  Never infer, estimate, or invent a number.
+- Every correlation's "var1" and "var2" MUST be keys already present in your
+  "variables" object. If a marginal was never reported, omit that correlation
+  rather than referencing an undeclared variable.
+- Do NOT treat standard errors (SE), confidence intervals (CI), or p-values as
+  standard deviations. If only SE/CI is given, omit the variable.
+- Do NOT extract from negated findings without numbers (e.g. "no difference",
+  "not significant") — return nothing for those.
+- If the text reports conflicting values, prefer the results Table over the
+  abstract; note nothing, just choose the Table value.
+- If no reportable statistics are present, return empty objects:
+  {"variables": {}, "correlations": {}} — abstention is correct.
 
 Please format your response as a JSON object that matches the following schema
 exactly:
@@ -82,6 +97,12 @@ label to its probability, for example {"yes": 0.3, "no": 0.7}.
 Please make sure to only output the JSON object itself and nothing else - no
 introductory text, no explanations, and no markdown code fences.
 """
+
+# Chunking for long documents. The LLM call truncates at ~10k chars, which drops
+# tables at the end of real papers. Longer inputs are split into overlapping
+# windows and merged, so recall no longer depends on where the table sits.
+LLM_CHUNK_SIZE = 8000
+LLM_CHUNK_OVERLAP = 500
 
 # The production system prompt. Switched from CAVEMAN_PROMPT to
 # NATURAL_LANGUAGE_PROMPT on the strength of the §9.6 ablation (see above).
@@ -115,6 +136,20 @@ _PATTERN_STD_MEAN = re.compile(
     + _SEP
     + _NUM,
     re.IGNORECASE,
+)
+
+# Shorthand "M = 10.5, SD = 2.1" / "M: 10.5 (SD 2.1)" — common in tables.
+# High precision: requires both markers, so bare "12.3 (2.1)" (often SE/CI/n)
+# is deliberately NOT matched here.
+_PATTERN_M_SD = re.compile(
+    r"\bM" + _SEP + _NUM + r".{0,40}?" + r"\bSD\b" + _SEP + _NUM,
+    re.IGNORECASE,
+)
+
+# Mean ± SD convention: "12.3 ± 2.1", "12.3 +/- 2.1". Attribution comes from
+# the preceding window via _name_for_stat, same as the mean/std patterns.
+_PATTERN_PLUSMINUS = re.compile(
+    _NUM + r"\s*(?:±|\+/-)\s*" + _NUM,
 )
 
 # Correlation between two named variables, e.g. "correlation between X and Y is 0.65",
@@ -246,6 +281,57 @@ def strip_json_fence(content: str) -> str:
     """Return `content` with a wrapping markdown code fence removed, if present."""
     match = _JSON_FENCE.search(content or "")
     return match.group(1) if match else content
+
+
+def _chunk_text(text: str, size: int = 8000, overlap: int = 500) -> list[str]:
+    """Split long documents into overlapping windows for LLM extraction."""
+    if len(text) <= size:
+        return [text]
+    chunks: list[str] = []
+    start = 0
+    while start < len(text):
+        chunks.append(text[start:start + size])
+        if start + size >= len(text):
+            break
+        start += size - overlap
+    return chunks
+
+
+def _merge_chunk_results(
+    results: list[tuple[Dict, Dict]],
+) -> tuple[Dict, Dict]:
+    """Merge per-chunk (variables, correlations): same name averages, else union."""
+    from agentdataset.models.schemas import VariableParams as _VP
+    from agentdataset.models.schemas import CorrelationParams as _CP
+
+    var_accum: dict[str, dict] = {}
+    for variables, _ in results:
+        for name, vp in variables.items():
+            slot = var_accum.setdefault(name, {"means": [], "stds": [], "vp": vp})
+            slot["means"].append(vp.mean)
+            slot["stds"].append(vp.std)
+    merged_vars: dict = {}
+    for name, acc in var_accum.items():
+        vp = acc["vp"]
+        mean = sum(acc["means"]) / len(acc["means"])
+        std = sum(acc["stds"]) / len(acc["stds"])
+        if not (std > 0):
+            continue
+        merged_vars[name] = _VP(
+            name=name,
+            distribution=vp.distribution,
+            mean=mean,
+            std=std,
+            min=vp.min if vp.min is not None else mean - 3 * std,
+            max=vp.max if vp.max is not None else mean + 3 * std,
+            categories=vp.categories,
+        )
+    merged_corrs: dict = {}
+    for _, correlations in results:
+        for key, cp in correlations.items():
+            if key not in merged_corrs:
+                merged_corrs[key] = cp
+    return merged_vars, merged_corrs
 
 
 class Extractor:
@@ -385,6 +471,10 @@ class Extractor:
 
         def add_variable(mean: float, std: float, start: int) -> None:
             """Record one continuous variable, named from the text where possible."""
+            # Implausible SD (non-positive, NaN/inf) is almost always a parse
+            # error or an SE/CI misread — drop it rather than synthesizing junk.
+            if not (std > 0) or not abs(mean) < 1e15 or not abs(std) < 1e15:
+                return
             key = (mean, std)
             if key in seen:
                 return
@@ -404,6 +494,12 @@ class Extractor:
 
         for match in _PATTERN_STD_MEAN.finditer(text):
             add_variable(float(match.group(2)), float(match.group(1)), match.start())
+
+        for match in _PATTERN_M_SD.finditer(text):
+            add_variable(float(match.group(1)), float(match.group(2)), match.start())
+
+        for match in _PATTERN_PLUSMINUS.finditer(text):
+            add_variable(float(match.group(1)), float(match.group(2)), match.start())
 
         # Categorical variables (any category count) — always captured with their
         # real name. Category *labels* are left exactly as written; only the
@@ -495,8 +591,22 @@ class Extractor:
 
         if self.api_key or os.environ.get(self.env_var):
             try:
-                data = self._extract_with_llm(text)
-                variables, correlations = self._parse_llm_result(data)
+                chunks = _chunk_text(text, LLM_CHUNK_SIZE, LLM_CHUNK_OVERLAP)
+                per_chunk: list[tuple[Dict, Dict]] = []
+                for i, chunk in enumerate(chunks):
+                    data = self._extract_with_llm(
+                        chunk, purpose=f"structured_extraction_chunk_{i}"
+                    )
+                    per_chunk.append(self._parse_llm_result(data))
+                if len(per_chunk) == 1:
+                    variables, correlations = per_chunk[0]
+                else:
+                    variables, correlations = _merge_chunk_results(per_chunk)
+                # Drop implausible LLM outputs: non-positive std cannot be
+                # synthesized and is near-certainly a hallucination/SE misread.
+                variables = {
+                    n: v for n, v in variables.items() if v.std is not None and v.std > 0
+                }
                 method = "llm"
                 logger.info(
                     "LLM extraction succeeded: %d variables, %d correlations",

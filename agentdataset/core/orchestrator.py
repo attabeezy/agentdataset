@@ -32,8 +32,10 @@ PATIENCE = 2  # non-improvement streak length that triggers a pivot
 MAX_SESSIONS = 3  # oldest session dirs beyond this limit are deleted on startup
 AGENTDATASET_CACHE_DIR = ".agentdataset_cache"
 DEFAULT_SESSION_DIR = str(Path(AGENTDATASET_CACHE_DIR) / "sessions")
-INITIAL_NOISE = 0.1
-EXPLORE_MULT = 1.1
+# §9.7 showed the fidelity landscape falls off above noise 0.05 and fixed 0.01
+# beats the adaptive schedule at equal budget — so start quiet.
+INITIAL_NOISE = 0.02
+EXPLORE_MULT = 1.05
 EXPLOIT_FACTOR = 0.5
 RESET_MULTIPLE = 2  # reset fires every PATIENCE * RESET_MULTIPLE non-improvements
 
@@ -317,6 +319,7 @@ class Orchestrator:
         parameters: Parameters,
         iterations: int = 5,
         pivot: Optional[NoisePivotConfig] = None,
+        source_text: Optional[str] = None,
     ):
         """Phase 2 & 3: The Engine (Synthesis-Validation Loop).
 
@@ -354,7 +357,7 @@ class Orchestrator:
 
             # Validation
             validation_started = time.perf_counter()
-            report = self.validator.validate(df, current_params)
+            report = self.validator.validate(df, current_params, source_text=source_text)
             validation_seconds = time.perf_counter() - validation_started
             logger.info("  Fidelity Score: %s", report.overall_score)
             improved = report.overall_score > self.best_score
