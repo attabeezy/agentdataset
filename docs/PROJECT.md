@@ -11,7 +11,7 @@ AgentDataset is a 4-phase assisted pipeline: discover research documents → ext
 ### 2.1 Discovery (`core/discovery.py` and `Orchestrator.run_discovery`)
 
 - **LLM-guided query expansion**: `Orchestrator.optimize_query()` asks the configured LLM for search-optimized queries focused on research papers, PDFs, reports, means, standard deviations, and correlations. The original query is always included; on LLM failure, only the original query is used.
-- **Search**: DuckDuckGo (`DDGS`) queries for both `filetype:pdf` and general HTML results for each optimized query.
+- **Search**: OpenRouter's Exa-powered web search (`OPENROUTER_API_KEY`); results are parsed as JSON, deduplicated by URL, and capped. Falls back to the original query on failure.
 - **Deduplication**: discovery results are deduplicated by URL.
 - **Source suggestion**: `Orchestrator.suggest_sources()` asks the LLM which results are likely to contain statistical parameters; on failure, no suggestions are returned.
 - **PDF fetch**: `requests.get()` streams the file to a `NamedTemporaryFile`; returns `pdf://<path>` to the caller.

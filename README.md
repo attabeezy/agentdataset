@@ -1,25 +1,18 @@
 # AgentDataset: Assisted Data Synthesis
 
-**AgentDataset** is an assisted workflow that discovers web pages and PDFs,
-extracts statistical parameters using an LLM, and generates synthetic datasets
-through an iterative synthesis-validation loop. Real-paper evaluation shows
-that source selection and extracted parameters require human review.
+AgentDataset is an assisted pipeline that turns a research query into a synthetic
+dataset. It discovers documents, extracts statistical parameters with an LLM
+(regex fallback), synthesizes correlated data, and validates fidelity. Human review
+of sources and extracted parameters is part of the intended workflow.
 
----
-
-## Quick Start
+## Quick start
 
 ```bash
-# Install dependencies
 uv sync
-
-# Run the dashboard
 uv run streamlit run app.py
 ```
 
-Then open the Streamlit UI, select an API provider, enter your key, and type a research query.
-
----
+Set `OPENROUTER_API_KEY` in `.env`. The app runs on Streamlit; open the printed URL.
 
 ## Pipeline
 
@@ -29,117 +22,70 @@ Query → Discovery → Extraction → Synthesis ⇄ Validation → data.csv + D
 
 | Phase | Module | What it does |
 |-------|--------|--------------|
-| 0 — Discovery | `core/discovery.py` | DuckDuckGo search for PDFs and HTML; downloads PDFs to temp files |
-| 1 — Extraction | `core/extractor.py` | LLM extraction (litellm) with regex fallback; parses PDFs via PyMuPDF |
-| 2 — Synthesis | `core/synthesizer.py` | Generates correlated DataFrames from parameters (normal, uniform, gamma) |
-| 3 — Validation | `core/validator.py` | KS-test, correlation similarity, bias check, synthetic-row dispersion diagnostic |
-
----
-
-## What It Costs
-
-Producing **one finished dataset** from a real paper averages **$0.0169 in API
-spend and 41.8 seconds**, measured end to end over three real papers with GPT-4o
-via OpenRouter:
-
-| Stage | API ($) | API (s) | Network (s) | Local (s) |
-|---|---:|---:|---:|---:|
-| Query expansion | .00094 | 2.22 | — | — |
-| Web search | — | — | 27.97 | — |
-| Source suggestion | .00647 | 1.90 | — | — |
-| Fetch and parse | — | — | 5.09 | .63 |
-| Extraction | .00945 | 3.69 | — | — |
-| Synthesis, validation, refinement, and writing | — | — | — | .34 |
-| **One dataset** | **.01686** | **7.80** | **33.06** | **.98** |
-
-Search and fetch dominate wall time. The retained experiment cost $0.05058
-over nine successful LLM calls; human source-review time is excluded. See
-`results/end_to_end_cost_latency.csv` and the evidence-to-claim map in
-`analysis/EVIDENCE_TO_CLAIM_MAP.md` for provenance and re-derivation.
-
----
-
-## Supported API Providers
-
-Select in the sidebar on app load. The correct env var is pre-filled automatically.
-
-| Provider | Env Var | Models |
-|----------|---------|--------|
-| OpenAI | `OPENAI_API_KEY` | `gpt-4o`, `gpt-3.5-turbo` |
-| Claude | `ANTHROPIC_API_KEY` | `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001` |
-| Gemini | `GEMINI_API_KEY` | `gemini/gemini-2.0-flash`, `gemini/gemini-1.5-pro` |
-
-Without an API key, extraction falls back to regex (mean/std pattern matching).
-
----
+| 0 — Discovery | `core/discovery.py` | OpenRouter (Exa) web search; fetches PDFs/HTML |
+| 1 — Extraction | `core/extractor.py` | LLM extraction with regex fallback; parses PDFs via PyMuPDF |
+| 2 — Synthesis | `core/synthesizer.py` | Generates correlated DataFrames (normal, uniform, gamma, categorical) |
+| 3 — Validation | `core/validator.py` | KS-test, correlation error, bias, row-dispersion diagnostic |
 
 ## Output
 
-Generated files live under `.agentdataset_cache/`, which is ignored by git. Each app run writes to `.agentdataset_cache/sessions/<run_id>/`:
+Each run writes to `.agentdataset_cache/sessions/<run_id>/`:
 
 | File | Contents |
 |------|----------|
 | `data.csv` | Best synthetic dataset from the optimization loop |
-| `parameters.json` | Extracted parameters used for synthesis |
-| `DATACARD.md` | Fidelity report plus a non-privacy synthetic-row dispersion diagnostic |
+| `parameters.json` | Parameters used for the best run |
+| `DATACARD.md` | Fidelity report and dispersion diagnostic |
 
-Sessions are pruned automatically — only the 3 most recent are kept.
+Only the 3 most recent session directories are kept.
 
----
+## Supported providers
 
-## LLM-Guided Discovery
+Select in the sidebar. The matching env var is used automatically.
 
-Discovery starts by asking the configured LLM to expand the user's research prompt into several search-optimized queries focused on papers, PDFs, reports, means, standard deviations, and correlations. The original query is always included, results are deduplicated by URL, and the source suggestion step asks the LLM which discovered sources are most likely to contain statistical parameters.
+| Provider | Env var | Example model |
+|----------|---------|---------------|
+| OpenAI | `OPENAI_API_KEY` | `gpt-4o` |
+| Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` |
+| Google | `GEMINI_API_KEY` | `gemini/gemini-2.0-flash` |
 
-Discovery uses OpenRouter's Exa-powered web search, so only `OPENROUTER_API_KEY` is required (no separate Exa or DuckDuckGo dependency).
+Discovery uses `OPENROUTER_API_KEY`. Extraction falls back to regex when no key is set.
 
-## Execution & safety notes
-- The pipeline does **not** execute LLM-generated Python; synthesis runs through the
-  vetted `Synthesizer`. Discovery fetches remote content with URL allowlisting,
-  a 25 MiB download cap, and temp-file cleanup.
-- LLM/search calls use bounded retries with exponential backoff + jitter and a
-  small circuit breaker to avoid runaway loops on flaky providers.
+## Project structure
 
-If the LLM call fails or no API key is available, discovery falls back to the original query and extraction can still use the regex fallback.
+| Path | Purpose |
+|------|---------|
+| `app.py` | Streamlit dashboard |
+| `agentdataset/core/` | Discovery, extraction, orchestration, synthesis, validation |
+| `agentdataset/models/schemas.py` | Pydantic data models |
+| `agentdataset/evaluation.py` | Benchmark helpers |
+| `benchmark.py` | Empirical benchmarks and ablations |
+| `analysis/` | Study scripts and protocols |
+| `docs/` | Project spec, experiment notes, report, NeurIPS paper |
+| `results/` | Generated result CSVs |
+| `tests/` | Unit tests (live e2e deselected by default) |
 
----
-
-## Project Structure
-
-```
-agentdataset/
-├── app.py                    # Streamlit dashboard
-├── agentdataset/
-│   ├── core/
-│   │   ├── discovery.py      # Search + PDF download
-│   │   ├── extractor.py      # LLM/regex parameter extraction
-│   │   ├── orchestrator.py   # Pipeline orchestration + optimization loop
-│   │   ├── synthesizer.py    # Synthetic data generation
-│   │   └── validator.py      # Fidelity + row-dispersion diagnostics
-│   └── models/
-│       └── schemas.py        # Pydantic data models
-├── tests/                    # automated checks plus opt-in live e2e
-└── .agentdataset_cache/      # Ignored runtime output, reports, sessions, artifacts
-```
-
----
-
-## Running Tests
+## Running tests
 
 ```bash
-uv run pytest tests/ -v
+uv run pytest
 ```
 
-The live API-backed e2e test runs automatically when a matching key is present in a repo-root `.env` file, and skips otherwise:
+Live, API-backed tests are marked `live_e2e` and skipped by default:
 
-```env
-OPENAI_API_KEY=...
-```
-
-Then run:
-
-```powershell
+```bash
 uv run pytest tests/test_e2e_live.py -m live_e2e -v
 ```
 
-The live test writes an inspection report to `.agentdataset_cache/e2e/live_e2e_report.md`.
+## Safety notes
+
+- The pipeline does not execute LLM-generated Python; synthesis runs through the
+  vetted `Synthesizer`.
+- Discovery allowlists `http(s)` URLs, caps PDF downloads at 25 MiB, and cleans
+  temp files.
+- LLM/search calls use bounded retries with backoff and a small circuit breaker.
+
+## Research artifacts
+
+The NeurIPS 2026 paper, evidence-to-claim map, and result CSVs live under
+`docs/` and `results/`. See `docs/PROJECT.md` for the full revision ledger.
