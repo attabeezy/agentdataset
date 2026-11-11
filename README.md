@@ -91,6 +91,15 @@ Sessions are pruned automatically — only the 3 most recent are kept.
 
 Discovery starts by asking the configured LLM to expand the user's research prompt into several search-optimized queries focused on papers, PDFs, reports, means, standard deviations, and correlations. The original query is always included, results are deduplicated by URL, and the source suggestion step asks the LLM which discovered sources are most likely to contain statistical parameters.
 
+Discovery uses OpenRouter's Exa-powered web search, so only `OPENROUTER_API_KEY` is required (no separate Exa or DuckDuckGo dependency).
+
+## Execution & safety notes
+- The pipeline does **not** execute LLM-generated Python; synthesis runs through the
+  vetted `Synthesizer`. Discovery fetches remote content with URL allowlisting,
+  a 25 MiB download cap, and temp-file cleanup.
+- LLM/search calls use bounded retries with exponential backoff + jitter and a
+  small circuit breaker to avoid runaway loops on flaky providers.
+
 If the LLM call fails or no API key is available, discovery falls back to the original query and extraction can still use the regex fallback.
 
 ---

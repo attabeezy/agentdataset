@@ -10,15 +10,16 @@ def test_discovery_agent_init():
     assert agent.max_results == 10
 
 
-@patch('agentdataset.core.discovery.DDGS')
-def test_discovery_agent_search(mock_ddgs):
-    mock_instance = mock_ddgs.return_value.__enter__.return_value
-    mock_instance.text.return_value = [
-        {'title': 'Result 1', 'href': 'http://test.com/file.pdf', 'body': 'Snippet 1'},
-        {'title': 'Result 2', 'href': 'http://test.com/page', 'body': 'Snippet 2'}
-    ]
+@patch('agentdataset.core.discovery.requests')
+def test_discovery_agent_search(mock_requests):
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": '[{"title":"Result 1","url":"http://test.com/file.pdf","snippet":"Snippet 1"},{"title":"Result 2","url":"http://test.com/page","snippet":"Snippet 2"}]'}}]
+    }
+    mock_requests.post.return_value = mock_response
 
-    agent = DiscoveryAgent(max_results=2)
+    agent = DiscoveryAgent(max_results=2, api_key="test-key")
     results = agent.search("test query")
 
     assert len(results) > 0
@@ -102,10 +103,10 @@ def test_html_fetch_falls_back_to_snippet(mock_traf):
     assert agent.fetch_content(res) == "snip"
 
 
-@patch('agentdataset.core.discovery.DDGS')
-def test_search_raises_on_backend_failure(mock_ddgs):
+@patch('agentdataset.core.discovery.requests')
+def test_search_raises_on_backend_failure(mock_requests):
     """A backend failure with no results raises SearchError (not silent empty)."""
-    mock_ddgs.side_effect = RuntimeError("backend down")
-    agent = DiscoveryAgent()
+    mock_requests.post.side_effect = RuntimeError("backend down")
+    agent = DiscoveryAgent(api_key="test-key")
     with pytest.raises(SearchError):
         agent.search("anything")

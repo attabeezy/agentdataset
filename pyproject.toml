@@ -14,7 +14,6 @@ dependencies = [
     "trafilatura>=2.0.0",
     "litellm>=1.83.14",
     "streamlit>=1.57.0",
-    "ddgs>=9.14.4",
     "scikit-learn>=1.9.0",
     "ucimlrepo>=0.0.7",
     "sdv>=1.17.0",

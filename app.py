@@ -195,6 +195,11 @@ if st.session_state.discovery_results:
                     )
                 )
                 st.session_state.best_data = best_data
+                if best_data is None:
+                    st.warning(
+                        "Synthesis did not produce a dataset (no successful "
+                        "iteration). Try a different source or check the logs."
+                    )
                 progress_bar.progress(100)
 
                 st.success(

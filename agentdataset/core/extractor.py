@@ -372,13 +372,25 @@ class Extractor:
 
     def pdf_to_markdown(self, pdf_path: str) -> str:
         """Convert PDF to clean text."""
-        doc = fitz.open(pdf_path)
-        sections = []
-        for page in doc:
-            text = page.get_text("text")
-            sections.append(text)
-        doc.close()
-        return "\n\n".join(sections)
+        doc = None
+        try:
+            doc = fitz.open(pdf_path)
+            sections = []
+            for page in doc:
+                try:
+                    sections.append(page.get_text("text") or "")
+                except Exception as e:
+                    logger.warning("Failed to extract text from a page in %s: %s", pdf_path, e)
+            return "\n\n".join(sections)
+        except Exception as e:
+            logger.error("Failed to open/read PDF %s: %s", pdf_path, e, exc_info=True)
+            return ""
+        finally:
+            if doc is not None:
+                try:
+                    doc.close()
+                except Exception:
+                    pass
 
     def _extract_with_llm(
         self,
@@ -426,26 +438,45 @@ class Extractor:
     def _parse_llm_result(self, data: Dict[str, Any]) -> tuple[Dict, Dict]:
         """Convert raw LLM JSON dict into (variables, correlations) dicts of Pydantic models."""
         variables: Dict[str, VariableParams] = {}
-        for name, v in data.get("variables", {}).items():
+        raw_vars = data.get("variables", {}) if isinstance(data, dict) else {}
+        if not isinstance(raw_vars, dict):
+            raw_vars = {}
+        for name, v in raw_vars.items():
+            if not isinstance(v, dict):
+                logger.warning("Skipping malformed variable entry %r: not an object", name)
+                continue
             # LLM output may explicitly set "mean"/"std" to null for categorical
             # variables (they don't apply), not just omit the keys.
-            mean = float(v.get("mean") if v.get("mean") is not None else 0.0)
-            std = float(v.get("std") if v.get("std") is not None else 1.0)
+            try:
+                mean = float(v.get("mean") if v.get("mean") is not None else 0.0)
+                std = float(v.get("std") if v.get("std") is not None else 1.0)
+            except (TypeError, ValueError):
+                logger.warning("Skipping variable %r: non-numeric mean/std", name)
+                continue
             categories = v.get("categories") or None
-            if categories is not None:
-                categories = {
-                    label: float(prob) for label, prob in categories.items()
-                    if prob is not None
-                } or None
-            variables[name] = VariableParams(
-                name=name,
-                distribution=v.get("distribution", "normal"),
-                mean=mean,
-                std=std,
-                min=float(v["min"]) if v.get("min") is not None else mean - 3 * std,
-                max=float(v["max"]) if v.get("max") is not None else mean + 3 * std,
-                categories=categories,
-            )
+            if isinstance(categories, dict):
+                try:
+                    categories = {
+                        str(label): float(prob) for label, prob in categories.items()
+                        if prob is not None
+                    } or None
+                except (TypeError, ValueError):
+                    categories = None
+            else:
+                categories = None
+            try:
+                variables[name] = VariableParams(
+                    name=name,
+                    distribution=v.get("distribution", "normal"),
+                    mean=mean,
+                    std=std,
+                    min=float(v["min"]) if v.get("min") is not None else mean - 3 * std,
+                    max=float(v["max"]) if v.get("max") is not None else mean + 3 * std,
+                    categories=categories,
+                )
+            except Exception as e:
+                logger.warning("Skipping variable %r: %s", name, e)
+                continue
 
         # Names are resolved against the declared variables only when the literal
         # name does not already match, so a self-consistent response is passed
@@ -455,13 +486,23 @@ class Extractor:
             by_normalized.setdefault(_normalize_variable_name(declared), []).append(declared)
 
         correlations: Dict[str, CorrelationParams] = {}
-        for key, c in data.get("correlations", {}).items():
-            correlations[key] = CorrelationParams(
-                var1=_resolve_correlation_name(c["var1"], variables, by_normalized),
-                var2=_resolve_correlation_name(c["var2"], variables, by_normalized),
-                correlation=float(c.get("correlation") if c.get("correlation") is not None else 0.0),
-                direction=c.get("direction", "positive"),
-            )
+        raw_corrs = data.get("correlations", {}) if isinstance(data, dict) else {}
+        if not isinstance(raw_corrs, dict):
+            raw_corrs = {}
+        for key, c in raw_corrs.items():
+            if not isinstance(c, dict):
+                logger.warning("Skipping malformed correlation entry %r", key)
+                continue
+            try:
+                correlations[key] = CorrelationParams(
+                    var1=_resolve_correlation_name(c.get("var1", ""), variables, by_normalized),
+                    var2=_resolve_correlation_name(c.get("var2", ""), variables, by_normalized),
+                    correlation=float(c.get("correlation") if c.get("correlation") is not None else 0.0),
+                    direction=c.get("direction", "positive"),
+                )
+            except Exception as e:
+                logger.warning("Skipping correlation %r: %s", key, e)
+                continue
 
         return variables, correlations
 
@@ -591,6 +632,18 @@ class Extractor:
 
     def extract_parameters(self, text: str, source_name: str) -> Parameters:
         """Extract statistical parameters — LLM first, regex fallback."""
+        from datetime import datetime as _dt
+        if not (text or "").strip():
+            return Parameters(
+                variables={},
+                correlations={},
+                meta=MetaParams(
+                    source=source_name,
+                    extracted_at=_dt.now().isoformat(timespec="seconds"),
+                    extraction_method="none",
+                ),
+            )
+
         method = "regex_fallback"
         variables: Dict[str, VariableParams] = {}
         correlations: Dict[str, CorrelationParams] = {}
@@ -600,10 +653,18 @@ class Extractor:
                 chunks = _chunk_text(text, LLM_CHUNK_SIZE, LLM_CHUNK_OVERLAP)
                 per_chunk: list[tuple[Dict, Dict]] = []
                 for i, chunk in enumerate(chunks):
-                    data = self._extract_with_llm(
-                        chunk, purpose=f"structured_extraction_chunk_{i}"
-                    )
-                    per_chunk.append(self._parse_llm_result(data))
+                    try:
+                        data = self._extract_with_llm(
+                            chunk, purpose=f"structured_extraction_chunk_{i}"
+                        )
+                        per_chunk.append(self._parse_llm_result(data))
+                    except Exception as e:
+                        logger.warning(
+                            "LLM extraction failed on chunk %d/%d: %s; skipping chunk.",
+                            i + 1, len(chunks), e,
+                        )
+                if not per_chunk:
+                    raise ValueError("All LLM chunks failed; falling back to regex.")
                 if len(per_chunk) == 1:
                     variables, correlations = per_chunk[0]
                 else:

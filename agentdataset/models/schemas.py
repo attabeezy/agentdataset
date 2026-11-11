@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Dict, List, Optional, Any
+import math
 from datetime import datetime
 
 _ALLOWED_DISTRIBUTIONS = {"normal", "uniform", "gamma", "categorical"}
@@ -16,6 +17,30 @@ class VariableParams(BaseModel):
     max: Optional[float] = None
     # Label -> probability, only used when distribution == "categorical".
     categories: Optional[Dict[str, float]] = None
+
+    @field_validator("mean", "min", "max", mode="before")
+    @classmethod
+    def _finite_or_none(cls, v):
+        if v is None:
+            return v
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(f):
+            return None
+        return f
+
+    @field_validator("std", mode="before")
+    @classmethod
+    def _positive_std(cls, v):
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return 1.0
+        if not math.isfinite(f) or f <= 0:
+            return 1.0
+        return f
 
     @field_validator("distribution", mode="before")
     @classmethod

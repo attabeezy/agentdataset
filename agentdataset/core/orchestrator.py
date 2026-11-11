@@ -99,11 +99,21 @@ def next_noise(
 
 def _prune_old_sessions(base_dir: str, keep: int = MAX_SESSIONS) -> None:
     """Delete oldest session directories beyond the keep limit."""
-    base = Path(base_dir)
-    if not base.exists():
+    if not base_dir:
         return
-    sessions = sorted(p for p in base.iterdir() if p.is_dir())
-    for old in sessions[:-keep] if len(sessions) > keep else []:
+    base = Path(base_dir).resolve()
+    if not base.exists() or not base.is_dir():
+        return
+    try:
+        sessions = sorted(
+            p for p in base.iterdir() if p.is_dir() and not p.is_symlink()
+        )
+    except OSError as e:
+        logger.warning("Could not list sessions in %s: %s", base, e)
+        return
+    if len(sessions) <= keep:
+        return
+    for old in sessions[:-keep]:
         try:
             import shutil
 
@@ -128,7 +138,17 @@ class Orchestrator:
         )
         os.makedirs(self.context.path, exist_ok=True)
 
-        self.discovery = DiscoveryAgent()
+        if "OPENROUTER" in (env_var or "").upper():
+            or_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
+        else:
+            or_key = os.environ.get("OPENROUTER_API_KEY", "")
+        or_key = api_key if "OPENROUTER" in (env_var or "").upper() else os.environ.get("OPENROUTER_API_KEY", "")
+        if not or_key:
+            or_key = os.environ.get("OPENROUTER_API_KEY", "")
+        self.discovery = DiscoveryAgent(
+            api_key=or_key,
+            model=model,
+        )
         self.extractor = Extractor(model=model, api_key=api_key, env_var=env_var)
         self.synthesizer = Synthesizer()
         self.validator = Validator()
@@ -241,7 +261,11 @@ class Orchestrator:
 
         all_results = []
         for q in optimized_queries:
-            results = self.discovery.search(q)
+            try:
+                results = self.discovery.search(q)
+            except Exception as e:
+                logger.warning("Discovery search failed for query %r: %s", q, e)
+                continue
             all_results.extend(results)
 
         # De-duplicate by URL to avoid redundant sources from different queries
@@ -255,23 +279,53 @@ class Orchestrator:
         return unique_results
 
     def process_source(self, result: DiscoveryResult) -> Parameters:
-        """Phase 1: Extraction."""
-        content = self.discovery.fetch_content(result)
+        """Phase 1: Extraction.
 
-        if content.startswith(PDF_PATH_PREFIX):
-            pdf_path = content[len(PDF_PATH_PREFIX) :]
-            try:
-                text = self.extractor.pdf_to_markdown(pdf_path)
-            finally:
-                # Clean up temp file regardless of extraction outcome
+        Never raises: a failure in fetch/parse/extract is logged and converted
+        into an empty Parameters so one bad source cannot abort a batch run.
+        """
+        from datetime import datetime as _dt
+
+        try:
+            content = self.discovery.fetch_content(result)
+
+            if content.startswith(PDF_PATH_PREFIX):
+                pdf_path = content[len(PDF_PATH_PREFIX):]
+
                 try:
-                    os.remove(pdf_path)
-                except OSError:
-                    pass
-        else:
-            text = content
+                    text = self.extractor.pdf_to_markdown(pdf_path)
+                finally:
+                    try:
+                        os.remove(pdf_path)
+                    except OSError:
+                        pass
+            else:
+                text = content
 
-        return self.extractor.extract_parameters(text, result.title)
+            if not (text or "").strip():
+                logger.warning("No text recovered from source %r; returning empty parameters.", result.title)
+                return Parameters(
+                    variables={},
+                    correlations={},
+                    meta=MetaParams(
+                        source=result.title,
+                        extracted_at=_dt.now().isoformat(timespec="seconds"),
+                        extraction_method="none",
+                    ),
+                )
+
+            return self.extractor.extract_parameters(text, result.title)
+        except Exception as e:
+            logger.error("Failed to process source %r: %s", result.title, e, exc_info=True)
+            return Parameters(
+                variables={},
+                correlations={},
+                meta=MetaParams(
+                    source=result.title,
+                    extracted_at=_dt.now().isoformat(timespec="seconds"),
+                    extraction_method="error",
+                ),
+            )
 
     def suggest_sources(self, results: List[DiscoveryResult]) -> List[int]:
         """Analyze discovery results and suggest which ones likely contain statistical data.
@@ -345,6 +399,7 @@ class Orchestrator:
         noise_level = cfg.initial_noise
         no_improve_streak = 0
         self.optimization_trace = []
+        last_df = None
 
         for i in range(iterations):
             iteration_started = time.perf_counter()
@@ -352,14 +407,56 @@ class Orchestrator:
 
             # Synthesis
             synthesis_started = time.perf_counter()
-            df = self.synthesizer.synthesize(current_params, noise_level=noise_level)
+            try:
+                df = self.synthesizer.synthesize(current_params, noise_level=noise_level)
+            except Exception as e:
+                logger.error("Synthesis failed on iteration %d: %s", i + 1, e, exc_info=True)
+                no_improve_streak += 1
+                noise_level, phase = next_noise(no_improve_streak, noise_level, cfg)
+                trace_row = {
+                    "iteration": i + 1,
+                    "noise_level": noise_level,
+                    "overall_score": None,
+                    "error": "synthesis: %s: %s" % (type(e).__name__, e),
+                    "improved": False,
+                    "phase": phase,
+                    "noise_after": noise_level,
+                    "synthesis_seconds": time.perf_counter() - synthesis_started,
+                    "validation_seconds": 0.0,
+                    "artifact_write_seconds": 0.0,
+                }
+                self.optimization_trace.append(trace_row)
+                trace_row["iteration_seconds"] = time.perf_counter() - iteration_started
+                continue
             synthesis_seconds = time.perf_counter() - synthesis_started
 
             # Validation
             validation_started = time.perf_counter()
-            report = self.validator.validate(df, current_params, source_text=source_text)
+            try:
+                report = self.validator.validate(df, current_params, source_text=source_text)
+            except Exception as e:
+                logger.error("Validation failed on iteration %d: %s", i + 1, e, exc_info=True)
+                no_improve_streak += 1
+                noise_level, phase = next_noise(no_improve_streak, noise_level, cfg)
+                trace_row = {
+                    "iteration": i + 1,
+                    "noise_level": noise_level,
+                    "overall_score": None,
+                    "error": "validation: %s: %s" % (type(e).__name__, e),
+                    "improved": False,
+                    "phase": phase,
+                    "noise_after": noise_level,
+                    "synthesis_seconds": synthesis_seconds,
+                    "validation_seconds": time.perf_counter() - validation_started,
+                    "artifact_write_seconds": 0.0,
+                }
+                self.optimization_trace.append(trace_row)
+                last_df = df
+                trace_row["iteration_seconds"] = time.perf_counter() - iteration_started
+                continue
             validation_seconds = time.perf_counter() - validation_started
             logger.info("  Fidelity Score: %s", report.overall_score)
+            last_df = df
             improved = report.overall_score > self.best_score
             trace_row = {
                 "iteration": i + 1,
@@ -429,4 +526,6 @@ class Orchestrator:
                 - trace_row["artifact_write_seconds"],
             )
 
+        if self.best_data is None and last_df is not None:
+            self.best_data = last_df
         return self.best_score, self.best_data
