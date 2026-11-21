@@ -19,6 +19,9 @@ dependencies = [
     "sdv>=1.17.0",
 ]
 
+[project.scripts]
+agentdataset = "agentdataset.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
