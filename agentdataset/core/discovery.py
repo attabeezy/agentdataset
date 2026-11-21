@@ -59,13 +59,14 @@ class DiscoveryAgent:
             return False
         return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
-    def search(self, query: str) -> List[DiscoveryResult]:
+    def search(self, query: str, max_results: int | None = None) -> List[DiscoveryResult]:
         """Search the web via OpenRouter's Exa-powered web search plugin."""
+        limit = max_results if max_results is not None else self.max_results
         results = []
         prompt = (
             "Search the web for: " + query + "\n"
             "Return ONLY a JSON array (no prose, no markdown fences) of up to "
-            + str(self.max_results)
+            + str(limit)
             + " objects with keys: title, url, snippet. "
             "Use real URLs from the search results."
         )
@@ -131,7 +132,10 @@ class DiscoveryAgent:
         if not isinstance(parsed, list):
             raise SearchError(f"OpenRouter search returned unparseable results for query {query!r}")
 
+        from datetime import datetime as _dt
+        retrieved_at = _dt.now().isoformat(timespec="seconds")
         seen_urls = set()
+        rank = 0
         for r in parsed:
             if not isinstance(r, dict):
                 continue
@@ -141,6 +145,9 @@ class DiscoveryAgent:
             if url in seen_urls:
                 continue
             seen_urls.add(url)
+            rank += 1
+            if rank > limit:
+                break
             snippet = r.get("snippet")
             if isinstance(snippet, str) and len(snippet) > 2000:
                 snippet = snippet[:2000]
@@ -150,6 +157,10 @@ class DiscoveryAgent:
                 source_type="pdf" if str(url).lower().endswith(".pdf") else "html",
                 relevance_score=1.0,
                 snippet=snippet,
+                query=query,
+                rank=rank,
+                retrieved_at=retrieved_at,
+                dedup_decision="kept",
             ))
 
         if not results:
