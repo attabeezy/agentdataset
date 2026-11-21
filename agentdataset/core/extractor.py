@@ -18,6 +18,8 @@ from agentdataset.models.schemas import (
     VariableParams,
     CorrelationParams,
     MetaParams,
+    Claim,
+    EvidenceLocator,
 )
 
 logger = logging.getLogger(__name__)
@@ -300,37 +302,109 @@ def _chunk_text(text: str, size: int = 8000, overlap: int = 500) -> list[str]:
 def _merge_chunk_results(
     results: list[tuple[Dict, Dict]],
 ) -> tuple[Dict, Dict]:
-    """Merge per-chunk (variables, correlations): same name averages, else union."""
+    """Merge per-chunk (variables, correlations), deduplicating across chunks.
+
+    Variables are grouped by their normalized name, so ``age`` and ``Age`` (or
+    ``heart rate`` / ``heart_rate``) collapse into a single entry instead of
+    becoming two columns. Their mean/std are averaged across occurrences.
+
+    Correlations are grouped by their normalized, order-insensitive
+    (var1, var2) pair, so the same pair reported in two overlapping windows
+    no longer survives twice under two different chunk-local keys (``c1``,
+    ``c2``, ...) while two distinct pairs that both happened to be ``c1`` in
+    different chunks no longer collapse into one.
+    """
     from agentdataset.models.schemas import VariableParams as _VP
     from agentdataset.models.schemas import CorrelationParams as _CP
+    from collections import defaultdict
 
-    var_accum: dict[str, dict] = {}
+    if not results:
+        return {}, {}
+
+    # --- Variables: group by normalized name ---
+    var_groups: dict[str, list[tuple[str, Any]]] = defaultdict(list)
     for variables, _ in results:
-        for name, vp in variables.items():
-            slot = var_accum.setdefault(name, {"means": [], "stds": [], "vp": vp})
-            slot["means"].append(vp.mean)
-            slot["stds"].append(vp.std)
+        for name, vp in (variables or {}).items():
+            var_groups[_normalize_variable_name(name)].append((name, vp))
+
     merged_vars: dict = {}
-    for name, acc in var_accum.items():
-        vp = acc["vp"]
-        mean = sum(acc["means"]) / len(acc["means"])
-        std = sum(acc["stds"]) / len(acc["stds"])
-        if not (std > 0):
+    for items in var_groups.values():
+        # Canonical name: first occurrence (deterministic).
+        canonical = items[0][0]
+        means = [vp.mean for _, vp in items]
+        stds = [vp.std for _, vp in items]
+        mean = sum(means) / len(means)
+        std = sum(stds) / len(stds)
+        if not (std is not None and std > 0):
             continue
-        merged_vars[name] = _VP(
-            name=name,
-            distribution=vp.distribution,
-            mean=mean,
-            std=std,
-            min=vp.min if vp.min is not None else mean - 3 * std,
-            max=vp.max if vp.max is not None else mean + 3 * std,
-            categories=vp.categories,
+        # Prefer optional fields carried by some chunk over a None from another.
+        distribution = items[0][1].distribution
+        categories = next(
+            (vp.categories for _, vp in items if getattr(vp, "categories", None)),
+            items[0][1].categories,
         )
-    merged_corrs: dict = {}
+        min_val = next(
+            (vp.min for _, vp in items if getattr(vp, "min", None) is not None),
+            None,
+        )
+        max_val = next(
+            (vp.max for _, vp in items if getattr(vp, "max", None) is not None),
+            None,
+        )
+        try:
+            merged_vars[canonical] = _VP(
+                name=canonical,
+                distribution=distribution,
+                mean=mean,
+                std=std,
+                min=min_val if min_val is not None else mean - 3 * std,
+                max=max_val if max_val is not None else mean + 3 * std,
+                categories=categories,
+            )
+        except Exception:
+            continue
+
+    # --- Correlations: group by normalized, order-insensitive pair ---
+    corr_groups: dict[tuple[str, str], list] = defaultdict(list)
     for _, correlations in results:
-        for key, cp in correlations.items():
-            if key not in merged_corrs:
-                merged_corrs[key] = cp
+        for cp in (correlations or {}).values():
+            v1n = _normalize_variable_name(getattr(cp, "var1", "") or "")
+            v2n = _normalize_variable_name(getattr(cp, "var2", "") or "")
+            pair_key = tuple(sorted((v1n, v2n)))
+            corr_groups[pair_key].append(cp)
+
+    # Normalized -> canonical variable name map for resolution.
+    by_normalized: dict[str, list] = defaultdict(list)
+    for name in merged_vars:
+        by_normalized[_normalize_variable_name(name)].append(name)
+
+    merged_corrs: dict = {}
+    for pair_key, cps in corr_groups.items():
+        # Self-correlations are always 1.0 and never a useful dependence statement.
+        if pair_key[0] and pair_key[0] == pair_key[1]:
+            continue
+        vals = [cp.correlation for cp in cps]
+        corr_val = sum(vals) / len(vals)
+        cp0 = cps[0]
+        var1 = _resolve_correlation_name(cp0.var1, merged_vars, by_normalized)
+        var2 = _resolve_correlation_name(cp0.var2, merged_vars, by_normalized)
+        direction = cp0.direction
+        key = f"{var1}__{var2}"
+        if key in merged_corrs:
+            i = 2
+            while f"{key}__{i}" in merged_corrs:
+                i += 1
+            key = f"{key}__{i}"
+        try:
+            merged_corrs[key] = _CP(
+                var1=var1,
+                var2=var2,
+                correlation=corr_val,
+                direction=direction,
+            )
+        except Exception:
+            continue
+
     return merged_vars, merged_corrs
 
 
@@ -342,6 +416,14 @@ class Extractor:
         self.api_key = api_key
         self.env_var = env_var
         self.call_history: list[dict] = []
+        # Last per-chunk (variables, correlations) pairs from an LLM extraction,
+        # kept so chunk-merge behaviour can be replayed/tested offline.
+        self.last_chunk_results: list[tuple[Dict, Dict]] = []
+        # Evidence captured during the most recent extraction: maps a variable
+        # name or correlation key to the supporting passage (best-effort).
+        self.last_evidence: dict[str, str] = {}
+        # Claims produced during the most recent extraction (§10.2).
+        self.last_claims: list = []
 
     def _record_completion(
         self, response, started_at: float, purpose: str, model: str | None = None
@@ -535,6 +617,10 @@ class Extractor:
                 min=mean - 3 * std,
                 max=mean + 3 * std,
             )
+            # Best-effort evidence passage for this claim (§10.2).
+            lo = max(0, start - 120)
+            hi = min(len(text), start + 120)
+            self.last_evidence[name] = text[lo:hi].strip()
 
         for match in _PATTERN_MEAN_STD.finditer(text):
             add_variable(float(match.group(1)), float(match.group(2)), match.start())
@@ -563,6 +649,9 @@ class Extractor:
                     distribution="categorical",
                     categories={label: float(prob) for label, prob in pairs},
                 )
+                lo = max(0, match.start() - 120)
+                hi = min(len(text), match.end() + 120)
+                self.last_evidence[name] = text[lo:hi].strip()
 
         # Correlation extraction. Names go through the same normalization as the
         # variables above so that a pair can actually resolve; a pair naming a
@@ -582,6 +671,9 @@ class Extractor:
                         correlation=value,
                         direction="positive" if value >= 0 else "negative",
                     )
+                    lo = max(0, match.start() - 120)
+                    hi = min(len(text), match.end() + 120)
+                    self.last_evidence[key] = text[lo:hi].strip()
 
         return variables, correlations
 
@@ -633,6 +725,9 @@ class Extractor:
     def extract_parameters(self, text: str, source_name: str) -> Parameters:
         """Extract statistical parameters — LLM first, regex fallback."""
         from datetime import datetime as _dt
+        self.last_chunk_results = []
+        self.last_evidence = {}
+        self.last_claims = []
         if not (text or "").strip():
             return Parameters(
                 variables={},
@@ -669,6 +764,7 @@ class Extractor:
                     variables, correlations = per_chunk[0]
                 else:
                     variables, correlations = _merge_chunk_results(per_chunk)
+                self.last_chunk_results = list(per_chunk)
                 # Drop implausible LLM outputs: non-positive std cannot be
                 # synthesized and is near-certainly a hallucination/SE misread.
                 variables = {
@@ -692,7 +788,7 @@ class Extractor:
         else:
             variables, correlations = self._extract_with_regex(text)
 
-        return Parameters(
+        params = Parameters(
             variables=variables,
             correlations=correlations,
             meta=MetaParams(
@@ -701,3 +797,57 @@ class Extractor:
                 extraction_method=method,
             ),
         )
+        self.last_claims = self._build_claims(params, source_name, method)
+        return params
+
+    def _build_claims(self, params: Parameters, source_name: str, method: str) -> list:
+        """Convert extracted Parameters into evidence-tagged Claims (§10.2).
+
+        Evidence is best-effort: regex extraction captures a surrounding passage;
+        LLM extraction does not yet return per-variable locators, so those claims
+        carry only the source id and method. claim_type defaults to ``reported``
+        because the extractor only emits directly stated statistics.
+        """
+        from datetime import datetime as _dt
+
+        confidence = 0.85 if method == "llm" else 0.55
+        claims = []
+        for name, vp in (params.variables or {}).items():
+            claims.append(Claim(
+                claim_id=f"{source_name}::{name}",
+                source_id=source_name,
+                variable_name=name,
+                statistic_type="mean" if vp.distribution != "categorical" else "category_prob",
+                value={"mean": vp.mean, "std": vp.std, "distribution": vp.distribution},
+                units=None,
+                claim_type="reported",
+                confidence=confidence,
+                method=method,
+                evidence=EvidenceLocator(
+                    source_id=source_name,
+                    passage=self.last_evidence.get(name),
+                ) if self.last_evidence.get(name) else None,
+                created_at=_dt.now().isoformat(timespec="seconds"),
+            ))
+        for key, cp in (params.correlations or {}).items():
+            claims.append(Claim(
+                claim_id=f"{source_name}::{key}",
+                source_id=source_name,
+                variable_name=key,
+                statistic_type="correlation",
+                value=cp.correlation,
+                claim_type="reported",
+                confidence=confidence,
+                method=method,
+                evidence=EvidenceLocator(
+                    source_id=source_name,
+                    passage=self.last_evidence.get(key),
+                ) if self.last_evidence.get(key) else None,
+                created_at=_dt.now().isoformat(timespec="seconds"),
+            ))
+        return claims
+
+    def extract_with_claims(self, text: str, source_name: str):
+        """Like extract_parameters, but also return the produced Claims."""
+        params = self.extract_parameters(text, source_name)
+        return params, list(self.last_claims)

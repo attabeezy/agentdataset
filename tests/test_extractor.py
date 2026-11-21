@@ -1,7 +1,8 @@
 import json
 import pytest
 from unittest.mock import MagicMock, patch
-from agentdataset.core.extractor import Extractor
+from agentdataset.core.extractor import Extractor, _merge_chunk_results
+from agentdataset.models.schemas import VariableParams, CorrelationParams
 
 
 def test_extractor_init():
@@ -423,3 +424,100 @@ def test_record_completion_falls_back_to_usage_cost():
     with patch("agentdataset.core.extractor.litellm.completion_cost", side_effect=Exception("not mapped")):
         ext._record_completion(response, started_at=0.0, purpose="test")
     assert ext.call_history[-1]["cost_usd"] == 0.0009
+
+
+# ---------------------------------------------------------------------------
+# _merge_chunk_results (chunk-merge dedup)
+# ---------------------------------------------------------------------------
+
+def _vp(name, mean=1.0, std=2.0):
+    return VariableParams(name=name, distribution="normal", mean=mean, std=std)
+
+
+def _cp(var1, var2, corr=0.5):
+    return CorrelationParams(var1=var1, var2=var2, correlation=corr)
+
+
+def test_merge_empty_returns_empty():
+    assert _merge_chunk_results([]) == ({}, {})
+
+
+def test_merge_single_chunk_variables_passthrough():
+    vars_in = {"age": _vp("age", 30.0, 5.0)}
+    corrs_in = {"c1": _cp("age", "income", 0.4)}
+    merged_vars, merged_corrs = _merge_chunk_results([(vars_in, corrs_in)])
+    assert "age" in merged_vars
+    assert merged_vars["age"].mean == pytest.approx(30.0)
+    # Correlation preserved even when only one chunk.
+    assert len(merged_corrs) == 1
+
+
+def test_merge_dedups_variables_by_normalized_name():
+    r1 = ({"Age": _vp("Age", 30.0, 5.0)}, {})
+    r2 = ({"age": _vp("age", 40.0, 7.0)}, {})
+    merged_vars, _ = _merge_chunk_results([r1, r2])
+    assert list(merged_vars.keys()) == ["Age"]
+    assert merged_vars["Age"].mean == pytest.approx(35.0)
+    assert merged_vars["Age"].std == pytest.approx(6.0)
+
+
+def test_merge_dedups_variables_with_punctuation_differences():
+    r1 = ({"heart rate": _vp("heart rate", 70.0, 8.0)}, {})
+    r2 = ({"heart_rate": _vp("heart_rate", 72.0, 9.0)}, {})
+    merged_vars, _ = _merge_chunk_results([r1, r2])
+    assert len(merged_vars) == 1
+
+
+def test_merge_dedups_correlations_by_pair():
+    # Same pair reported under different chunk-local keys must collapse.
+    r1 = ({}, {"c1": _cp("a", "b", 0.6)})
+    r2 = ({}, {"c1": _cp("a", "b", 0.8)})
+    _, merged_corrs = _merge_chunk_results([r1, r2])
+    assert len(merged_corrs) == 1
+    assert list(merged_corrs.values())[0].correlation == pytest.approx(0.7)
+
+
+def test_merge_keeps_distinct_correlations():
+    # Two different pairs that both happened to be "c1" in their chunks.
+    r1 = ({}, {"c1": _cp("a", "b", 0.6)})
+    r2 = ({}, {"c1": _cp("c", "d", 0.8)})
+    _, merged_corrs = _merge_chunk_results([r1, r2])
+    assert len(merged_corrs) == 2
+
+
+def test_merge_correlation_pair_order_insensitive():
+    r1 = ({}, {"c1": _cp("a", "b", 0.6)})
+    r2 = ({}, {"c2": _cp("b", "a", 0.8)})
+    _, merged_corrs = _merge_chunk_results([r1, r2])
+    assert len(merged_corrs) == 1
+
+
+def test_merge_skips_self_correlations():
+    r1 = ({}, {"c1": _cp("a", "a", 1.0)})
+    _, merged_corrs = _merge_chunk_results([r1])
+    assert merged_corrs == {}
+
+
+def test_merge_preserves_unmatched_correlation():
+    r1 = ({"a": _vp("a")}, {"c1": _cp("a", "income", 0.3)})
+    merged_vars, merged_corrs = _merge_chunk_results([r1])
+    assert "a" in merged_vars
+    cp = list(merged_corrs.values())[0]
+    assert cp.var2 == "income"
+    assert cp.var2 not in merged_vars
+
+
+def test_extractor_last_chunk_results_populated():
+    import json as _json
+    from unittest.mock import MagicMock, patch
+    llm_json = {
+        "variables": {"income": {"distribution": "normal", "mean": 50000.0, "std": 12000.0}},
+        "correlations": {},
+    }
+    mock_response = MagicMock()
+    mock_response.choices[0].message.content = _json.dumps(llm_json)
+    with patch("agentdataset.core.extractor.completion", return_value=mock_response):
+        ext = Extractor(model="gpt-4o", api_key="sk-test")
+        ext.extract_parameters("Some research text.", "test_source")
+        assert isinstance(ext.last_chunk_results, list)
+        assert len(ext.last_chunk_results) == 1
