@@ -10,7 +10,7 @@ import pandas as pd
 from scipy import stats
 from scipy.spatial.distance import cdist
 from typing import Dict, Any, List, Optional
-from agentdataset.models.schemas import Parameters, FidelityReport
+from agentdataset.models.schemas import Parameters, FidelityReport, Claim
 
 MIN_KS_PVALUE = 0.05
 MIN_FIDELITY_SCORE = 90.0
@@ -266,11 +266,57 @@ class Validator:
         """Deprecated alias for :meth:`compute_row_dispersion`."""
         return self.compute_row_dispersion(df, sample_size=sample_size)
 
+    def compute_claim_grounding(
+        self, claims: Optional[List[Claim]] = None, source_text: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Claim-level grounding: each claim's value must appear in its evidence
+        passage (or the whole source text as fallback). Returns score + details.
+        """
+        if not claims:
+            return {"score": 100.0, "details": {"skipped": True}}
+        import re as _re
+        grounded = 0
+        per_claim = {}
+        for c in claims:
+            passage = None
+            if c.evidence and c.evidence.passage:
+                passage = c.evidence.passage
+            elif source_text:
+                passage = source_text
+            if passage is None:
+                per_claim[c.claim_id] = False
+                continue
+            text_low = passage.lower().replace("_", " ")
+            # value presence: try numeric mean if dict
+            val = c.value
+            num = None
+            if isinstance(val, dict):
+                num = val.get("mean")
+            elif isinstance(val, (int, float)):
+                num = val
+            ok = True
+            if num is not None:
+                nums = [_f for _f in (_to_float(m) for m in _re.findall(r"-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?", passage)) if _f is not None]
+                num_hit = any(abs(n - float(num)) <= max(1e-6, 0.01 * abs(float(num))) for n in nums)
+                ok = ok and num_hit
+            # name presence
+            if c.variable_name and "_" in c.variable_name:
+                name_hit = c.variable_name.lower().replace("_", " ") in text_low
+            else:
+                name_hit = c.variable_name.lower() in text_low
+            if c.variable_name:
+                ok = ok and name_hit
+            per_claim[c.claim_id] = ok
+            grounded += 1 if ok else 0
+        total = len(claims) or 1
+        return {"score": 100.0 * grounded / total, "details": per_claim}
+
     def validate(
         self,
         df: pd.DataFrame,
         parameters: Parameters,
         source_text: Optional[str] = None,
+        claims: Optional[List[Any]] = None,
     ) -> FidelityReport:
         """Run full validation suite.
 
@@ -307,8 +353,9 @@ class Validator:
 
         plaus = self.compute_plausibility(parameters)
         ground = self.compute_grounding(parameters, source_text)
+        claim_ground = self.compute_claim_grounding(claims, source_text)
         trust_score = round(
-            0.5 * overall_score + 0.3 * ground["score"] + 0.2 * plaus["score"], 2
+            0.4 * overall_score + 0.25 * ground["score"] + 0.2 * plaus["score"] + 0.15 * claim_ground["score"], 2
         )
 
         return FidelityReport(
