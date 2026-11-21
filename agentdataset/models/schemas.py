@@ -132,8 +132,158 @@ class DiscoveryResult(BaseModel):
     source_type: str  # "pdf" or "html"
     relevance_score: float
     snippet: Optional[str] = None
+    # Discovery provenance (§10.1)
+    query: Optional[str] = None
+    rank: Optional[int] = None
+    retrieved_at: Optional[str] = None
+    dedup_decision: Optional[str] = None
 
     @field_validator("source_type", mode="before")
     @classmethod
     def _coerce_source_type(cls, v):
         return v if v in _ALLOWED_SOURCE_TYPES else "html"
+
+
+# ---------------------------------------------------------------------------
+# Evidence-first claim / provenance models (§10)
+# ---------------------------------------------------------------------------
+
+_ALLOWED_CLAIM_TYPES = {"reported", "derived", "inferred"}
+_ALLOWED_CLAIM_STATUSES = {"proposed", "accepted", "rejected", "deferred", "edited"}
+_ALLOWED_STATISTIC_TYPES = {
+    "mean", "std", "min", "max", "category_prob", "correlation",
+    "sample_size", "bound", "other",
+}
+
+
+class EvidenceLocator(BaseModel):
+    """Where a claim is supported in a source document."""
+
+    source_id: str
+    passage: Optional[str] = None
+    locator: Optional[str] = None  # e.g. "p.4 Table 2"
+    char_offset: Optional[int] = None
+    content_hash: Optional[str] = None
+
+
+class SourceRecord(BaseModel):
+    """A retrieved candidate source plus its discovery provenance."""
+
+    source_id: str
+    url: str
+    title: str
+    source_type: str  # "pdf" or "html"
+    query: Optional[str] = None
+    rank: Optional[int] = None
+    snippet: Optional[str] = None
+    retrieved_at: Optional[str] = None
+    dedup_decision: Optional[str] = None  # "kept" | "duplicate" | ...
+    content_hash: Optional[str] = None
+    fetch_status: Optional[str] = None
+    parse_status: Optional[str] = None
+
+    @field_validator("source_type", mode="before")
+    @classmethod
+    def _coerce_source_type(cls, v):
+        return v if v in _ALLOWED_SOURCE_TYPES else "html"
+
+
+class Claim(BaseModel):
+    """A single proposed statistic, with evidence and review state."""
+
+    claim_id: str
+    source_id: str
+    variable_name: str
+    statistic_type: str = "other"
+    value: Any = None
+    units: Optional[str] = None
+    population: Optional[str] = None
+    subgroup: Optional[str] = None
+    time_point: Optional[str] = None
+    arm: Optional[str] = None
+    claim_type: str = "reported"  # reported | derived | inferred
+    derivation: Optional[str] = None
+    confidence: float = 0.5
+    evidence: Optional[EvidenceLocator] = None
+    conflict_flag: bool = False
+    conflict_group: Optional[str] = None
+    status: str = "proposed"
+    method: str = "llm"  # llm | regex_fallback | manual
+    edited_value: Any = None
+    review_note: Optional[str] = None
+    created_at: Optional[str] = None
+
+    @field_validator("claim_type", mode="before")
+    @classmethod
+    def _coerce_claim_type(cls, v):
+        return v if v in _ALLOWED_CLAIM_TYPES else "reported"
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _coerce_status(cls, v):
+        return v if v in _ALLOWED_CLAIM_STATUSES else "proposed"
+
+    @field_validator("statistic_type", mode="before")
+    @classmethod
+    def _coerce_statistic_type(cls, v):
+        return v if v in _ALLOWED_STATISTIC_TYPES else "other"
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _clamp_confidence(cls, v):
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return 0.5
+        return max(0.0, min(1.0, f))
+
+
+class ReconciliationDecision(BaseModel):
+    """How claims were reconciled into the synthesis specification."""
+
+    target_variable: str
+    accepted_claim_ids: List[str] = Field(default_factory=list)
+    rejected_claim_ids: List[str] = Field(default_factory=list)
+    pooled_value: Optional[Any] = None
+    method: str = "manual"  # manual | weighted_pool | single_source | ...
+    assumption: Optional[str] = None
+    note: Optional[str] = None
+
+
+class SynthesisConfig(BaseModel):
+    """Configuration used for a synthesis run."""
+
+    row_count: int = 500
+    seed: int = 42
+    noise_level: float = 0.02
+    iterations: int = 5
+    marginal_model: str = "parametric"
+    dependence_model: str = "gaussian_copula"
+    corr_repair: str = "drop"
+    pivot: Optional[Dict[str, Any]] = None
+
+
+class RunManifest(BaseModel):
+    """Versioned provenance manifest for a complete run (§10.9)."""
+
+    manifest_version: str = "1.0"
+    run_id: str
+    created_at: str
+    code_revision: Optional[str] = None
+    python_version: Optional[str] = None
+    query: Optional[str] = None
+    model_ids: List[str] = Field(default_factory=list)
+    prompt_version: Optional[str] = None
+    schema_version: Optional[str] = None
+    sources: List[SourceRecord] = Field(default_factory=list)
+    raw_claims: List[Claim] = Field(default_factory=list)
+    review_decisions: List[Dict[str, Any]] = Field(default_factory=list)
+    reconciliation: List[ReconciliationDecision] = Field(default_factory=list)
+    synthesis_config: Optional[SynthesisConfig] = None
+    parameters_path: Optional[str] = None
+    data_path: Optional[str] = None
+    datacard_path: Optional[str] = None
+    fidelity: Optional[Dict[str, Any]] = None
+    cost_latency: Optional[Dict[str, Any]] = None
+    retention_policy: Optional[str] = None
+    notes: Optional[str] = None
