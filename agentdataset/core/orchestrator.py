@@ -18,7 +18,10 @@ from agentdataset.models.schemas import (
     VariableParams,
     CorrelationParams,
     MetaParams,
+    SourceRecord,
+    Claim,
 )
+from agentdataset.core.manifest import build_manifest, write_manifest
 from agentdataset.core.discovery import DiscoveryAgent, PDF_PATH_PREFIX
 from agentdataset.core.extractor import Extractor
 from agentdataset.core.synthesizer import Synthesizer
@@ -158,6 +161,9 @@ class Orchestrator:
         self.best_params: Optional[Parameters] = None
         self.best_data: Optional[pd.DataFrame] = None
         self.optimization_trace: list[dict] = []
+        # Evidence-first provenance (§10.9): sources/claims captured during the run.
+        self.run_sources: list = []
+        self.run_claims: list = []
 
     def merge_parameters(self, params_list: List[Parameters]) -> Parameters:
         """Merge parameters extracted from multiple sources.
@@ -254,29 +260,124 @@ class Orchestrator:
             logger.error("Query optimization failed: %s", e)
             return [query]
 
-    def run_discovery(self, query: str) -> List[DiscoveryResult]:
-        """Phase 0: Discovery (with query optimization)."""
+    @staticmethod
+    def _normalize_url(url: str) -> str:
+        from urllib.parse import urlparse, urlunparse
+
+        try:
+            p = urlparse(str(url).strip())
+        except Exception:
+            return str(url).strip().lower()
+        # Drop scheme, trailing slash, and fragment for dedup purposes.
+        netloc = p.netloc.lower()
+        path = p.path.rstrip("/")
+        return f"{netloc}{path}".lower()
+
+    @staticmethod
+    def _score_candidate(r: DiscoveryResult) -> float:
+        """Inexpensive relevance heuristic for ranking candidates (§10.1).
+
+        Favours sources whose snippets mention statistical quantities and PDFs.
+        """
+        score = 0.0
+        text = " ".join(
+            filter(None, [r.title, r.snippet])
+        ).lower()
+        for kw in ("mean", "std", "standard deviation", "correlation", "distribution",
+                   "table", "results", "dataset", "sample"):
+            if kw in text:
+                score += 1.0
+        if r.source_type == "pdf":
+            score += 1.5
+        # Prefer earlier ranks from their originating query.
+        if r.rank is not None:
+            score += max(0.0, 3.0 - (r.rank or 1))
+        # Incorporate any backend relevance score.
+        try:
+            score += float(r.relevance_score or 0.0)
+        except (TypeError, ValueError):
+            pass
+        return score
+
+    def run_discovery(
+        self,
+        query: str,
+        max_candidates: int = 20,
+        per_query: int | None = None,
+        concurrency: int = 1,
+    ) -> List[DiscoveryResult]:
+        """Phase 0: Discovery (broad funnel + ranked candidates, §10.1).
+
+        Expands the query, searches each angle (optionally in parallel), dedups
+        by normalized URL while recording the dedup decision, ranks candidates by
+        an inexpensive statistical-availability heuristic, and returns the full
+        ranked candidate pool up to ``max_candidates``. Fetching/extraction is
+        deliberately left to the caller (user selection).
+        """
         optimized_queries = self.optimize_query(query)
         logger.info("Optimized queries: %s", optimized_queries)
 
-        all_results = []
-        for q in optimized_queries:
-            try:
-                results = self.discovery.search(q)
-            except Exception as e:
-                logger.warning("Discovery search failed for query %r: %s", q, e)
-                continue
-            all_results.extend(results)
+        # Collect per-query results (optionally concurrent).
+        collected: list[tuple[str, List[DiscoveryResult]]] = []
+        if concurrency and concurrency > 1:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        # De-duplicate by URL to avoid redundant sources from different queries
-        seen_urls = set()
-        unique_results = []
-        for r in all_results:
-            if r.url not in seen_urls:
-                unique_results.append(r)
-                seen_urls.add(r.url)
+            with ThreadPoolExecutor(max_workers=concurrency) as pool:
+                future_map = {
+                    pool.submit(
+                        (lambda qq: self.discovery.search(qq, per_query) if per_query is not None else self.discovery.search(qq)),
+                        q,
+                    ): q
+                    for q in optimized_queries
+                }
+                for fut in as_completed(future_map):
+                    q = future_map[fut]
+                    try:
+                        collected.append((q, fut.result()))
+                    except Exception as e:
+                        logger.warning("Discovery search failed for query %r: %s", q, e)
+        else:
+            for q in optimized_queries:
+                try:
+                    collected.append((q, (self.discovery.search(q, per_query) if per_query is not None else self.discovery.search(q))))
+                except Exception as e:
+                    logger.warning("Discovery search failed for query %r: %s", q, e)
 
-        return unique_results
+        # Dedup by normalized URL, recording provenance + dedup decision.
+        seen: dict[str, DiscoveryResult] = {}
+        all_results: list[DiscoveryResult] = []
+        for q, results in collected:
+            for r in results:
+                norm = self._normalize_url(r.url)
+                if norm in seen:
+                    r.dedup_decision = "duplicate"
+                    # keep the first (higher-ranked) occurrence
+                    continue
+                r.dedup_decision = "kept"
+                if r.query is None:
+                    r.query = q
+                seen[norm] = r
+                all_results.append(r)
+
+        # Rank by inexpensive heuristic.
+        ranked = sorted(all_results, key=self._score_candidate, reverse=True)
+
+        # Trim to candidate pool size (keep full list available for inspection).
+        if max_candidates is not None and max_candidates > 0:
+            ranked = ranked[:max_candidates]
+
+        # Record provenance into run_sources.
+        try:
+            for r in ranked:
+                self.record_source(r)
+        except Exception:
+            pass
+
+        logger.info(
+            "Discovery funnel: %d queries -> %d candidates (pool cap %s)",
+            len(optimized_queries), len(ranked), max_candidates,
+        )
+        return ranked
 
     def process_source(self, result: DiscoveryResult) -> Parameters:
         """Phase 1: Extraction.
@@ -367,6 +468,76 @@ class Orchestrator:
         except Exception as e:
             logger.error("Source suggestion failed: %s", e)
             return []
+
+    def record_source(self, result) -> None:
+        """Record a discovered source into the run manifest provenance."""
+        try:
+            rec = SourceRecord(
+                source_id=getattr(result, "url", None) or str(len(self.run_sources)),
+                url=getattr(result, "url", ""),
+                title=getattr(result, "title", ""),
+                source_type=getattr(result, "source_type", "html"),
+                query=getattr(result, "query", None),
+                rank=getattr(result, "rank", None),
+                snippet=getattr(result, "snippet", None),
+                retrieved_at=getattr(result, "retrieved_at", None),
+                dedup_decision=getattr(result, "dedup_decision", None),
+            )
+        except Exception:
+            return
+        self.run_sources.append(rec)
+
+    def record_claims(self, claims) -> None:
+        """Record extracted claims into the run manifest provenance."""
+        for c in (claims or []):
+            self.run_claims.append(c)
+
+    def process_sources_parallel(self, results, max_workers: int = 4):
+        """Process multiple sources with bounded concurrency (§10.8)."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        out = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            future_map = {pool.submit(self.process_source, r): r for r in results}
+            for fut in as_completed(future_map):
+                r = future_map[fut]
+                try:
+                    out[r.url] = fut.result()
+                    self.record_source(r)
+                    self.record_claims(getattr(self.extractor, "last_claims", []) or [])
+                except Exception as e:
+                    logger.warning("Failed to process source %r: %s", r.title, e)
+        return out
+
+    def write_run_manifest(self, extra: dict | None = None) -> None:
+        """Write a versioned run manifest to the session directory (§10.9)."""
+        try:
+            from agentdataset.models.schemas import SynthesisConfig as _SC
+        except Exception:
+            _SC = None
+        try:
+            params = self.best_params
+            cfg = None
+            if _SC is not None:
+                cfg = _SC()
+            manifest = build_manifest(
+                run_id=self.context.session_id,
+                query=None,
+                sources=list(self.run_sources),
+                raw_claims=list(self.run_claims),
+                synthesis_config=cfg,
+            )
+            if params is not None:
+                manifest.parameters_path = "parameters.json"
+            if self.best_data is not None:
+                manifest.data_path = "data.csv"
+            manifest.datacard_path = "DATACARD.md"
+            manifest.fidelity = {"best_score": self.best_score}
+            if extra:
+                manifest.notes = str(extra)
+            write_manifest(manifest, Path(self.context.path) / "run_manifest.json")
+        except Exception as e:
+            logger.warning("Failed to write run manifest: %s", e)
 
     def run_optimization_loop(
         self,
@@ -505,6 +676,8 @@ class Orchestrator:
                     trace_row["artifact_write_seconds"] = (
                         time.perf_counter() - artifact_started
                     )
+                    # Persist provenance manifest alongside artifacts (§10.9).
+                    self.write_run_manifest()
             else:
                 no_improve_streak += 1
                 noise_level, phase = next_noise(no_improve_streak, noise_level, cfg)
