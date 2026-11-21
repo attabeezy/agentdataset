@@ -1193,7 +1193,11 @@ _FIVELAB_PROVIDERS = [
     # chunk (single datapoint, 2026-10-10) — infeasible for 300-call sweeps —
     # so the DeepSeek seat goes to the fast V4.1 Flash.
     {"name": "DeepSeek", "model": "openrouter/deepseek/deepseek-v4.1-flash", "key_env": "OPENROUTER_API_KEY"},
-    {"name": "GLM", "model": "openrouter/z-ai/glm-5.3", "key_env": "OPENROUTER_API_KEY"},
+    # GLM seat swapped to the Flash cut-down: the full glm-5.3 is reasoning-heavy
+    # (~73 s / 15k tokens per chunk, 0 vars on real papers, 250/330 API errors on
+    # the challenge sweep, see docs/report.md §4). GLMFlash in _BUDGET_PROVIDERS
+    # keeps the same model for the cheap-tier comparison.
+    {"name": "GLM", "model": "openrouter/z-ai/glm-5.3-flash", "key_env": "OPENROUTER_API_KEY"},
     {"name": "GPT", "model": "openrouter/openai/gpt-6.1-sol", "key_env": "OPENROUTER_API_KEY"},
     {"name": "Claude", "model": "openrouter/anthropic/claude-sonnet-5.5", "key_env": "OPENROUTER_API_KEY"},
     {"name": "Gemini", "model": "openrouter/google/gemini-3.8-flash", "key_env": "OPENROUTER_API_KEY"},

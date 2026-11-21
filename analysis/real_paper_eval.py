@@ -293,7 +293,7 @@ def gold_to_parameters(source_id: str, gold: pd.DataFrame) -> Parameters:
     )
 
 
-def synthesize_conditions(source: pd.Series, conditions: dict[str, Parameters]) -> tuple[pd.DataFrame, pd.DataFrame]:
+def synthesize_conditions(source: pd.Series, conditions: dict[str, Parameters], source_text: str | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     raw_rows, trace_rows = [], []
     for condition, params in conditions.items():
         if not params.variables:
@@ -304,8 +304,8 @@ def synthesize_conditions(source: pd.Series, conditions: dict[str, Parameters]) 
                 base_dir=str(CACHE_DIR / "sessions"), model=MODEL, env_var=ENV_VAR,
             )
             orchestrator.synthesizer = Synthesizer(n_rows=int(source.sample_size), seed=seed)
-            best_score, frame = orchestrator.run_optimization_loop(params, iterations=3)
-            report = Validator().validate(frame, params)
+            best_score, frame = orchestrator.run_optimization_loop(params, iterations=3, source_text=source_text)
+            report = Validator().validate(frame, params, source_text=source_text)
             # §9.7: read the structured diagnostics the synthesizer now records
             # instead of string-matching a RuntimeWarning message. `pairs_applied`
             # matters as much as the PD status — a matrix can pass the
@@ -321,6 +321,9 @@ def synthesize_conditions(source: pd.Series, conditions: dict[str, Parameters]) 
                 "fallback_warning_count": fallback_count,
                 "vacuous_matrix_count": vacuous_count,
                 "correlation_matrices_built": len(diagnostics),
+                "trust_score": report.trust_score,
+                "grounding_score": report.grounding_score,
+                "plausibility_score": report.plausibility_score,
             }.items():
                 raw_rows.append({
                     "experiment_id": "real_paper_pipeline_v1", "run_id": f"{source.source_id}:{condition}:{seed}",
@@ -441,7 +444,7 @@ def run(mode: str, refresh_sources: set[str] | None = None,
             if not errors.empty:
                 errors.insert(1, "condition", condition)
                 error_frames.append(errors)
-        raw, traces = synthesize_conditions(source, conditions)
+        raw, traces = synthesize_conditions(source, conditions, source_text=text)
         raw_frames.append(raw)
         trace_frames.append(traces)
 

@@ -2,7 +2,9 @@
 
 ## 1. Overview
 
-AgentDataset is a 4-phase assisted pipeline: discover research documents → extract statistical parameters → synthesize a dataset → validate fidelity. Each phase is a standalone module; the `Orchestrator` wires them together and manages the iterative refinement loop. Human review of selected sources and extracted parameters is part of the intended workflow.
+AgentDataset is an assisted pipeline: discover research documents → extract statistical parameters → synthesize a dataset → validate the result. Each phase is a standalone module; the `Orchestrator` wires them together. The current UI lets users review and select sources, but it does not yet pause for review of extracted parameters before merging and synthesis. The proposed system direction in §10 addresses that gap and the other limitations identified in the project audits.
+
+> **Revision status:** §2–§9 primarily document the existing implementation and completed research. §10 is the forward-looking change plan. Its items are proposals until implemented and evaluated; do not read them as current capabilities or as claims supported by the frozen results.
 
 ---
 
@@ -801,4 +803,150 @@ If time is constrained, the minimum defensible response to this review is:
 - [x] an explicit limitations discussion for idealized extraction, pairwise dependence, sample size, and distribution shift;
 - [ ] updated paper tables, appendix details, reproducibility commands, and a clean final build.
   - Technical artifacts and build are complete; the submission build remains open pending the author-block confirmation in Section 9.10.
+
+## 10. Product and Research Direction: Evidence-First Literature Synthesis
+
+This section consolidates the next system revision. The goal is to make a wider search useful, preserve defensible inference without presenting it as reported fact, and make every generated dataset traceable to reviewed evidence. This is a proposed direction, not a description of implemented behavior. Existing benchmark outputs remain frozen; results from a revised pipeline must be saved under new names and compared against the current baseline.
+
+### 10.1 Discovery — broaden coverage with a ranked source funnel
+
+**Current state:** `optimize_query()` returns the original query plus up to four generated variants. `DiscoveryAgent` requests up to five results per query, and `run_discovery()` searches those queries sequentially and deduplicates by URL. Source suggestions are advisory in the UI; users can still select any result.
+
+**Change:** Expand search across deliberately different query angles and, where practical, multiple scholarly and public-source indexes. Gather a configurable candidate pool, normalize URLs and metadata, deduplicate records, and rank candidates using topical relevance, source quality, likely availability of statistics, and coverage diversity. Keep the full candidate list available for inspection; suggestions must not silently discard sources.
+
+**Essential details:**
+- Make per-query and total-result limits, search concurrency, timeouts, and spend/API limits configurable and visible.
+- Record the query that found each source, its rank, URL, title, snippet, retrieval time, and deduplication decision.
+- Prefer broad retrieval followed by inexpensive ranking and user selection; reserve full-document fetching and LLM extraction for selected candidates.
+- Treat search snippets as discovery evidence only, not as a substitute for the paper when extracting statistics.
+
+**Acceptance checks:** Measure recall of relevant sources against a labeled query set, ranking quality at the user-selection cutoff, duplicate rate, fetch success, latency, and cost. Compare the wider funnel to the existing search behavior before changing defaults.
+
+### 10.2 Extraction — retain evidence and label inference
+
+**Current state:** The production prompt strongly prefers explicitly stated numeric statistics. Long documents are chunked and merged, but chunk outputs can duplicate the same entity or statistic. The output schema mostly stores values and source-level metadata, not claim-level evidence.
+
+**Change:** Let the extractor propose both directly reported statistics and cautious, useful inferences, while representing them as distinct claim types. Every candidate should carry a supporting passage or table locator, source identity, extraction method, assumptions, and calibrated confidence. Preserve abstention when evidence is insufficient.
+
+**Essential details:**
+- Distinguish `reported`, `derived`, and `inferred` values. Record derivations (for example, converting SE to SD only when sample size is available) rather than silently rewriting the source.
+- Preserve units, population/subgroup, sample size, time point, statistic type, table/figure/page location, and whether a value is adjusted or unadjusted.
+- Do not treat a p-value or confidence interval as a standard deviation without a justified conversion. Preserve conflicting abstract/table values as separate claims with locators and a conflict flag.
+- Merge overlapping chunk results by source location and normalized variable/measure identity, not by blindly unioning or averaging all outputs.
+- Evaluate direct extraction and inference separately, including precision, recall, calibration, unsupported-claim rate, and evidence-locator accuracy.
+
+**Acceptance checks:** On an annotated real-paper set, report separate quality for reported and inferred claims. Review high-impact or low-confidence claims before allowing them into synthesis.
+
+### 10.3 Cross-source reconciliation — do not average unlike studies
+
+**Current state:** `merge_parameters()` averages means and standard deviations for same-named variables, unions unique variables, and averages duplicate correlation keys. It does not account for sample size, population, study design, units, or whether two measures with the same name are actually comparable.
+
+**Change:** Replace automatic numeric averaging with evidence-aware reconciliation. Normalize names and units, group only comparable measures, retain per-study estimates, and surface disagreement. Pooling should be an explicit, documented statistical operation with assumptions and uncertainty, not the default merge behavior.
+
+**Essential details:**
+- Match measures using name plus definition, unit, population, time point, and study context; ambiguous matches remain separate for review.
+- Show source-level values and confidence intervals/uncertainty side by side. Support weighted pooling only where required inputs and compatibility assumptions are present.
+- Preserve correlations as study-specific unless the variable definitions, sample/population, and statistic are compatible.
+- Store the accepted or pooled value with links back to all contributing claims and the reconciliation decision.
+
+**Acceptance checks:** Include fixtures with unit changes, subgroup differences, duplicate reports, and conflicting estimates. Verify the system flags incompatibility rather than silently combining values.
+
+### 10.4 Human review — approve the specification before synthesis
+
+**Current state:** The Streamlit app supports source selection. It currently proceeds from extraction to merging and synthesis without a parameter-review step, despite the intended human-in-the-loop workflow described earlier in this document.
+
+**Change:** Add a review stage between extraction and reconciliation/synthesis. Present the source passage beside each proposed statistic, its evidence type (reported/derived/inferred), uncertainty, source context, and any conflict or name-matching warning. Let the user accept, reject, edit, or defer claims.
+
+**Essential details:**
+- Make approval state and editor changes explicit and audit logged.
+- Prevent unreviewed low-confidence inferences or unresolved source conflicts from entering the default synthesis specification; allow opt-in inclusion with a visible label.
+- Keep source selection and claim approval separate: a relevant paper can be useful even when some of its extracted claims are rejected.
+
+**Acceptance checks:** A saved run must reconstruct the exact reviewed specification from its audit record. UI tests should cover accepted, rejected, edited, conflicting, and inferred claims.
+
+### 10.5 Terminal CLI — make the same workflow available from a shell
+
+**Current state:** The primary user interface is the Streamlit app. Existing scripts under `analysis/` and `benchmark.py` have task-specific command-line entry points, but there is no supported general-purpose `agentdataset` command for running and managing ordinary project workflows.
+
+**Change:** Add a small installable CLI as a second front end to the shared discovery, extraction, review, reconciliation, synthesis, and validation services. The CLI should not fork the pipeline logic or produce a different interpretation of the same reviewed specification.
+
+**Essential details:**
+- Register an `agentdataset` console command in `pyproject.toml`. Prefer the Python standard library `argparse` initially unless a richer command structure clearly justifies another dependency.
+- Provide a guided `run` path for a research query, plus focused commands to discover sources and resume/review a saved run. Keep the initial command surface small and grow it from real use.
+- Support interactive terminal review of sources and extracted claims, including evidence snippets, reported/derived/inferred labels, conflicts, and accept/edit/reject choices. Non-interactive mode must consume an explicit reviewed specification or require an explicit policy; it must not silently skip review of uncertain claims.
+- Expose practical options such as output directory, row count, seed, model/provider, result limits, and machine-readable output. Load credentials from environment/configuration, never require secrets as command-line arguments.
+- Write the same versioned manifest, evidence, CSV, parameters, and data card as the UI. Provide clear progress, per-source failures, stage timing/cost where available, and stable non-zero exit codes for failed or incomplete runs.
+- Document installation, `--help`, examples, environment setup, resume behavior, and the difference between interactive and non-interactive operation in `README.md` when implementation begins.
+
+**Acceptance checks:** Exercise the CLI in a clean environment with mocked/offline discovery and extraction, verify argument validation, review decisions, resumability, output paths, and exit codes. For the same saved reviewed specification and seed, compare CLI and Streamlit outputs and manifests for semantic parity. Keep live API tests separate and opt-in.
+
+### 10.6 Synthesis — use an auditable, replaceable engine interface
+
+**Current state:** `Synthesizer` samples parametric marginals and uses a Gaussian latent correlation transform. Its correlation diagnostics are valuable, but the project audit found that unresolved names can leave declared correlations unapplied; categorical rank coding also makes dependence sensitive to arbitrary category ordering. The optimizer changes noise against an internal score that is not independent evidence of source fidelity.
+
+**Change:** Separate the specification from the sampling engine and make synthesis methods selectable behind a stable interface. Start with methods supported by published aggregate inputs: fitted marginal distributions plus an explicit dependence model. Compare the existing Gaussian-copula-style method with defensible alternatives only where the available statistics identify their parameters. Do not introduce a record-trained neural generator as the default for summary-only inputs.
+
+**Essential details:**
+- Validate variable references, units, marginal parameters, and correlation-matrix consistency before sampling. Unresolved declared correlations must be prominent errors or review items, not quiet omissions.
+- Treat positive-semidefinite repair as a documented transformation: retain original and repaired matrices, report the change, and allow rejection when repair materially changes the evidence.
+- Add a categorical dependence method that does not interpret alphabetical or arbitrary labels as ordinal measurements. If available aggregate inputs cannot identify a valid categorical dependence model, report that limitation and omit the unsupported dependence rather than implying it was preserved.
+- Keep SDV's real-record-trained synthesizers as benchmark baselines or options for workflows that actually have record-level training data; they are not a drop-in engine for literature-only summary statistics.
+- Expose row count, random seed, marginal model, dependence model, repair policy, and all approximation choices in the output manifest.
+
+**Acceptance checks:** Compare engines on held-out known datasets using marginal error, dependence error, downstream utility, interval coverage, runtime, and failure rate. Include independent-marginal and one-shot/no-refinement baselines. Retain the existing implementation as a reproducibility baseline until the new engine demonstrates a measured improvement.
+
+### 10.7 Validation and optimization — score against independent evidence
+
+**Current state:** The KS and bias components compare generated data to the same parameter specification used to generate it. The audit in §9.7 found the resulting score invariant to errors in those input parameters. It therefore measures implementation consistency, not whether extracted statistics are correct or whether generated rows match the source population. Grounding exists in `Validator`, but the app's optimization call does not pass source text; without it, grounding defaults to 100. The noise-pivot loop can optimize the internal score without improving downstream usefulness.
+
+**Change:** Report separate validation dimensions and make independent evidence the basis for claims about source fidelity. Keep internal sampler diagnostics, but label them as such and do not use them alone to select or certify a dataset. Make refinement optional and retain a no-loop result as a baseline.
+
+**Essential details:**
+- Validate extracted claims against source passages and validate synthetic marginals/dependence against reviewed source statistics with uncertainty-aware tolerances.
+- Where public benchmark records are available, compare against held-out real data and downstream tasks; clearly separate these benchmark-only checks from normal literature-only runs.
+- Pass evidence through to validation. Replace substring/any-number grounding with claim-level checks tied to the cited passage, including correct statistic, variable, units, and context.
+- Report per-variable and per-pair errors, unresolved or skipped correlations, matrix repairs, confidence intervals across seeds, and all score definitions.
+- Keep nearest-neighbor row dispersion labeled only as a synthetic-row diagnostic. It is not a privacy audit or formal guarantee; no differential-privacy claim follows from aggregate-only inputs.
+
+**Acceptance checks:** Corrupt a known specification in controlled ways and verify validation detects the error. Test that score changes when source statistics change even if the sampler faithfully follows its inputs. Evaluate each claimed validation metric against a predeclared external target.
+
+### 10.8 Throughput, caching, and failure handling
+
+**Current state:** The UI processes selected sources serially. Fetching and PDF parsing can dominate run time; failed fetches may fall back to short snippets. Repeating a run can repeat network and extraction work.
+
+**Change:** Use bounded concurrency for independent fetch, parse, and extraction work, with per-provider rate limits. Cache fetched documents, parsed text, and extraction results using stable content hashes plus model/prompt/schema versions. Make partial completion recoverable.
+
+**Essential details:**
+- Record per-source stage status, elapsed time, retries, and failure cause. Continue when one source fails and allow retry of only failed stages.
+- Keep cache invalidation explicit: changed content, prompt, model, or schema creates a distinct result.
+- Bound download sizes, timeouts, concurrency, API attempts, and spend. Preserve current URL safety checks and PDF size limits.
+- Treat snippet-only extraction as low-evidence and require a clear label or user approval.
+
+**Acceptance checks:** Demonstrate bounded resource use, correct cache invalidation, resumability, and a measured reduction in end-to-end latency without loss of source coverage or extraction quality.
+
+### 10.9 Provenance, retention, and evaluation discipline
+
+**Current state:** Session artifacts include the best CSV, merged parameters, and a data card. The orchestrator prunes sessions beyond three. Some benchmark artifacts and manifests are already detailed, but the product run does not yet preserve the full claim/review/reconciliation chain needed to reproduce a dataset.
+
+**Change:** Save a versioned run manifest linking query, retrieved sources, source contents or permitted references/hashes, extracted claims, review decisions, reconciliation, synthesis configuration, validation, and outputs. Make retention configurable and explicit rather than silently deleting prior research runs on startup.
+
+**Essential details:**
+- Include code revision, dependency/model identifiers, prompt/schema versions, timestamps, random seeds, source URLs and content hashes, and cost/latency by stage.
+- Preserve raw per-source claims separately from the final synthesis specification; never overwrite the frozen baseline artifacts.
+- Keep privacy language narrow: aggregate-source synthesis may reduce reliance on record-level training data, but it does not itself establish anonymity or differential privacy.
+- Evaluate each pipeline stage separately and end to end. Report uncertainty, missingness, failures, and cost; keep live API/web experiments distinct from deterministic offline replays.
+
+**Acceptance checks:** A run can be replayed from its manifest where licensing and cached content permit, and its final CSV can be traced back to each accepted claim. Retention tests confirm older runs are preserved according to the configured policy.
+
+### 10.10 Recommended implementation sequence
+
+1. Define a versioned claim/evidence schema and run manifest; preserve current outputs as frozen baselines.
+2. Add extraction evidence locators, `reported`/`derived`/`inferred` labels, and chunk-level deduplication; measure on annotated papers.
+3. Add the parameter review flow and replace blind averaging with study-aware reconciliation and conflict reporting.
+4. Build the CLI and UI on shared workflow services; validate parity on saved reviewed specifications.
+5. Broaden discovery into a configurable ranked funnel; evaluate recall, ranking, duplicates, cost, and latency on labeled queries.
+6. Add resumable caching and bounded parallel source processing; compare end-to-end costs and failure rates.
+7. Repair validation so it tests claims against independent evidence; audit the optimizer objective and keep a no-loop baseline.
+8. Introduce a synthesis-engine interface and benchmark dependence/categorical alternatives on known data before changing the default.
+9. Run a staged end-to-end evaluation on real papers, publish new artifacts under new names, and update the paper/data card only after claims are supported by those results.
 
