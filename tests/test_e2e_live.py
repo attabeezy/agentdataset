@@ -31,8 +31,8 @@ def _load_dotenv(path: Path) -> None:
 def test_live_e2e_generates_inspection_report():
     _load_dotenv(ROOT / ".env")
 
-    env_var = os.environ.get("AGENTDATASET_E2E_ENV_VAR", "OPENAI_API_KEY")
-    model = os.environ.get("AGENTDATASET_E2E_MODEL", "gpt-4o")
+    env_var = os.environ.get("AGENTDATASET_E2E_ENV_VAR", "OPENROUTER_API_KEY")
+    model = os.environ.get("AGENTDATASET_E2E_MODEL", "openrouter/auto")
     api_key = os.environ.get(env_var, "")
     if not api_key:
         pytest.skip(f"{env_var} is not set in the environment or repo-root .env.")

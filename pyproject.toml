@@ -9,11 +9,12 @@ dependencies = [
     "numpy>=2.2.0",
     "scipy>=1.15.0",
     "pandas>=2.2.0",
-    "PyMuPDF>=1.25.0",
+    "PyMuPDF>=2.0",
+    "pymupdf4llm>=2.0",
     "requests>=2.32.0",
     "trafilatura>=2.0.0",
     "litellm>=1.83.14",
-    "streamlit>=1.57.0",
+    "tenacity>=9.0.0",
     "scikit-learn>=1.9.0",
     "ucimlrepo>=0.0.7",
     "sdv>=1.17.0",
@@ -31,7 +32,7 @@ packages = ["agentdataset"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-addopts = '--basetemp=.pytest_tmp -m "not live_e2e" --cov=agentdataset --cov=app --cov-report=term-missing'
+addopts = '--basetemp=.pytest_tmp -m "not live_e2e" --cov=agentdataset --cov-report=term-missing'
 markers = [
     "live_e2e: live API-backed end-to-end test that requires .env credentials",
 ]

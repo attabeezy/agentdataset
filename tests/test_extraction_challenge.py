@@ -447,9 +447,9 @@ def test_run_extraction_challenge_produces_all_arms(mock_completion):
         Extractor(model=models[0]["model"], api_key="sk-test"),
         challenge_set=cases, models=models, n_llm_repeats=2,
     )
-    assert set(df["arm"]) == {"regex", "caveman", "natural_language"}
-    # 1 regex + 2 arms x 1 model x 2 reps
-    assert len(df) == 5
+    assert set(df["arm"]) == {"caveman", "natural_language"}
+    # 2 arms x 1 model x 2 reps
+    assert len(df) == 4
     assert not df["api_error"].any()
     llm = df[df["arm"] != "regex"]
     assert (llm["f1"] == 1.0).all()
@@ -515,17 +515,6 @@ def test_schema_violation_counts_as_malformed(mock_completion):
     assert (llm["f1"] == 0.0).all()
 
 
-def test_regex_only_run_needs_no_api_key():
-    cases = benchmark.load_challenge_set(CHALLENGE_SET_PATH)
-    df = benchmark.run_extraction_challenge(
-        Extractor(model="openrouter/openai/gpt-4o", env_var="AGENTDATASET_ABSENT_KEY"),
-        challenge_set=cases, arms=(),
-    )
-    assert set(df["arm"]) == {"regex"}
-    assert len(df) == len(cases)
-    assert (df["cost_usd"] == 0.0).all()
-    assert (df["prompt_tokens"] == 0).all()
-
 
 def test_load_challenge_set_filters_by_category():
     cases = benchmark.load_challenge_set(CHALLENGE_SET_PATH, categories=["negated_finding"])
@@ -534,16 +523,9 @@ def test_load_challenge_set_filters_by_category():
         benchmark.load_challenge_set(CHALLENGE_SET_PATH, categories=["no_such_category"])
 
 
-def test_legacy_ablation_signature_still_works():
-    """run_ablation_study() must keep producing ablation_extraction_method.csv."""
-    extractor = Extractor(model="openrouter/openai/gpt-4o", env_var="AGENTDATASET_ABSENT_KEY")
-    df = benchmark.run_ablation_extraction_method(extractor, n_llm_repeats=0)
-    assert isinstance(df, pd.DataFrame)
-    assert set(df["method"]) == {"regex"}
-    assert "success_rate" in df.columns
 
 # --------------------------------------------------------------------------
-# Five-lab harness (docs/experiment.md): additive only, no frozen behavior moves
+# Five-lab harness: additive only, no frozen behavior moves
 # --------------------------------------------------------------------------
 
 def test_fivelab_providers_shape():

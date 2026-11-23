@@ -25,6 +25,7 @@ def cmd_discover(args) -> int:
         model=args.model,
         api_key=_env(args.env_var),
         env_var=args.env_var,
+        pdf_backend=getattr(args, "pdf_backend", "pymupdf4llm"),
     )
     results = orch.run_discovery(args.query, max_candidates=args.limit)
     out = []
@@ -55,6 +56,7 @@ def cmd_run(args) -> int:
         model=args.model,
         api_key=_env(args.env_var),
         env_var=args.env_var,
+        pdf_backend=getattr(args, "pdf_backend", "pymupdf4llm"),
     )
     results = orch.run_discovery(args.query, max_candidates=args.sources)
     print(f"Discovered {len(results)} candidates.", file=sys.stderr)
@@ -113,6 +115,156 @@ def cmd_review(args) -> int:
     return 0
 
 
+def cmd_synthesize(args) -> int:
+    import json
+    from pathlib import Path
+    import pandas as pd
+    from agentdataset.models.schemas import Parameters
+
+    params_path = Path(args.params)
+    params = Parameters.model_validate_json(params_path.read_text(encoding="utf-8"))
+    out_dir = Path(args.output)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    orch = Orchestrator(
+        session_id=args.session_id or "cli_synth",
+        base_dir=str(out_dir / "sessions"),
+        model=args.model,
+        api_key=_env(args.env_var),
+        env_var=args.env_var,
+        pdf_backend=getattr(args, "pdf_backend", "pymupdf4llm"),
+    )
+    score, df = orch.run_agent_loop(params, iterations=args.iterations)
+    print(f"Best fidelity score: {score}")
+    if df is not None:
+        df.to_csv(out_dir / "data.csv", index=False)
+        print(f"Wrote {out_dir / 'data.csv'}")
+    return 0
+
+
+def cmd_validate(args) -> int:
+    import json
+    from pathlib import Path
+    import pandas as pd
+    from agentdataset.models.schemas import Parameters
+
+    df = pd.read_csv(args.data)
+    params = Parameters.model_validate_json(Path(args.params).read_text(encoding="utf-8"))
+    orch = Orchestrator(
+        session_id=args.session_id or "cli_validate",
+        model=args.model,
+        api_key=_env(args.env_var),
+        env_var=args.env_var,
+        pdf_backend=getattr(args, "pdf_backend", "pymupdf4llm"),
+    )
+    report = orch.validator.validate(df, params, source_text=args.source_text)
+    print(f"overall={report.overall_score} trust={report.trust_score}")
+    print(f"critique: {report.critique}")
+    return 0
+
+
+def cmd_doctor(args) -> int:
+    import os
+    from pathlib import Path
+    import sys
+
+    ROOT = Path.cwd()
+    _load_dotenv = None
+    # load .env if present
+    env_path = ROOT / ".env"
+    if env_path.exists():
+        for raw in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            k = k.strip(); v = v.strip().strip('"').strip("'")
+            if k and k not in os.environ:
+                os.environ[k] = v
+
+    checks = []
+    def record(name, ok, detail=""):
+        checks.append((name, ok, detail))
+        status = "OK" if ok else "FAIL"
+        print(f"[{status}] {name}" + (f" - {detail}" if detail else ""))
+
+    # 1. env keys
+    key = None
+    for k in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"):
+        if os.environ.get(k):
+            key = k
+            break
+    record("API key present", bool(key), key or "none found")
+
+    # 2. imports
+    for mod in ("pydantic", "numpy", "scipy", "pandas", "pymupdf", "pymupdf4llm",
+                "requests", "trafilatura", "litellm"):
+        try:
+            __import__(mod)
+            record(f"import {mod}", True)
+        except Exception as e:
+            record(f"import {mod}", False, str(e))
+
+    # 3. pdf backend
+    try:
+        import tempfile, os as _os
+        import pymupdf
+        fd, p = tempfile.mkstemp(suffix=".pdf")
+        _os.close(fd)
+        import pymupdf4llm
+        # write a tiny pdf via pymupdf
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((72, 72), "doctor test")
+        doc.save(p)
+        doc.close()
+        md = pymupdf4llm.to_markdown(p)
+        _os.remove(p)
+        record("pdf backend (pymupdf4llm)", bool(md and md.strip()), (md or "")[:40])
+    except Exception as e:
+        record("pdf backend (pymupdf4llm)", False, str(e))
+
+    # 4. cache dir writable
+    try:
+        from agentdataset.core.cache import ContentCache
+        c = ContentCache(base_dir=str(ROOT / ".agentdataset_cache" / "cache"))
+        c.set("doctor_probe", {"ok": True})
+        assert c.get("doctor_probe") == {"ok": True}
+        record("cache dir writable", True)
+    except Exception as e:
+        record("cache dir writable", False, str(e))
+
+    # 5. network + model reachability
+    try:
+        import requests
+        r = requests.get("https://openrouter.ai/api/v1/models", timeout=15)
+        record("network (openrouter)", r.status_code < 500, f"HTTP {r.status_code}")
+    except Exception as e:
+        record("network (openrouter)", False, str(e))
+
+    if key:
+        try:
+            from agentdataset.core.extractor import Extractor
+            ext = Extractor(model="openrouter/auto", api_key=os.environ[key], env_var=key)
+            out = ext.llm_call("Reply with the single word: ok", purpose="doctor")
+            record("model reachability", bool(out and out.strip()), (out or "")[:40])
+        except Exception as e:
+            record("model reachability", False, str(e)[:80])
+
+    # auto-fix
+    if getattr(args, "fix", False):
+        print("\n-- auto-fix --")
+        if not env_path.exists():
+            env_path.write_text("# Add your key below\nOPENROUTER_API_KEY=\n", encoding="utf-8")
+            print("Created .env template (fill in OPENROUTER_API_KEY).")
+        cache_dir = ROOT / ".agentdataset_cache" / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        print("Ensured cache directory exists.")
+
+    failed = [c for c in checks if not c[1]]
+    print(f"\n{len(checks) - len(failed)}/{len(checks)} checks passed.")
+    return 1 if failed else 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="agentdataset", description="AgentDataset CLI")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -124,6 +276,7 @@ def main(argv=None) -> int:
     p.add_argument("--env-var", default="OPENROUTER_API_KEY")
     p.add_argument("--session-id", default=None)
     p.add_argument("--json", action="store_true")
+    p.add_argument("--pdf-backend", default="pymupdf4llm")
     p.set_defaults(func=cmd_discover)
 
     p = sub.add_parser("run", help="Run discovery + extraction and write claims for review")
@@ -131,9 +284,10 @@ def main(argv=None) -> int:
     p.add_argument("--sources", type=int, default=3)
     p.add_argument("--all", action="store_true")
     p.add_argument("--output", default=".agentdataset_cache/cli_run")
-    p.add_argument("--model", default="gpt-4o")
-    p.add_argument("--env-var", default="OPENAI_API_KEY")
+    p.add_argument("--model", default="openrouter/auto")
+    p.add_argument("--env-var", default="OPENROUTER_API_KEY")
     p.add_argument("--session-id", default=None)
+    p.add_argument("--pdf-backend", default="pymupdf4llm")
     p.set_defaults(func=cmd_run)
 
     p = sub.add_parser("review", help="Review extracted claims")
@@ -142,6 +296,30 @@ def main(argv=None) -> int:
     p.add_argument("--reject-all", action="store_true")
     p.add_argument("--interactive", action="store_true")
     p.set_defaults(func=cmd_review)
+
+    p = sub.add_parser("synthesize", help="Synthesize a dataset from a reviewed params JSON")
+    p.add_argument("params")
+    p.add_argument("--output", default=".agentdataset_cache/cli_synth")
+    p.add_argument("--iterations", type=int, default=3)
+    p.add_argument("--model", default="openrouter/auto")
+    p.add_argument("--env-var", default="OPENROUTER_API_KEY")
+    p.add_argument("--session-id", default=None)
+    p.add_argument("--pdf-backend", default="pymupdf4llm")
+    p.set_defaults(func=cmd_synthesize)
+
+    p = sub.add_parser("validate", help="Validate a generated dataset")
+    p.add_argument("data")
+    p.add_argument("params")
+    p.add_argument("--source-text", default=None)
+    p.add_argument("--model", default="openrouter/auto")
+    p.add_argument("--env-var", default="OPENROUTER_API_KEY")
+    p.add_argument("--session-id", default=None)
+    p.add_argument("--pdf-backend", default="pymupdf4llm")
+    p.set_defaults(func=cmd_validate)
+
+    p = sub.add_parser("doctor", help="Check environment and dependencies; --fix repairs basics")
+    p.add_argument("--fix", action="store_true")
+    p.set_defaults(func=cmd_doctor)
 
     args = parser.parse_args(argv)
     return args.func(args)

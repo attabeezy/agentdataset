@@ -129,6 +129,7 @@ class FidelityReport(BaseModel):
     grounding_score: float = 100.0
     trust_score: float = 0.0
     issues: List[str] = Field(default_factory=list)
+    critique: Optional[str] = None
 
     @property
     def privacy_details(self) -> Dict[str, Any]:
