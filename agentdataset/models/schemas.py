@@ -84,6 +84,25 @@ class CorrelationParams(BaseModel):
         except (TypeError, ValueError):
             return 0.0
 
+    @model_validator(mode="after")
+    def _apply_direction(self):
+        """Fold ``direction`` into the sign of ``correlation``.
+
+        The LLM prompt asks for a magnitude plus a direction, but downstream
+        code (synthesis, validation, reconciliation) reads only ``correlation``.
+        Without this, a reported negative correlation is synthesized as a
+        positive one, which reverses the dependence in the output table.
+        """
+        direction = (self.direction or "positive").strip().lower()
+        # An omitted direction means the caller supplied a signed value and
+        # relied on the field default; keep that sign. An explicit direction is
+        # authoritative (the extraction prompt asks for magnitude + direction).
+        if "direction" not in self.model_fields_set:
+            return self
+        magnitude = abs(float(self.correlation))
+        self.correlation = -magnitude if direction.startswith("neg") else magnitude
+        return self
+
 class MetaParams(BaseModel):
     source: str
     extracted_at: str

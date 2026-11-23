@@ -35,6 +35,16 @@ def test_correlation_params():
     assert corr.var1 == "v1"
     assert corr.correlation == 0.5
 
+def test_correlation_params_negative_direction_is_signed():
+    corr = CorrelationParams(var1="v1", var2="v2", correlation=0.5, direction="negative")
+    assert corr.correlation == -0.5
+
+
+def test_correlation_params_signed_value_with_matching_direction():
+    corr = CorrelationParams(var1="v1", var2="v2", correlation=-0.5, direction="negative")
+    assert corr.correlation == -0.5
+
+
 def test_meta_params():
     meta = MetaParams(source="test_source", extracted_at="now")
     assert meta.source == "test_source"

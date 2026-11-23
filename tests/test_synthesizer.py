@@ -81,6 +81,24 @@ def test_synthesize_categorical_correlated_with_continuous():
     assert mean_yes > mean_no
 
 
+def test_synthesize_negative_direction_reverses_dependence():
+    syn = Synthesizer(n_rows=2000, seed=0)
+    params = Parameters(
+        variables={
+            "score": VariableParams(name="score", distribution="normal", mean=0.0, std=1.0),
+            "outcome": VariableParams(name="outcome", distribution="categorical", categories={"no": 0.5, "yes": 0.5}),
+        },
+        correlations={
+            "c": CorrelationParams(var1="score", var2="outcome", correlation=0.8, direction="negative"),
+        },
+        meta=MetaParams(source="S", extracted_at="N"),
+    )
+    df = syn.synthesize(params)
+    mean_yes = df.loc[df["outcome"] == "yes", "score"].mean()
+    mean_no = df.loc[df["outcome"] == "no", "score"].mean()
+    assert mean_yes < mean_no
+
+
 def test_generate_variable_categorical_three_categories():
     syn = Synthesizer(n_rows=3000)
     params = VariableParams(

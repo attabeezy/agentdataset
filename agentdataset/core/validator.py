@@ -320,9 +320,10 @@ class Validator:
     ) -> FidelityReport:
         """Run full validation suite.
 
-        `overall_score` is unchanged (synthesis diagnostic). `trust_score`
-        catches parameter error: 0.5*overall + 0.3*grounding + 0.2*plausibility.
-        Without source_text, grounding defaults to 100 so behavior is unchanged.
+        `overall_score` is unchanged (synthesis diagnostic). `trust_score` is
+        designed to catch parameter error: 0.4*overall + 0.25*grounding +
+        0.2*plausibility + 0.15*claim_grounding. Without source_text, grounding
+        defaults to 100 so behavior is unchanged.
         """
         ks_pvalues = self.compute_ks_test(df, parameters)
         corr_sim = self.compute_correlation_similarity(df, parameters)
