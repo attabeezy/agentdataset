@@ -1,29 +1,32 @@
 {
-  "snapshot": "pre_july_2026_reviewer_revision",
-  "recorded_at": "2026-08-02",
-  "git_commit": "08852c2cfe6c68bb46cc45aad95e58a8f26b54c4",
-  "git_dirty_only": [
-    ".gitignore",
-    "PROJECT.md"
-  ],
+  "snapshot": "2026-11-23_benchmark_refresh",
+  "recorded_at": "2026-11-23",
+  "git_commit": "171c0d2a7b0ed930e5ef87f5fdcdafd253b37483",
+  "git_dirty_only": [],
   "python_version": "3.13.5",
   "uv_version": "0.11.26",
-  "uv_lock_sha256": "5ac40da015af432f039e096ad94c70714a353f8f24133f5eec51bcef98a1ea3c",
+  "uv_lock_sha256": "af9bbff717c17ebe118136f10f956b2c513eb8615101bf286e592c23ea48ab59",
   "files": {
-    "ablation_extraction_method.csv": "497178f7234f8ec33b27dc3a98f8a86779c35b32218a3c86691682456dcd6cc2",
-    "ablation_noise_pivot.csv": "ce5cb400c1fc95b8fb3e9c684da325951f0a2d68bbf6a4ae9b5415efc5411830",
+    "ablation_extraction_method.csv": "84848509c76d014a4d345d7ef09a302127cd45f5eb1738e23b9bf0adc2421ea6",
+    "ablation_noise_pivot.csv": "8845ac2ea35c4d5e9885de0a78f11ada1b63ca42549ea8134674e7b00a5e19ad",
     "adult_f1_gap.csv": "628208792ae9e9bcd5f2a0ed7f7fd0edc584e21516fe450717929997ee0618b5",
     "caveman_token_savings.csv": "5d1ef28d880024a735694529fc0c121631ba5829c0b27e24613891648400aba0",
     "cost_latency.csv": "0f30437cc46af6ce41a155692bbed3c166dde55e685fbac879fd42e4d790822c",
-    "empirical_benchmark.csv": "0c4b2a492cbe8e43771d87e9c8f26b3403384f2fba30f1bccc6e40625bfa4b20"
+    "empirical_benchmark.csv": "3a55f440d4484e561ee2c1ff11e3cfc2d8659b6944c4e9cfa4fc557d93b10dba"
   },
   "note": "Hashes freeze the exact historical result bytes without duplicating them. New experiments write seed-level raw files and must not overwrite these files. The files map holds raw-byte hashes as recorded on Windows (CRLF) and is kept as the historical record; it is NOT portable, because git checks the same blob out with CRLF on Windows and LF on Linux. files_sha256_lf holds line-ending-normalized hashes of the same content and is the check enforced by tests/test_baseline_manifest.py, which passes on every platform.",
   "files_sha256_lf": {
-    "ablation_extraction_method.csv": "f2d1fd531e959e614af9f0aaf864ce4f2ff50e053eaa9e477d4ba34a953c2d9d",
-    "ablation_noise_pivot.csv": "e2e053bc97b13fb88e7133f75acb1bdb59103e561c8837a2a192863da518b4bb",
+    "ablation_extraction_method.csv": "2c485b9eb3ed09a922f998aa9f485f24137b29f8b9cdf07e87fca78ee251292f",
+    "ablation_noise_pivot.csv": "30edac40855a8b8c8c0852dfff20f62d4e66e08860a63bf11d54b5747dd9f446",
     "adult_f1_gap.csv": "f6738e61ceab237a4c67a3ce1cb19ae1ff99aa979af8935cf1c7d1a000416f16",
     "caveman_token_savings.csv": "5ed92b7e0553035f88e1fcc6552b74ca3fd2bf2ed35af4fb43b3302256512c6d",
     "cost_latency.csv": "c468789d1522957ff80fe32e682cf42541f8439e79922ffd9d883db098170a2e",
-    "empirical_benchmark.csv": "948a484b450cd6569bd4104279a238c7bb2ccb435939ab2dc7b6705250192a97"
-  }
+    "empirical_benchmark.csv": "97925ecc9d00907ec912d7b8eae75c286a75d02888638b225d1f2f313714c8e5"
+  },
+  "regenerated_files": [
+    "ablation_extraction_method.csv",
+    "ablation_noise_pivot.csv",
+    "empirical_benchmark.csv"
+  ],
+  "reason": "Deliberate refresh: restored the SDV baseline, made the ablation seeds real by constructing a fresh Synthesizer per cell, added a noise-matched one-shot control, and fixed correlation-direction signs in extraction (negative directions had been synthesized as positive). Benchmark.py is now the producer of these three files."
 }

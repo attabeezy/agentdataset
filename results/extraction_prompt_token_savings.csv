@@ -1,4 +1,4 @@
 provider,model,verbose_tokens,caveman_tokens,reduction_pct
-OpenAI,openrouter/openai/gpt-4o,308,189,38.63636363636363
-Anthropic,openrouter/anthropic/claude-sonnet-4.5,308,189,38.63636363636363
-Google,openrouter/google/gemini-2.5-flash,308,189,38.63636363636363
+OpenAI,openrouter/openai/gpt-4o,515,189,63.30097087378641
+Anthropic,openrouter/anthropic/claude-sonnet-4.5,515,189,63.30097087378641
+Google,openrouter/google/gemini-2.5-flash,515,189,63.30097087378641
