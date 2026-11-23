@@ -26,7 +26,7 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OrdinalEncoder
 
-from agentdataset.core.orchestrator import DEFAULT_PIVOT, Orchestrator
+from agentdataset.core.orchestrator import Orchestrator
 from agentdataset.core.synthesizer import Synthesizer
 from agentdataset.evaluation import collect_provenance, summarize_long_results, write_json
 from agentdataset.models.schemas import CorrelationParams, MetaParams, Parameters, VariableParams
@@ -80,7 +80,7 @@ def _one_shot_copula(params: Parameters, n_rows: int, seed: int) -> pd.DataFrame
     noise fixed makes the comparison with AgentDataset isolate the loop.
     """
     return Synthesizer(n_rows=n_rows, seed=seed).synthesize(
-        params, noise_level=DEFAULT_PIVOT.initial_noise
+        params, noise_level=0.02
     )
 
 
@@ -381,7 +381,7 @@ def main(n_seeds: int) -> None:
             "sdv_gaussian_copula": "individual real training records",
             "real": "individual real training records",
         },
-        "one_shot_noise": DEFAULT_PIVOT.initial_noise,
+        "one_shot_noise": 0.02,
         "agentdataset_iterations": 3,
         "baseline_contrasts": [
             f"{left}_minus_{right}" for left, right in BASELINE_CONTRASTS

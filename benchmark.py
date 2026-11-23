@@ -66,6 +66,18 @@ def _save_results(df: pd.DataFrame, filename: str) -> None:
         logger.warning("Failed to save results to %s: %s", filename, e)
 
 
+def _load_checkpoint(filename: str) -> pd.DataFrame:
+    """Load a previously written results CSV, or an empty frame."""
+    path = RESULTS_DIR / filename
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        return pd.read_csv(path)
+    except Exception as e:  # noqa: BLE001 - a bad checkpoint should not abort
+        logger.warning("Could not read checkpoint %s: %s", path, e)
+        return pd.DataFrame()
+
+
 def _load_adult() -> dict:
     """UCI Adult Income (id=2): demographic/income classification."""
     ds = fetch_ucirepo(id=2)
@@ -139,9 +151,8 @@ def _load_german_credit() -> dict:
 
 def _dataset_to_source_text(dataset: dict) -> str:
     """Build a "literature style" description from the REAL dataset's own
-    statistics (not fabricated), phrased so both the LLM and the regex
-    fallback can extract it. Categorical variables may have any number of
-    categories — see extractor._PATTERN_CATEGORICAL."""
+    statistics (not fabricated), phrased for the LLM extractor. Categorical
+    variables may have any number of categories."""
     df = dataset["df"]
     continuous = dataset["continuous"]
     categorical = dataset["categorical_features"] + [dataset["target"]]
@@ -154,7 +165,7 @@ def _dataset_to_source_text(dataset: dict) -> str:
     # Canonical encoding: labels sorted alphabetically -> codes 0..N-1. Used
     # consistently for both the stated probabilities and the correlation
     # numbers below, so extraction round-trips correctly regardless of which
-    # order the LLM/regex happens to preserve.
+    # order the extractor happens to preserve.
     label_order = {}
     for col in categorical:
         labels = sorted(df[col].dropna().unique().tolist())
@@ -163,7 +174,7 @@ def _dataset_to_source_text(dataset: dict) -> str:
         parts = [f"'{label}' with probability {float(probs[label]):.4f}" for label in labels]
         # "'a' with probability p and 'b' with probability q" for 2 labels,
         # "'a' with probability p, 'b' with probability q, and 'c' with
-        # probability r" for 3+ — both forms match the extractor regex.
+        # probability r" for 3+ — both forms are unambiguous prose.
         listed = " and ".join(parts) if len(parts) == 2 else ", ".join(parts[:-1]) + f", and {parts[-1]}"
         lines.append(f"The categorical variable {col} takes value {listed}.")
 
@@ -459,10 +470,9 @@ def run_empirical_benchmark(dataset_loaders: Optional[List] = None, n_seeds: int
     return df_results
 
 
-# Ground-truth-embedded "literature" texts spanning several domains, used for both
-# ablation studies. Regex/LLM extraction is compared against the known mean/std/
-# correlation values that were used to write each text, instead of against a
-# single hand-picked snippet.
+# Ground-truth-embedded "literature" texts spanning several domains. LLM
+# extraction is compared against the known mean/std/correlation values that were
+# used to write each text, instead of against a single hand-picked snippet.
 _ABLATION_DOMAINS = [
     ("heart_rate", "blood_pressure", 72.0, 8.0, 120.0, 15.0, 0.35),
     ("cholesterol", "bmi", 190.0, 35.0, 27.0, 5.0, 0.42),
@@ -503,9 +513,8 @@ def _build_ablation_texts():
 def _score_extraction(extracted_vars: dict, ground_truth: dict) -> dict:
     """Match extracted variables to ground truth by nearest mean and score relative error.
 
-    LLM output uses real variable names; regex output uses generic "var_N" names,
-    so matching by name is not possible in general — nearest-mean matching works
-    for both without requiring the extractor to name variables correctly.
+    Matching is by nearest mean rather than by name, so scoring still works when
+    the extractor paraphrases a variable name.
     """
     if not extracted_vars:
         return {"success_rate": 0.0, "mean_rel_err": None, "std_rel_err": None}
@@ -628,10 +637,10 @@ def _score_challenge_case(
 ) -> dict:
     """Score one extraction attempt against one annotated challenge case.
 
-    Matching is by *value*, not by name: the regex fallback emits generic
-    "var_N" names (extractor._extract_with_regex), so name-based matching would
-    zero it out for a reason unrelated to whether it read the numbers correctly.
-    Name correctness is reported separately as `name_accuracy`.
+    Matching is by *value*, not by name: an extractor may emit generic names, so
+    name-based matching would zero it out for a reason unrelated to whether it
+    read the numbers correctly. Name correctness is reported separately as
+    `name_accuracy`.
 
     Gold entries carry a `variant_group`. Several entries may share a group when
     the source legitimately reports the same variable for several populations,
@@ -796,13 +805,11 @@ def run_extraction_challenge(
     models: Optional[list[dict]] = None,
     n_llm_repeats: int = 5,
     arms: tuple[str, ...] = LLM_ARMS,
-    include_regex: bool = True,
 ) -> pd.DataFrame:
-    """Three-arm extraction ablation over the challenge set (P1 9.6).
+    """Two-arm extraction ablation over the challenge set (P1 9.6).
 
-    Arms: the Caveman Protocol prompt, an equivalent natural-language prompt, and
-    the regex fallback. The regex arm is deterministic, runs once, and is reported
-    separately — fallback output is never folded into LLM results.
+    Arms: the Caveman Protocol prompt and an equivalent natural-language prompt.
+    Regex fallback has been removed (LLM-only extraction).
 
     Every LLM arm keeps the production `response_format={"type":"json_object"}`
     setting, so `malformed` counts *schema* violations (missing/!parseable fields),
@@ -819,13 +826,15 @@ def run_extraction_challenge(
 
     have_key = bool(extractor.api_key or os.environ.get(extractor.env_var))
     if not have_key and arms:
-        print("No OPENROUTER_API_KEY found — running the regex arm only.")
-        arms = ()
+        raise RuntimeError(
+            "The extraction challenge requires an LLM API key; the regex "
+            "fallback has been removed."
+        )
 
     run_id = uuid.uuid4().hex[:12]
     rows: list[dict] = []
     total = len(challenge_set) * (
-        int(include_regex) + len(arms) * len(models) * n_llm_repeats
+        len(arms) * len(models) * n_llm_repeats
     )
     print(f"\n--- Extraction challenge: {len(challenge_set)} cases, "
           f"{len(arms)} LLM arm(s) x {len(models)} model(s) x {n_llm_repeats} rep(s) "
@@ -839,25 +848,6 @@ def run_extraction_challenge(
             "provenance": case["provenance"],
             "source_id": case.get("source_id"),
         }
-
-        if include_regex:
-            started = time.perf_counter()
-            variables, corrs = extractor._extract_with_regex(case["text"])
-            rows.append({
-                **base,
-                "arm": "regex",
-                "model": "none",
-                "rep": 0,
-                "latency_s": time.perf_counter() - started,
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "cost_usd": 0.0,
-                "malformed": False,
-                "api_error": False,
-                "error_type": None,
-                "fence_stripped": False,
-                **_score_challenge_case(variables, corrs, case),
-            })
 
         for arm in arms:
             prompt = _prompt_for_arm(arm)
@@ -1014,16 +1004,15 @@ def run_ablation_extraction_method(
     challenge_set: Optional[list[dict]] = None,
     models: Optional[list[dict]] = None,
 ) -> pd.DataFrame:
-    """Ablation A: extraction method comparison.
+    """Ablation A: extraction quality.
 
-    With `challenge_set` supplied (or a path resolved by the caller) this runs the
-    full P1 9.6 protocol via `run_extraction_challenge` — Caveman prompt vs
-    natural-language prompt vs regex, over several models and repetitions, scored
-    with precision/recall/F1, hallucination and abstention.
+    With `challenge_set` supplied this delegates to `run_extraction_challenge`
+    (Caveman vs natural-language prompt, several models/repetitions, scored with
+    precision/recall/F1, hallucination and abstention).
 
-    Without it, this keeps the original behaviour: LLM vs regex over the synthetic
-    ground-truth texts in `_build_ablation_texts`, so `run_ablation_study()` and
-    `results/ablation_extraction_method.csv` are unchanged.
+    Without it, runs the production LLM extractor over the synthetic
+    ground-truth texts in `_build_ablation_texts` and reports success rate,
+    relative error, and latency. Regex fallback has been removed.
     """
     if challenge_set is not None or models is not None:
         return run_extraction_challenge(
@@ -1033,17 +1022,11 @@ def run_ablation_extraction_method(
             n_llm_repeats=n_llm_repeats,
         )
 
-    print("\n--- Ablation A: Extraction Method (LLM vs Regex) ---")
+    print("\n--- Ablation A: Extraction Quality (LLM) ---")
     texts = _build_ablation_texts()
     rows = []
 
     for t in texts:
-        t0 = time.perf_counter()
-        v, c = extractor._extract_with_regex(t["text"])
-        latency = time.perf_counter() - t0
-        score = _score_extraction(v, t["ground_truth"])
-        rows.append({"method": "regex", "text_id": t["id"], "rep": 0, "latency_s": latency, **score})
-
         for rep in range(n_llm_repeats):
             t0 = time.perf_counter()
             try:
@@ -1068,17 +1051,6 @@ def run_ablation_extraction_method(
         std_rel_err=("std_rel_err", "mean"),
     )
     print(summary.to_string())
-
-    # Paired comparison per text_id (average LLM reps per text first so both
-    # methods contribute exactly one observation per text_id).
-    llm_by_text = df[df.method == "llm"].groupby("text_id")["mean_rel_err"].mean()
-    regex_by_text = df[df.method == "regex"].groupby("text_id")["mean_rel_err"].mean()
-    paired = pd.concat([llm_by_text, regex_by_text], axis=1, keys=["llm", "regex"]).dropna()
-    if len(paired) >= 2:
-        t_stat, p_val = scipy_stats.ttest_rel(paired["llm"], paired["regex"])
-        print(f"\nPaired t-test (LLM vs regex mean_rel_err, n={len(paired)}): t={t_stat:.3f}, p={p_val:.4f}")
-    else:
-        print("\nNot enough paired texts with both methods succeeding for a significance test.")
 
     return df
 
@@ -1114,21 +1086,43 @@ def _params_from_ground_truth(t: dict, source_tag: str) -> Parameters:
 
 
 def run_ablation_noise_pivot(
-    iterations_grid=(0, 1, 2, 3, 5, 10), n_seeds: int = 5
+    iterations_grid=(0, 1, 2, 3, 5, 10), n_seeds: int = 5, resume: bool = True
 ) -> pd.DataFrame:
-    """Ablation B: overall_score vs Noise Pivot iteration count, across multiple
-    (source text, seed) combinations, with paired significance testing."""
+    """Ablation B: overall_score vs agent-loop iteration budget.
+
+    Covers every (source text, seed, iteration budget) cell and reports paired
+    significance tests. When ``resume`` is true, cells already present in
+    ``results/ablation_noise_pivot.csv`` are skipped, so an interrupted sweep can
+    continue without redoing completed work.
+    """
     print("\n--- Ablation B: Optimization Loop (Iterations 0..10, multiple seeds/texts) ---")
     texts = _build_ablation_texts()
-    synthesizer = Synthesizer()
     validator = Validator()
-    rows = []
+
+    rows: list[dict] = []
+    done: set[tuple[str, int, int]] = set()
+    existing = _load_checkpoint("ablation_noise_pivot.csv") if resume else pd.DataFrame()
+    if not existing.empty and {"text_id", "seed", "iterations", "score"}.issubset(existing.columns):
+        rows = existing[["text_id", "seed", "iterations", "score"]].to_dict("records")
+        done = {
+            (str(r["text_id"]), int(r["seed"]), int(r["iterations"]))
+            for r in rows
+        }
+        print(f"Resuming from checkpoint: {len(done)} cells already complete.")
+    elif resume:
+        print("No usable checkpoint; starting the sweep from scratch.")
 
     for t in texts:
         params = _params_from_ground_truth(t, source_tag=t["id"])
         for seed in range(n_seeds):
             for iterations in iterations_grid:
+                if (t["id"], seed, iterations) in done:
+                    continue
                 np.random.seed(seed)
+                # A fresh, seed-scoped synthesizer per cell. Synthesizer draws
+                # from an instance-scoped default_rng, so sharing one across
+                # cells makes `seed` a label rather than a control.
+                synthesizer = Synthesizer(seed=seed)
                 if iterations == 0:
                     df = synthesizer.synthesize(params, noise_level=0.1)
                     score = validator.validate(df, params).overall_score
@@ -1141,36 +1135,97 @@ def run_ablation_noise_pivot(
                     score, _ = orch.run_optimization_loop(params, iterations=iterations)
                 rows.append({"text_id": t["id"], "seed": seed, "iterations": iterations, "score": score})
 
+            # Checkpoint after every (text, seed) so a crash in the stats step
+            # cannot lose the whole sweep.
+            try:
+                RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+                pd.DataFrame(rows).to_csv(RESULTS_DIR / "ablation_noise_pivot.csv", index=False)
+            except OSError as e:
+                logger.warning("Incremental save failed: %s", e)
+
     df = pd.DataFrame(rows)
+    if not df.empty:
+        df = df.sort_values(["text_id", "seed", "iterations"]).reset_index(drop=True)
+    _save_results(df, "ablation_noise_pivot.csv")
+    if df.empty:
+        print("No optimization-loop results collected.")
+        return df
+
     summary = df.groupby("iterations")["score"].agg(["mean", "std", "count"])
     print(summary.to_string())
 
     # Paired test: iterations=0 vs iterations=5, matched by (text_id, seed).
-    zero = df[df.iterations == 0].set_index(["text_id", "seed"])["score"]
-    five = df[df.iterations == 5].set_index(["text_id", "seed"])["score"]
-    paired = pd.concat([zero, five], axis=1, keys=["zero", "five"]).dropna()
-    if len(paired) >= 2:
-        t_stat, p_val = scipy_stats.ttest_rel(paired["five"], paired["zero"])
-        w_stat, w_p = scipy_stats.wilcoxon(paired["five"], paired["zero"])
-        print(
-            f"\n0 vs 5 iterations (n={len(paired)}): "
-            f"paired t-test t={t_stat:.3f} p={p_val:.4f}; Wilcoxon p={w_p:.4f}"
-        )
-        print(f"Mean improvement (5 - 0 iterations): {(paired['five'] - paired['zero']).mean():+.4f}")
+    # Guarded: a broken optional dependency (e.g. torch) must not discard the CSV.
+    try:
+        zero = df[df.iterations == 0].set_index(["text_id", "seed"])["score"]
+        five = df[df.iterations == 5].set_index(["text_id", "seed"])["score"]
+        paired = pd.concat([zero, five], axis=1, keys=["zero", "five"]).dropna()
+        if len(paired) >= 2:
+            t_stat, p_val = scipy_stats.ttest_rel(
+                paired["five"].to_numpy(), paired["zero"].to_numpy()
+            )
+            w_stat, w_p = scipy_stats.wilcoxon(
+                paired["five"].to_numpy(), paired["zero"].to_numpy()
+            )
+            print(
+                f"\n0 vs 5 iterations (n={len(paired)}): "
+                f"paired t-test t={t_stat:.3f} p={p_val:.4f}; Wilcoxon p={w_p:.4f}"
+            )
+            print(f"Mean improvement (5 - 0 iterations): {(paired['five'] - paired['zero']).mean():+.4f}")
+    except Exception as e:  # noqa: BLE001 - stats failure must not lose the run
+        logger.warning("Significance tests failed (%s); raw CSV was saved.", e)
 
     return df
 
 
-def run_ablation_study():
+def run_one_shot_noise_control(
+    noise_level: float = 0.02, n_seeds: int = 5
+) -> pd.DataFrame:
+    """One-shot synthesis at the agent loop's starting noise.
+
+    Ablation B's budget-0 arm uses ``noise_level=0.1`` (the standalone
+    synthesizer default), while ``run_optimization_loop`` starts at 0.02. Without
+    this control, the 0-vs-1 contrast mixes iteration count with noise choice.
+    """
+    print("\n--- One-shot control at the agent loop's starting noise ---")
+    texts = _build_ablation_texts()
+    validator = Validator()
+    rows: list[dict] = []
+
+    for t in texts:
+        params = _params_from_ground_truth(t, source_tag=t["id"])
+        for seed in range(n_seeds):
+            np.random.seed(seed)
+            synth = Synthesizer(seed=seed)
+            df_synth = synth.synthesize(params, noise_level=noise_level)
+            score = validator.validate(df_synth, params).overall_score
+            rows.append(
+                {
+                    "text_id": t["id"],
+                    "seed": seed,
+                    "noise_level": noise_level,
+                    "score": score,
+                }
+            )
+
+    df = pd.DataFrame(rows).sort_values(["text_id", "seed"]).reset_index(drop=True)
+    _save_results(df, "one_shot_noise_matched.csv")
+    print(df.groupby("noise_level")["score"].agg(["count", "mean", "std"]).round(3).to_string())
+    return df
+
+
+def run_ablation_study(which: str = "all", fresh: bool = False):
     print("\n" + "="*50)
     print("2. ABLATION STUDIES")
     print("="*50)
 
-    extractor = Extractor(model=_OPENROUTER_MODEL, env_var=_OPENROUTER_ENV_VAR)
-    df_extraction = run_ablation_extraction_method(extractor)
-    _save_results(df_extraction, "ablation_extraction_method.csv")
-    df_noise_pivot = run_ablation_noise_pivot()
-    _save_results(df_noise_pivot, "ablation_noise_pivot.csv")
+    if which in ("all", "a"):
+        extractor = Extractor(model=_OPENROUTER_MODEL, env_var=_OPENROUTER_ENV_VAR)
+        df_extraction = run_ablation_extraction_method(extractor)
+        _save_results(df_extraction, "ablation_extraction_method.csv")
+    if which in ("all", "b"):
+        run_ablation_noise_pivot(resume=not fresh)
+        run_one_shot_noise_control()
 
 
 # Providers checked for cost/latency measurement. All three are routed through
@@ -1183,9 +1238,9 @@ _COST_LATENCY_PROVIDERS = [
     {"name": "Google", "model": "openrouter/google/gemini-2.5-flash", "key_env": "OPENROUTER_API_KEY"},
 ]
 
-# Five-lab panel (Oct 2026 rerun, see docs/experiment.md): one fairly-priced,
-# near-flagship model per lab, all routed through OpenRouter. Kept separate
-# from _COST_LATENCY_PROVIDERS so the frozen cost/latency artifact and every
+# Five-lab panel (Oct 2026 rerun): one fairly-priced, near-flagship model per
+# lab, all routed through OpenRouter. Kept separate from
+# _COST_LATENCY_PROVIDERS so the frozen cost/latency artifact and every
 # committed comparison keep their exact provider set. IDs verified live via
 # GET /api/v1/models on 2026-10-10.
 _FIVELAB_PROVIDERS = [
@@ -1194,9 +1249,9 @@ _FIVELAB_PROVIDERS = [
     # so the DeepSeek seat goes to the fast V4.1 Flash.
     {"name": "DeepSeek", "model": "openrouter/deepseek/deepseek-v4.1-flash", "key_env": "OPENROUTER_API_KEY"},
     # GLM seat swapped to the Flash cut-down: the full glm-5.3 is reasoning-heavy
-    # (~73 s / 15k tokens per chunk, 0 vars on real papers, 250/330 API errors on
-    # the challenge sweep, see docs/report.md §4). GLMFlash in _BUDGET_PROVIDERS
-    # keeps the same model for the cheap-tier comparison.
+    # (~73 s / 15k tokens per chunk, 0 vars on real papers, many API errors on
+    # the challenge sweep). GLMFlash in _BUDGET_PROVIDERS keeps the same model
+    # for the cheap-tier comparison.
     {"name": "GLM", "model": "openrouter/z-ai/glm-5.3-flash", "key_env": "OPENROUTER_API_KEY"},
     {"name": "GPT", "model": "openrouter/openai/gpt-6.1-sol", "key_env": "OPENROUTER_API_KEY"},
     {"name": "Claude", "model": "openrouter/anthropic/claude-sonnet-5.5", "key_env": "OPENROUTER_API_KEY"},
@@ -1215,9 +1270,9 @@ _BUDGET_PROVIDERS = [
 _ALL_PROVIDERS = _COST_LATENCY_PROVIDERS + _FIVELAB_PROVIDERS + _BUDGET_PROVIDERS
 
 # The natural-language prompt now lives with the extractor, because it *is* the
-# production prompt (switched from CAVEMAN_PROMPT on the strength of the §9.6
-# ablation). This alias keeps the benchmark's vocabulary — "verbose" is the
-# baseline against which the Caveman compression is measured.
+# production prompt (chosen over CAVEMAN_PROMPT by the extraction ablation).
+# This alias keeps the benchmark's vocabulary — "verbose" is the baseline
+# against which the Caveman compression is measured.
 _VERBOSE_PROMPT = NATURAL_LANGUAGE_PROMPT
 
 _SAMPLE_SOURCE_TEXT = _ABLATION_DOMAINS and """
@@ -1319,12 +1374,33 @@ def run_cost_latency_analysis(n_repeats: int = 5):
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run the AgentDataset benchmark suite.")
+    parser.add_argument(
+        "--only",
+        choices=["all", "empirical", "ablation-a", "ablation-b", "cost"],
+        default="all",
+        help="Run one stage instead of the whole suite.",
+    )
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Ignore ablation checkpoints and start from scratch.",
+    )
+    args = parser.parse_args()
+
     load_env()
-    print("Starting AgentDataset NeurIPS 2026 Benchmarks...\n")
+    print("Starting AgentDataset benchmarks...\n")
     try:
-        run_empirical_benchmark()
-        run_ablation_study()
-        run_cost_latency_analysis()
-        print("\nBenchmarks complete. Ready for NeurIPS 2026 review.")
-    except Exception as e:
+        if args.only in ("all", "empirical"):
+            run_empirical_benchmark()
+        if args.only == "all":
+            run_ablation_study(fresh=args.fresh)
+        elif args.only in ("ablation-a", "ablation-b"):
+            run_ablation_study(which=args.only.split("-")[1], fresh=args.fresh)
+        if args.only in ("all", "cost"):
+            run_cost_latency_analysis()
+        print("\nBenchmarks complete.")
+    except Exception:
         logger.exception("Benchmark failed")
