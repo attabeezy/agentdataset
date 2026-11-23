@@ -19,8 +19,8 @@ statistical parameters (marginals and pairwise correlations) with a large
 language model, (3) synthesizing correlated rows through a Gaussian copula over
 parametric marginals, and (4) validating the result against the declared
 statistics. The system is *assisted*, not autonomous: source selection and
-extracted claims are surfaced for human review before synthesis, and every
-generated artifact carries a provenance manifest. We reframe the internal
+extracted claims are reviewed by an LLM agent before synthesis (with a human
+override), and every generated artifact carries a provenance manifest. We reframe the internal
 fidelity score as a sampler-consistency diagnostic rather than evidence of
 source fidelity, and add a trust score that combines grounding, plausibility,
 and claim grounding. A corruption probe shows that the sampler-consistency score
@@ -41,7 +41,7 @@ usable table while keeping a human in the loop.
 
 Contributions:
 1. An end-to-end assisted workflow (discovery, LLM extraction, synthesis,
-   validation) exposed as a CLI with review gates.
+   validation) exposed as a CLI with an agentic review gate.
 2. An LLM-driven agentic loop that proposes, synthesizes, validates, and
    critiques, replacing a fixed hyperparameter schedule.
 3. A copula-based synthesizer with correlation diagnostics and an opt-in
@@ -113,7 +113,17 @@ The prompt asks for a correlation magnitude and a direction; the schema folds
 the direction into the sign of the stored value before synthesis or validation,
 so a reported negative association cannot be applied as a positive one.
 
-### 3.3 Synthesis
+### 3.3 Agentic review
+
+Each extracted claim carries a value and an evidence passage. Before synthesis,
+an LLM agent accepts, rejects, or defers every claim against that evidence and
+the declared population, arm, and time point; rejected and deferred claims are
+excluded from the synthesis specification. A human can override the agent's
+decisions through the `review` command. Accepted continuous statistics are
+grouped by variable name, and accepted correlation claims populate the Gaussian
+copula.
+
+### 3.4 Synthesis
 
 `Synthesizer` draws parametric marginals (normal, uniform, gamma, categorical)
 and imposes pairwise correlations via a rank transform over a latent Gaussian.
@@ -121,14 +131,14 @@ Diagnostics record declared/applied/skipped pairs and matrix conditioning. An
 opt-in nearest-PSD repair is available. Categorical variables are drawn as
 integer codes and rank-transformed (ordinal coding is a documented limitation).
 
-### 3.4 Validation
+### 3.5 Validation
 
 `Validator` reports KS (or chi-square for categorical) fit, correlation
 similarity, bias, and a synthetic-row dispersion diagnostic. `plausibility`,
 `grounding`, and `claim_grounding` scores feed a `trust_score`. An LLM critique
 summarizes fidelity and suggests next actions.
 
-### 3.5 Agentic loop
+### 3.6 Agentic loop
 
 `Orchestrator.run_agent_loop` iterates synthesize-validate-critique, asking an
 LLM to choose the next action (continue, accept, stop, adjust noise, repair

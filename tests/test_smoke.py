@@ -123,3 +123,68 @@ def test_no_noise_pivot_in_orchestrator():
     assert not hasattr(o, "NoisePivotConfig")
     assert not hasattr(o, "next_noise")
     assert not hasattr(o, "DEFAULT_PIVOT")
+
+
+def _claim(claim_id, variable, statistic, value, status="proposed"):
+    from agentdataset.models.schemas import Claim, EvidenceLocator
+
+    return Claim(
+        claim_id=claim_id,
+        source_id="src",
+        variable_name=variable,
+        statistic_type=statistic,
+        value=value,
+        status=status,
+        evidence=EvidenceLocator(source_id="src", passage=f"reported {statistic} {value}"),
+    )
+
+
+def test_agent_review_applies_llm_decisions():
+    import json
+
+    orch = Orchestrator(session_id="review", base_dir=tempfile.mkdtemp(), api_key="sk-test")
+    claims = [
+        _claim("c1", "age", "mean", 40.0),
+        _claim("c2", "bmi", "mean", 999.0),
+        _claim("c3", "score", "mean", 5.0),
+    ]
+    orch.extractor.llm_call = MagicMock(
+        return_value=json.dumps({
+            "decisions": [
+                {"claim_id": "c1", "decision": "accept", "reason": "grounded"},
+                {"claim_id": "c2", "decision": "reject", "reason": "fabricated"},
+                {"claim_id": "c3", "decision": "defer", "reason": "unclear"},
+            ]
+        })
+    )
+
+    review = orch.review_claims_with_agent(claims)
+    assert review.accepted_claims()[0].claim_id == "c1"
+    assert review.rejected_claims()[0].claim_id == "c2"
+    assert review.pending_claims()[0].claim_id == "c3"
+    assert all(c.review_note.startswith("agent: ") for c in review.claims)
+
+
+def test_agent_review_failure_leaves_claims_proposed():
+    orch = Orchestrator(session_id="review", base_dir=tempfile.mkdtemp(), api_key="sk-test")
+    orch.extractor.llm_call = MagicMock(side_effect=RuntimeError("offline"))
+    review = orch.review_claims_with_agent([_claim("c1", "age", "mean", 40.0)])
+    assert review.pending_claims()[0].status == "proposed"
+
+
+def test_parameters_from_accepted_claims_only():
+    from agentdataset.core.review import parameters_from_claims
+
+    claims = [
+        _claim("c1", "age", "mean", 40.0, "accepted"),
+        _claim("c2", "age", "std", 10.0, "accepted"),
+        _claim("c3", "bmi", "mean", 999.0, "rejected"),
+        _claim("c4", "age__score", "correlation", -0.6, "accepted"),
+    ]
+    params = parameters_from_claims(claims)
+    assert params.variables["age"].mean == 40.0
+    assert params.variables["age"].std == 10.0
+    assert "bmi" not in params.variables
+    corr = params.correlations["age__score"]
+    assert corr.correlation == -0.6
+    assert corr.direction == "negative"

@@ -23,9 +23,10 @@ from agentdataset.models.schemas import (
 )
 from agentdataset.core.manifest import build_manifest, write_manifest
 from agentdataset.core.discovery import DiscoveryAgent, PDF_PATH_PREFIX
-from agentdataset.core.extractor import Extractor
+from agentdataset.core.extractor import Extractor, strip_json_fence
 from agentdataset.core.synthesizer import Synthesizer
 from agentdataset.core.cache import ContentCache
+from agentdataset.core.review import ClaimReview
 from agentdataset.core.validator import Validator
 
 logger = logging.getLogger(__name__)
@@ -465,6 +466,62 @@ class Orchestrator:
         """Record extracted claims into the run manifest provenance."""
         for c in (claims or []):
             self.run_claims.append(c)
+
+    def review_claims_with_agent(self, claims) -> ClaimReview:
+        """Have the LLM agent accept, reject, or defer each extracted claim.
+
+        The agent checks each statistic against its evidence passage and the
+        declared population/arm/timepoint before the claim reaches synthesis.
+        On an LLM failure every claim stays proposed for explicit review.
+        """
+        import json
+
+        review = ClaimReview(claims)
+        if not review.claims:
+            return review
+
+        rows = []
+        for c in review.claims:
+            passage = ""
+            if c.evidence and c.evidence.passage:
+                passage = str(c.evidence.passage).replace("\n", " ")[:300]
+            rows.append(
+                f"- id={c.claim_id} | variable={c.variable_name} | statistic={c.statistic_type} "
+                f"| value={c.value} | population={c.population} | subgroup={c.subgroup} "
+                f"| time={c.time_point} | arm={c.arm} | confidence={c.confidence:.2f} "
+                f"| conflict={c.conflict_flag} | evidence={passage!r}"
+            )
+
+        prompt = (
+            "You are a meticulous data curator. Review each proposed statistic for "
+            "grounding in its evidence passage and internal consistency. Reject claims "
+            "whose number is unsupported, that conflate populations, arms, or time "
+            "points, or that are conflicting without a clear resolution. Defer "
+            "borderline cases. Decide for every id. Return JSON only with shape: "
+            '{"decisions":[{"claim_id":"...","decision":"accept|reject|defer",'
+            '"reason":"..."}]}.\n\n'
+            + "\n".join(rows)
+        )
+
+        try:
+            raw = self.extractor.llm_call(prompt, purpose="claim_review")
+            payload = json.loads(strip_json_fence(raw))
+            known = {c.claim_id for c in review.claims}
+            for decision in payload.get("decisions", []):
+                claim_id = str(decision.get("claim_id", "")).strip()
+                if claim_id not in known:
+                    continue
+                action = str(decision.get("decision", "defer")).strip().lower()
+                reason = f"agent: {str(decision.get('reason', 'review'))[:300]}"
+                if action == "accept":
+                    review.accept(claim_id, note=reason)
+                elif action == "reject":
+                    review.reject(claim_id, note=reason)
+                else:
+                    review.defer(claim_id, note=reason)
+        except Exception as e:
+            logger.warning("Agent claim review failed: %s", e)
+        return review
 
     def process_sources_parallel(self, results, max_workers: int = 4):
         """Process multiple sources with bounded concurrency (§10.8)."""

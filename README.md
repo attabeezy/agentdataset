@@ -1,6 +1,6 @@
 # AgentDataset
 
-AgentDataset turns published statistical reports into synthetic tabular data. It discovers candidate documents, extracts marginals and pairwise correlations with an LLM, synthesizes correlated rows through a Gaussian copula, and validates the result. Source selection and extracted claims are staged for human review before synthesis.
+AgentDataset turns published statistical reports into synthetic tabular data. It discovers candidate documents, extracts marginals and pairwise correlations with an LLM, synthesizes correlated rows through a Gaussian copula, and validates the result. Source selection and extracted claims pass through an agentic review before synthesis.
 
 The tool is CLI-only and extraction is LLM-only — there is no web UI and no regex fallback. It is intended for settings where record-level data cannot be shared but aggregate statistics are public. It does **not** provide a privacy guarantee and models pairwise dependence only; see the [manuscript](docs/MANUSCRIPT.md) for the evaluation and operating envelope.
 
@@ -21,23 +21,15 @@ The default model is `openrouter/auto`; an API key is required even when free mo
 
 ```bash
 agentdataset discover "adult income by education" --limit 10
+# run extracts claims, the agent reviews them, and parameters.json is written
 agentdataset run "adult income by education" --sources 3 --output .agentdataset_cache/demo
-agentdataset review .agentdataset_cache/demo/claims.json --interactive
-agentdataset synthesize parameters.json --output .agentdataset_cache/demo --iterations 3
-agentdataset validate .agentdataset_cache/demo/data.csv parameters.json
+agentdataset synthesize .agentdataset_cache/demo/parameters.json \
+  --output .agentdataset_cache/demo --iterations 3
+agentdataset validate .agentdataset_cache/demo/data.csv \
+  .agentdataset_cache/demo/parameters.json
 ```
 
-`run` writes `claims.json` for review. `synthesize` takes a `Parameters` JSON; for scripted workflows, serialize an extraction result:
-
-```python
-from pathlib import Path
-from agentdataset.core.extractor import Extractor
-
-params = Extractor(model="openrouter/auto", env_var="OPENROUTER_API_KEY").extract_parameters(
-    text, "source-id"
-)
-Path("parameters.json").write_text(params.model_dump_json(indent=2), encoding="utf-8")
-```
+Use `agentdataset review .agentdataset_cache/demo/claims.json --interactive` to override an agent decision; `--agent` re-runs the agent review on an existing claims file.
 
 ## Commands
 
@@ -45,7 +37,7 @@ Path("parameters.json").write_text(params.model_dump_json(indent=2), encoding="u
 | --- | --- |
 | `discover QUERY [--limit N] [--json]` | Search and rank candidate documents. |
 | `run QUERY [--sources N] [--all] [--output DIR]` | Discover, extract, and stage claims for review. |
-| `review CLAIMS [--interactive \| --accept-all \| --reject-all]` | Accept, reject, or defer extracted claims. |
+| `review CLAIMS [--agent \| --interactive \| --accept-all \| --reject-all]` | Re-run agent review or apply a human override. |
 | `synthesize PARAMS [--output DIR] [--iterations N]` | Run the agent loop and write the best table. |
 | `validate DATA PARAMS [--source-text TEXT]` | Report fidelity, trust score, and critique. |
 | `doctor [--fix]` | Check keys, imports, PDF backend, cache, and model access. |
@@ -55,10 +47,12 @@ All commands that call a model accept `--model` and `--env-var`; `--pdf-backend 
 ## Workflow and outputs
 
 ```text
-query → discover → extract → review → synthesize ⇄ validate → data.csv
+query → discover → extract → agent review → synthesize ⇄ validate → data.csv
 ```
 
-Synthesis writes `data.csv` to the output directory and `parameters.json`, `DATACARD.md`, and `run_manifest.json` to `sessions/<session-id>/`. Content is cached by hash under `.agentdataset_cache/cache/`; idle sessions beyond the three most recent are pruned after 24 hours.
+`run` writes `claims.json` and the agent-approved `parameters.json` to the output directory. The agent accepts, rejects, or defers each claim against its evidence; a human can override those decisions with `review`. `synthesize` writes `data.csv` to the output directory and `DATACARD.md` plus `run_manifest.json` to `sessions/<session-id>/`.
+
+Content is cached by hash under `.agentdataset_cache/cache/`; idle sessions beyond the three most recent are pruned after 24 hours.
 
 Fidelity measures consistency with the declared parameters, not correctness of those parameters. The trust score adds grounding and plausibility signals; neither is a privacy guarantee.
 
@@ -70,7 +64,7 @@ agentdataset/
 ├── core/
 │   ├── discovery.py          # search, rank, and fetch PDF/HTML sources
 │   ├── extractor.py          # text/PDF → Parameters (LLM only)
-│   ├── review.py             # claim accept/reject/defer decisions
+│   ├── review.py             # agent claim review + human override
 │   ├── reconciliation.py     # study-aware merge of multiple sources
 │   ├── orchestrator.py       # agent loop and end-to-end coordination
 │   ├── synthesizer.py        # parametric marginals + Gaussian copula

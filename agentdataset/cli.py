@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 from agentdataset.core.orchestrator import Orchestrator
-from agentdataset.core.review import ClaimReview
+from agentdataset.core.review import ClaimReview, parameters_from_claims
 
 
 def _env(key: str, default: str = "") -> str:
@@ -78,11 +78,26 @@ def cmd_run(args) -> int:
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
     claims_path = out_dir / "claims.json"
-    review = ClaimReview(claims_all)
+    # The agent reviews every extracted claim before any parameters reach synthesis.
+    review = orch.review_claims_with_agent(claims_all)
+    summary = (
+        f"Agent review: {len(review.accepted_claims())} accepted, "
+        f"{len(review.rejected_claims())} rejected, "
+        f"{len(review.pending_claims())} pending"
+    )
+    print(summary, file=sys.stderr)
     review.save(claims_path)
-    orch.write_run_manifest({"claims_path": str(claims_path)})
+
+    params = parameters_from_claims(review.accepted_claims())
+    params_path = out_dir / "parameters.json"
+    params_path.write_text(params.model_dump_json(indent=2), encoding="utf-8")
+    orch.write_run_manifest({
+        "claims_path": str(claims_path),
+        "parameters_path": str(params_path),
+        "review_mode": "agent",
+    })
     print(f"Claims written to {claims_path}")
-    print("Run 'agentdataset review <file>' to approve claims before synthesis.")
+    print(f"Reviewed parameters written to {params_path}")
     return 0
 
 
@@ -90,6 +105,16 @@ def cmd_review(args) -> int:
     path = Path(args.claims_file)
     review = ClaimReview.load(path)
     print(f"Loaded {len(review.claims)} claims ({len(review.pending_claims())} pending).")
+    if args.agent:
+        orch = Orchestrator(session_id="cli_agent_review")
+        review = orch.review_claims_with_agent(review.claims)
+        review.save(path)
+        print(
+            f"Agent review: {len(review.accepted_claims())} accepted, "
+            f"{len(review.rejected_claims())} rejected, "
+            f"{len(review.pending_claims())} pending."
+        )
+        return 0
     if args.accept_all:
         for c in review.pending_claims():
             review.accept(c.claim_id)
@@ -295,6 +320,7 @@ def main(argv=None) -> int:
     p.add_argument("--accept-all", action="store_true")
     p.add_argument("--reject-all", action="store_true")
     p.add_argument("--interactive", action="store_true")
+    p.add_argument("--agent", action="store_true", help="Have the LLM agent review the claims")
     p.set_defaults(func=cmd_review)
 
     p = sub.add_parser("synthesize", help="Synthesize a dataset from a reviewed params JSON")
