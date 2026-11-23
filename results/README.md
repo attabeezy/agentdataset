@@ -1,450 +1,61 @@
 # Benchmark Results
 
-CSV outputs written by `benchmark.py`. Each file is produced (and overwritten)
-by the corresponding function on every run:
+## Introduction
 
-> **2026-11-23 correction.** `CorrelationParams` now folds an explicit
-> `direction: negative` into the sign of `correlation`. Previously the sign was
-> metadata only, so negative associations from LLM extraction were synthesized
-> as positive ones (Pima TSTR ROC-AUC 0.18 instead of 0.83). The three benchmark
-> outputs below were regenerated with the fix under a new manifest snapshot.
-> Older real-paper and cost artifacts predate it and are reported as historical.
->
-> This README is a historical lab notebook. Entries referring to `regex`,
-> `analysis/noise_pivot_ablation.py`, `docs/experiment.md`, `docs/report.md`, or
-> `docs/neurips/` describe artifacts and scripts that have since been removed;
-> the surviving result files and the current code are authoritative.
+This directory contains the quantitative evidence for AgentDataset. The CSV files are the source of truth for the numbers in the [manuscript](../docs/MANUSCRIPT.md): every reported value is derived from one of these artifacts, and the table captions in the manuscript name their source file. Results produced by `benchmark.py` are current; artifacts from earlier reviewer-revision studies are retained as historical records and are identified explicitly below. The 2026-11-23 refresh regenerated three previously frozen benchmark outputs after fixing correlation-sign handling, making ablation seeds real, and restoring the SDV baseline.
 
-- `empirical_benchmark.csv` — `run_empirical_benchmark()`: TRTR vs TSTR
-  metrics per dataset (UCI Adult, Pima Diabetes, German Credit).
-- `ablation_extraction_method.csv` — `run_ablation_extraction_method()`:
-  per-domain LLM extraction scores.
-- `ablation_noise_pivot.csv` — `run_ablation_noise_pivot()`: fidelity score
-  per iteration count / seed / source text.
-- `one_shot_noise_matched.csv` — `run_one_shot_noise_control()`: one-shot
-  synthesis at the agent loop's starting noise (0.02), paired with the same
-  (text, seed) cells. Separates iteration count from noise choice.
-- `cost_latency.csv` — historical per-call latency, cost, and token usage per
-  provider, measured with the Caveman prompt. **Frozen** (see
-  `baseline_manifest.json`); `run_cost_latency_analysis()` now writes current
-  measurements to `extraction_cost_latency.csv` instead.
-- `caveman_token_savings.csv` — historical Caveman vs verbose prompt token
-  counts (21.9%, 242 → 189). **Frozen**; superseded but not overwritten.
-  That verbose baseline omitted the `categorical` distribution and the
-  `categories` field, so it requested strictly less than `CAVEMAN_PROMPT` and
-  *understated* the saving.
-- `extraction_prompt_token_savings.csv` — the corrected, schema-matched
-  measurement: **38.6%** (308 → 189 tokens).
-  `tests/test_extraction_challenge.py::test_prompt_schema_parity` prevents the
-  two prompts from drifting apart again.
-- `extraction_cost_latency.csv` — current per-call latency, cost, and token
-  usage per provider, measured on whichever prompt is in production
-  (`EXTRACTION_PROMPT`). Regenerated after the switch to the natural-language
-  prompt: Google $0.0006/2.15 s, OpenAI $0.0023/2.00 s, Anthropic $0.0042/3.95 s.
+## Body
 
-**The six files listed in `baseline_manifest.json` are frozen historical bytes
-and must never be regenerated in place.** `tests/test_baseline_manifest.py`
-enforces this by hash and also asserts that `run_cost_latency_analysis()` does
-not target their filenames.
+**<u>Current benchmark outputs</u>**
 
-The manifest carries two hash maps. `files` holds the original raw-byte hashes
-as recorded on Windows and is kept as the historical record; it is **not**
-portable, because git checks the same blob out with CRLF on Windows and LF on
-Linux, so those hashes can never match in CI. `files_sha256_lf` holds
-line-ending-normalized hashes of the identical content and is the map the test
-enforces. Normalization does not weaken the check — any change to a value still
-changes the hash, which `test_normalized_hash_ignores_line_endings_but_not_content`
-verifies directly.
+The active benchmark suite is defined in `benchmark.py` and writes four families of results. All of them were regenerated after the correlation-direction fix, so the values below reflect the current code. These files back Tables 1, 3, and 4 of the manuscript.
 
-Files are only written for functions that ran and produced at least one row.
+- **Empirical utility.** `empirical_benchmark.csv` holds 9 rows: three datasets × three synthesizers, five seeds each. AgentDataset reaches TSTR accuracy 0.809 on Adult, 0.769 on Pima, and 0.689 on German Credit, against TRTR 0.816, 0.771, and 0.693; ROC-AUC differs from TRTR by at most 0.006. SDV achieves 0.772, 0.758, and 0.698, and independent marginals 0.761, 0.649, and 0.700. Before the sign fix, Pima TSTR ROC-AUC was 0.18; after it, 0.823.
+- **Optimization budget.** `ablation_noise_pivot.csv` contains all 240 cells of the eight-domain × five-seed × six-budget sweep. Mean fidelity is 59.82 ± 0.09 at zero iterations (noise 0.1), 95.82 ± 8.14 at one, 99.34 ± 3.16 at two, and 99.84 ± 0.08 at three, five, and ten. The paired 0-versus-5 contrast is +40.02 fidelity (n = 40, paired *t* p ≈ 2.3e-123, Wilcoxon p ≈ 2.1e-8).
+- **Noise-matched control.** `one_shot_noise_matched.csv` holds 40 one-shot cells at the agent loop's starting noise of 0.02. It scores 95.82 ± 8.14, identical cell-by-cell to the one-iteration arm, showing that the large zero-to-one jump is a noise-level effect. Three iterations improve on it by +4.02 fidelity (paired *t* p = 0.0034, Wilcoxon p = 0.011).
+- **Extraction and cost.** `ablation_extraction_method.csv` records 24/24 successful synthetic-text extractions with zero relative error at 1.91 s per call. `extraction_cost_latency.csv` reports five calls per model: $0.0023 / 2.00 s for `gpt-4o`, $0.0042 / 3.95 s for Claude Sonnet 4.5, and $0.0006 / 2.15 s for Gemini 2.5 Flash. `extraction_prompt_token_savings.csv` measures the Caveman prompt at 515 → 189 tokens (63.3% saving); it was not adopted because it loses 2.8–8.9 F1 points on the challenge set.
 
-## P0 reviewer-revision artifacts
+**<u>Downstream utility with gold summaries</u>**
 
-- `baseline_manifest.json` freezes the pre-revision CSV hashes and repository
-  provenance.
-- `real_paper_pipeline_raw.csv`, `real_paper_pipeline_summary.csv`, and
-  `real_paper_optimization_traces.csv` contain the 30-seed synthesis study for
-  the three sources in `analysis/real_paper_manifest.csv`. Discovery and
-  extraction scores live in `analysis/real_paper_*.csv`; the run manifest
-  records the model, token use, latency, cost, lockfile hash, and command.
-- `p0_utility_raw.csv` contains one long-format observation per metric and seed
-  for 30 paired splits. `p0_utility_summary.csv` reports mean, sample standard
-  deviation, and deterministic 10,000-resample bootstrap intervals. It covers
-  three classification datasets with logistic regression and histogram
-  gradient boosting, plus Concrete Compressive Strength regression with linear
-  regression and histogram gradient boosting. The summary-only arms are
-  independent marginals, a one-shot correlated copula at the shipped initial
-  noise (0.1), and AgentDataset's three-iteration loop; all receive parameters
-  computed from the training fold only. SDV and TRTR receive individual rows.
-- `p0_utility_baseline_contrasts_raw.csv` contains paired seed-level differences
-  for one-shot minus independent, AgentDataset minus one-shot, and SDV minus
-  AgentDataset. `p0_utility_baseline_contrasts.csv` summarizes those differences
-  with 10,000-resample bootstrap intervals. The SDV contrast is a descriptive
-  real-data-access/modeling gap, not a like-for-like treatment effect.
-- Correlations, rather than refinement, explain the summary-only gain. One-shot
-  improves over independence on every reported primary metric (for example,
-  Adult LR AUC +.341 [.284,.400] and Concrete LR $R^2$ +.612 [.584,.641]).
-  Agent-minus-one-shot intervals include zero for every classification primary
-  metric; only Concrete HGB has a small refinement gain ($R^2$ +.030
-  [.003,.059]). These runs hold extraction perfect (`gold_train_summary`), so
-  they measure the synthesis ceiling rather than end-to-end extraction utility.
+The P0 utility study separates synthesis quality from LLM extraction by computing gold summaries from each training fold. It uses 30 paired splits, four datasets, logistic regression and histogram gradient boosting for classification, and linear regression and gradient boosting for Concrete Compressive Strength. These artifacts back Table 2 of the manuscript.
 
-## P1 reviewer-revision artifacts
+- **Classification utility.** `p0_utility_summary.csv` reports logistic-regression TSTR accuracy of 0.799 on Adult, 0.757 on Pima, and 0.702 on German Credit, against SDV at 0.770, 0.757, and 0.701. AgentDataset is effectively tied with the one-shot copula on all three, while independent marginals reach 0.761, 0.649, and 0.700.
+- **Regression utility.** On Concrete, gradient-boosted TSTR R² is 0.528 for AgentDataset, 0.497 for one-shot, −0.256 for independent marginals, and 0.622 for SDV. This is the clearest case where record-level access matters: SDV can model nonlinear structure beyond the reported pairwise correlations.
+- **Minority-F1 calibration.** `adult_calibration.csv` and `adult_f1_gap.csv` show that the Adult minority-F1 gap is largely a threshold artifact. At the default 0.5 threshold, isotonic and Platt calibration give minority F1 0.342 and 0.366; selecting the threshold on synthetic validation raises it to 0.613, close to the oracle value 0.624, with ROC-AUC unchanged at about 0.85.
 
-- `adult_calibration_raw.csv` and `adult_calibration.csv` contain the Adult
-  post-hoc calibration study over 30 paired splits: eight threshold and
-  calibration strategies crossed with the real training data, AgentDataset,
-  independent marginals, and the SDV Gaussian copula, for logistic regression
-  and histogram gradient boosting. Raw rows follow the shared schema plus two
-  extra columns: `calibration_strategy`, and `uses_real_test_labels`, which is
-  set only on the `oracle_threshold_real_test` diagnostic.
-- Calibrators and thresholds are fitted on a validation split carved out of the
-  *synthetic* training frame; the real test fold is scored against but never
-  tuned on. The single exception is `oracle_threshold_real_test`, which is an
-  upper bound on what thresholding alone could achieve and is not a usable
-  method — it is flagged in the schema so it cannot be read as a result.
-- `uncalibrated_full_fit` reproduces the P0 protocol (model fitted on the whole
-  training frame, decision threshold 0.5) and exists to reconcile this study
-  against `p0_utility_summary.csv`.
-- Isotonic regression is skipped, with `status="skipped"` and an explicit
-  `failure_stage`, when the validation split has fewer than 500 rows or fewer
-  than 50 members of either class.
+**<u>Extraction quality</u>**
 
-### Extraction robustness and prompt ablation (§9.6)
+Extraction is evaluated on both a controlled adversarial set and three heterogeneous real papers. The controlled set is the more diagnostic test; the real-paper study shows how close extracted parameters come to a hand-curated specification.
 
-- `extraction_challenge_raw.csv` — one row per (case, arm, model, repetition)
-  over the 30-case challenge set in `analysis/extraction_challenge_set.json`.
-  Arms are `caveman` (the production prompt), `natural_language` (a verbose
-  prompt requesting the identical schema), and `regex` (the fallback, run once
-  and never folded into LLM results). Columns split false positives by cause:
-  `fp_distractor` (context error), `fp_fabricated` (hallucination),
-  `fp_conflated` (mean and SD taken from different populations), and `fp_other`.
-- `extraction_challenge_summary.csv` — per-arm × per-model means with
-  deterministic 10,000-resample bootstrap intervals, via
-  `summarize_long_results` in `agentdataset/evaluation.py`.
-- `extraction_challenge_by_category.csv` — the same metrics per taxonomy
-  category (negated findings, multiple populations, footnotes, …), so a reader
-  can see which kind of messiness each method fails on.
-- `extraction_challenge_run_manifest.json` — provenance, model list, challenge
-  set sha256, real/constructed split, per-call token and cost history, and the
-  API error count.
+- **Adversarial challenge.** `extraction_challenge_summary.csv` covers 30 cases across ten failure categories, five repetitions per case and condition. With natural-language prompting, F1 is 0.791 for `gpt-4o`, 0.789 for Gemini 2.5 Flash, and 0.764 for Claude Sonnet 4.5; hallucination rates are 0.093, 0.106, and 0.099, and variable-name accuracy remains 0.44–0.56. The Caveman prompt is consistently worse (F1 0.675–0.763), which is why production uses natural language.
+- **Real-paper extraction.** `real_paper_pipeline_summary.csv` evaluates 30 synthesis seeds per paper. LLM extraction fidelity is 97.41 versus 98.61 gold on the randomized trial, 61.63 versus 63.35 on the NHANES report, and 96.81 versus 98.45 on the student survey; correlation scores are 96.7–99.5 in both conditions. The NHANES specification is intrinsically hard for this sampler because its reported structure is coarse and categorical.
+- **Historical extraction sweeps.** `extraction_challenge_raw.csv`, `_summary.csv`, and `_by_category.csv` preserve the earlier 930-call prompt ablation and its replication. They predate the current production prompt and the correlation-sign fix and are kept for provenance, not as current headline numbers.
 
-Headline from the committed 930-extraction sweep: the Caveman prompt buys a
-30.0% prompt-token reduction (404.6 → 283.3 tokens per request) but only a 3.5%
-cost reduction, because completion tokens dominate — and it costs quality. F1 is
-.710 [.657,.760] against .778 [.729,.825] for the schema-matched
-natural-language prompt (paired Wilcoxon p=.0001, same direction on all three
-models). Recall is near-ceiling for both; the loss is precision, driven by
-hallucination rising from .098 to .154. Regex reaches F1 .156.
+**<u>Synthesis diagnostics and score validity</u>**
 
-**Acted on:** production now uses the natural-language prompt
-(`EXTRACTION_PROMPT` in `agentdataset/core/extractor.py`). `CAVEMAN_PROMPT` is
-retained and still measured by the ablation.
+Two studies explain what the internal fidelity score does and does not certify. Together they are the reason the manuscript describes fidelity as a sampler-consistency diagnostic rather than evidence of source fidelity.
 
-The extraction-backed artifacts — `analysis/real_paper_*.csv` and
-`real_paper_pipeline_*.csv` — were regenerated under the new prompt with
-`real_paper_eval.py --mode cached` (cached text, so only the prompt changed).
-The `gold` condition is bit-identical across all 18 summary metrics, confirming
-only extraction moved. That evaluation independently replicates the §9.6 result:
-extraction F1 .247 → .308 and precision .167 → .226 with **recall unchanged** at
-.480, because false positives roughly halved (cdc 27 → 12, calerie 21 → 17)
-while true positives were identical. The natural-language prompt wins by
-inventing less, not by finding more.
+- **Correlation matrices.** `corr_validity_summary.csv` reports correlation scores of 97.6–99.7 for gold, templated, and automatically extracted specifications, with every declared pair applied. In five stress specifications, only one matrix is positive definite; without repair the correlation score is 66.6 ± 19.1, and opt-in nearest-PSD repair raises it to 92.5 ± 9.8. Repair improves fit but cannot recover information that was never declared.
+- **Fidelity invariance.** `fidelity_validity_probe_summary.csv` perturbs declared parameters before synthesis. For Adult under a mean shift, reported fidelity stays 95.64, reported correlation 99.10, and reported KS 90.0 at every corruption level from ε = 0 to 2, while external KS against the real data rises from 0.143 to 0.709. The score checks whether the synthesizer did what it was told, not whether the instruction was correct.
+- **Consequence for evaluation.** High intrinsic fidelity can coexist with weak downstream utility, and extraction quality does not surface in the fidelity score. The manuscript reports an independent trust score and external utility tests for this reason; no privacy guarantee is claimed.
 
-Downstream synthesis shifted accordingly, because a smaller parameter set is
-being synthesized. A `calerie_rct` fallback warning seen in the first
-post-switch run did **not** reproduce on an independent re-run (0 across all
-sources), so it was a property of that run's particular extraction rather than
-a structural issue.
+**<u>End-to-end cost and latency</u>**
 
-### Replication (two independent runs)
+Cost was measured both per extraction call and over the complete discovery-to-validation pipeline. The dominant expense is document discovery, not the statistical model.
 
-`extraction_challenge_raw_run1.csv` preserves the first 930-extraction sweep;
-`extraction_challenge_raw.csv` is the second, run from a clean tree. Both reach
-the same conclusion:
+- **Per-dataset spend.** `end_to_end_cost_latency.csv` averages three real papers to $0.0169 and 41.84 s per final dataset, with a range of $0.0133–$0.0209 and 39.07–45.64 s. Each run uses three LLM calls, about 4,977 prompt tokens and 442 completion tokens.
+- **Stage breakdown.** Mean wall time is 7.80 s in LLM APIs, 33.06 s in search and fetch network activity, and under 1 s in local synthesis and validation. Human source-review time is excluded.
+- **Current versus frozen cost files.** `extraction_cost_latency.csv` is the current per-call measurement; `cost_latency.csv` and `caveman_token_savings.csv` are frozen historical baselines and are not overwritten. Older end-to-end artifacts also predate the 2026-11-23 refresh.
 
-| pooled LLM arms | F1 | precision | recall | hallucination |
-|---|---|---|---|---|
-| caveman run1 → run2 | .710 → .719 | .639 → .648 | .960 → .963 | .154 → .154 |
-| natural run1 → run2 | .778 → .782 | .720 → .723 | .989 → .988 | .098 → .094 |
+**<u>Provenance and reproduction</u>**
 
-Caveman-minus-natural F1 gap: **−.0686** (run 1) and **−.0629** (run 2), both
-significant (Wilcoxon p=.0001 and p=.0004). The regex arm is bit-identical
-across runs (max |ΔF1| = 0.0), confirming the spread is LLM-side.
+`baseline_manifest.json` records hashes and repository provenance for six result files. Three of them were deliberately regenerated in the 2026-11-23 refresh; the other three remain frozen.
 
-Run 2 hit 45 `APIError` rows on Anthropic (15% of its calls) where run 1 hit
-none. Retries are disabled by design so provider instability stays visible;
-failures are recorded as rows and shrink the paired sample rather than biasing
-the rates. Recompute the comparison from the two committed raw files with:
+- **Manifest contract.** The manifest lists `files` (raw-byte hashes recorded on Windows) and `files_sha256_lf` (line-ending-normalized hashes enforced by `tests/test_baseline_manifest.py`). It records `regenerated_files` for `empirical_benchmark.csv`, `ablation_extraction_method.csv`, and `ablation_noise_pivot.csv`, with the reason for each refresh. Frozen files remain `cost_latency.csv`, `caveman_token_savings.csv`, and `adult_f1_gap.csv`.
+- **Refresh rationale.** The regenerated files incorporate the restored SDV baseline, a fresh `Synthesizer(seed=seed)` per ablation cell, and the fix that folds an explicit negative correlation direction into the stored sign. The old label-only ablation checkpoint was discarded rather than mixed with the corrected run.
+- **Reproduce the main tables.** Run `uv run python benchmark.py --only empirical`, `--only ablation-b`, and `--only cost`. Ablation B resumes from its checkpoint by default; `--fresh` restarts it. The extended studies live in `analysis/`, with `p0_utility_benchmark.py`, `adult_calibration.py`, `corr_validity_audit.py`, and `fidelity_validity_probe.py` running locally without an API key.
+- **Source of truth.** Generated CSVs are authoritative; the manuscript and this index are written against them. When a result changes, update the CSV, the manifest, and the corresponding manuscript table in the same change.
 
-```powershell
-.venv\Scripts\python.exe -c "import pandas as pd; a=pd.read_csv('results/extraction_challenge_raw_run1.csv'); b=pd.read_csv('results/extraction_challenge_raw.csv'); m=['f1','precision','recall','hallucination_rate']; print(pd.concat({'run1':a[a.arm!='regex'].groupby('arm')[m].mean(),'run2':b[b.arm!='regex'].groupby('arm')[m].mean()},axis=1).round(4))"
-```
+## Conclusion
 
-Both run manifests record `git_dirty: false` at a commit present in history.
-`collect_provenance()` is now called before any output is written — previously
-it ran afterwards, which made a dirty flag structurally unavoidable.
-
-A second finding is recorded in `fence_stripped`: Anthropic models via OpenRouter
-ignore `response_format=json_object` and wrap the object in a Markdown fence on
-100% of calls, so a strict `json.loads` fails on every one. `strip_json_fence` in
-`agentdataset/core/extractor.py` handles this; without it the pipeline silently
-falls back to regex for that provider while appearing to succeed.
-
-API failures are recorded as rows with `api_error=True` rather than dropped, so
-they cannot bias the reported rates downward. All arms keep the production
-`response_format={"type": "json_object"}` setting, so the malformed rate is
-schema-level; retries are disabled so nondeterminism stays visible. Every model
-is routed through OpenRouter, so one `OPENROUTER_API_KEY` covers the sweep. See
-`analysis/EXTRACTION_CHALLENGE_PROTOCOL.md` for the annotation rules and
-limitations.
-
-### Synthesis and optimization diagnostics (§9.7)
-
-**Headline: the advertised copula path is almost never bypassed for the reason
-we assumed, and very often bypassed for a reason we had not measured.**
-Positive-definiteness is not the binding constraint on real inputs — every
-templated, gold, and auto-extracted matrix in the sweep is positive-definite.
-What actually destroys dependence is *name resolution*: a declared correlation
-whose variables are absent from the extracted variable dictionary is discarded
-silently, leaving an identity matrix that passes every validity check and
-imposes nothing.
-
-- `corr_validity_per_matrix.csv` — one row per correlation matrix the pipeline
-  builds, with `min_eigenvalue`, `condition_number`, `is_pd`, `action`
-  (`cholesky_ok` / `dropped_all` / `repaired_psd` / `no_correlations`),
-  `n_pairs_declared`, `n_pairs_applied`, `n_pairs_skipped_unknown_var`,
-  `n_pairs_overwritten`, and the `corr_score` obtained under both the shipped
-  drop-all fallback and the nearest-PSD repair.
-- `corr_validity_raw.csv` / `_summary.csv` — the same observations in the shared
-  long schema, grouped by input class. Key metrics: `is_pd`, `dropped_all`,
-  `vacuous_matrix` (no pair resolved), `pairs_applied_rate`, and
-  `effective_copula` (positive-definite *and* at least one pair applied).
-- Effective copula rate **as first measured**: auto-extracted 0/8 pairs applied
-  (0%), templated 11/20 (55%), gold 3/4 (75%). The regex extractor named
-  continuous variables positionally (`var_1`, `var_2`, …) while emitting
-  correlations under the names found in the text, so no regex-extracted pair
-  could ever resolve.
-- **This was a real defect and has been fixed.** `_extract_with_regex` now
-  recovers the variable name from the prose immediately preceding a mean/std
-  hit and normalizes names on both sides, so `heart rate` in the prose matches
-  `heart_rate` in the correlation clause. After the fix: auto-extracted **8/8
-  (100%)**, templated **20/20 (100%)**, gold unchanged at 3/4 — that remaining
-  pair names a variable the source genuinely never reports, which is correct.
-  On the eight templated domains the correlation score rises **77.3 → 99.3**
-  and overall fidelity **50.9 → 59.7**, consistent across all eight.
-- Where the prose supplies no confident name the positional `var_N` fallback is
-  kept on purpose: a *wrong* name mismatches silently, which is worse than a
-  visibly unresolved one. Guarded by
-  `tests/test_corr_validity_audit.py::test_regex_correlations_resolve_against_extracted_variables`
-  and eight naming tests in `tests/test_extractor.py`.
-- The fix does **not** move other reported numbers. `_score_extraction` matches
-  by nearest mean rather than by name, so §9.6/Q3 extraction F1 is unchanged,
-  and `real_paper_pipeline_raw.csv` holds only the `gold` and `llm` conditions
-  (regex extracted no target items from the real papers), so Q1 is unchanged.
-- The LLM parse path had the same structural gap and now carries a
-  **fallback-only** resolution: a correlation name is remapped only when the
-  literal name matches no declared variable, and only when its normalized form
-  identifies exactly one. Exact matches pass through byte-for-byte, so a
-  self-consistent LLM response is unaffected and no reported number can move.
-  Ambiguous names (`BMI` vs `bmi`) are left unresolved rather than guessed, and
-  unresolvable names are preserved so `n_pairs_skipped_unknown_var` still counts
-  them — the common, legitimate case of a paper reporting a correlation whose
-  marginals it never reports. The prompt is deliberately unchanged; requiring
-  `var1`/`var2` to be declared keys would regenerate Q3 and Q6.
-- Non-positive-definite matrices appear only in the constructed `stress` class
-  (4/5), which exists precisely so the 100% PD rate on natural inputs is a
-  measured result rather than an untested assumption.
-- The nearest-PSD repair (eigenvalue clipping with diagonal renormalisation,
-  Higham's first iterate) is **opt-in**: `Synthesizer(corr_repair="psd")`. The
-  default remains `"drop"`, so every frozen baseline in `baseline_manifest.json`
-  stays valid. On the slightly-invalid stress case the repair recovers
-  correlation fidelity that dropping destroys.
-- `noise_pivot_ablation_raw.csv.gz` / `_summary.csv` — the sensitivity grid over
-  `patience`, `initial_noise`, `explore_mult`, `exploit_factor`,
-  `reset_multiple`, and iteration budget, with fixed-noise, random-search, and
-  no-loop baselines matched on synthesize+validate call count. Extra columns:
-  `family`, `factor`, `level`, `iterations`, `split`.
-- `noise_pivot_traces.csv.gz` — per-iteration noise level, score, and pivot
-  `phase`, which is what makes the reset frequency and the budget-dependent
-  variance measurable rather than asserted.
-- `noise_pivot_knob_ranking.csv` — one row per schedule knob, ranked by the
-  range of its per-level mean best score. The paired tests answer "is this level
-  better than the shipped one"; this answers "which knob is worth caring about
-  at all". Ordering: `initial_noise` (37.50) ≫ `patience` (16.18) >
-  `exploit_factor` (9.18) > `explore_mult` (2.91) ≫ `reset_multiple` (**0.00**).
-- **The reset branch is inert at the shipped budget.** `reset_multiple` shows an
-  effect range of exactly 0.0 across all four arms — including the one that
-  disables reset entirely. At five iterations with `patience=2` a run cannot
-  accumulate the non-improvement streak the reset branch needs, so that branch
-  never changes the outcome. It is dead code at the shipped settings.
-- `noise_pivot_knob_ranking_replication.csv` — the same ranking produced by a
-  **separate, independent implementation** of §9.7 (different script, different
-  grid, different levels), retained as corroboration. It agrees on the ordering
-  and closely on the magnitudes: `initial_noise` 37.03 vs 37.50, `patience`
-  15.57 vs 16.18, `exploitation_factor` 9.33 vs 9.18, `exploration_multiplier`
-  3.69 vs 2.91, and both pick the lowest available initial-noise level as best.
-  It differs on `reset_interval_cycles` (7.93 vs 0.00) because its screen used a
-  longer iteration budget, where the reset branch can actually fire — which is
-  consistent with, rather than contrary to, the dead-branch finding above.
-  Caveat: both studies score against the same fidelity objective, which is
-  invariant to errors in the extracted parameters, so this corroborates the knob
-  ordering *for that objective* and is not independent evidence that the
-  objective is the right one.
-- `noise_pivot_tests.csv` / `_budget.csv` / `_variance.csv` — produced by
-  `analysis/noise_pivot_report.py` from the raw grid: paired Wilcoxon tests
-  against the shipped configuration with Holm–Bonferroni correction inside each
-  factor family, score and runtime by budget, and the variance decomposition.
-- Sources are split into a **tune** set and a held-out **report** set, declared
-  in code before any result was inspected and recorded in the run manifest, so
-  the question "were these hyperparameters tuned on the data you report on?" has
-  a checkable answer. Every finding below replicates on the held-out split with
-  near-identical effect sizes.
-
-**Headline: the shipped noise-pivot defaults are not empirically justified.**
-The fidelity landscape is monotone decreasing in noise with a cliff between
-0.05 and 0.1 (mean per-iteration score 97.8 at noise 0.01, 93.2 at 0.05, 70.8
-at 0.1, 62.0 at ≥0.2), and the shipped `initial_noise=0.1` sits on the wrong
-side of it. At the shipped 5-iteration budget the adaptive schedule scores
-88.50 (across-seed SD 10.0) against **99.88 (SD 0.07) for a fixed noise of
-0.01** — Δ +11.47, paired Cohen's *d* 1.09, Holm-adjusted Wilcoxon
-*p* = 3.9e-16. Budget-matched random search also wins (99.49). Zero iterations
-at noise 0.01 beats the incumbent's five-iteration run by +10.09. The loop is
-largely compensating for a bad default starting noise. The defaults are left
-unchanged here: that is a behaviour change and its own decision.
-
-**The 10-iteration variance is explained.** In the older shared-stream runs,
-outcomes were a two-point mixture — a run either crossed the noise cliff
-(scoring ~100) or did not (~60) — and the previous file spanned [59.94, 100.00]
-at 10 iterations with 21 distinct values in 40 cells. In the regenerated,
-seed-scoped sweep that mixture is gone at high budgets: all 40 cells reach
-≥ 99.69 by 3 iterations and the across-seed SD falls to 0.08. The remaining
-variance is sampling noise, not a Bernoulli mixture. The noise-matched one-shot
-control at 0.02 still shows the mixture (95.82 ± 8.14), confirming that the
-cliff is a noise-level effect rather than an iteration effect.
-
-**Seed control in `ablation_noise_pivot.csv` (fixed 2026-11-23).** The earlier
-frozen file was generated by a version of `run_ablation_noise_pivot` that called
-`np.random.seed(seed)` (legacy global RNG) while sharing one `Synthesizer`
-across all cells. Because `Synthesizer` draws from an instance-scoped
-`default_rng`, that seed column was a label rather than a control and the
-variation was the shared stream's position. `run_ablation_noise_pivot` now
-constructs a fresh `Synthesizer(seed=seed)` per cell (and per budget-0 cell), so
-cells with the same seed are paired and the sweep is reproducible. The old file
-was discarded rather than mixed with the corrected run.
-
-### What the fidelity score certifies (§9.7 follow-up)
-
-**The reported fidelity score is exactly invariant to errors in the extracted
-parameters.** `fidelity_validity_probe_raw.csv` builds parameters from three
-real UCI datasets, corrupts them, synthesizes from the corrupted parameters,
-and records both what the system reports (`reported_*`, scored against the
-parameters it believes) and how far the output actually is from the real data
-(`external_*`). Within every (dataset, seed) cell the reported score takes a
-**single value across all 14 corruption conditions**, while the external
-two-sample KS distance rises 0.126 → 0.967 and the mean error reaches 141.9
-standard deviations. Attaching each variable's statistics to a different
-variable changes the reported score by zero.
-
-This is invariance by construction. The KS term (weight .40) compares each
-column against the same parameterized CDF, with the same mean and standard
-deviation, that the synthesizer drew it from; the bias term (.20) compares the
-sample mean against that same declared mean. Any location–scale error in the
-parameters moves the data and the reference together and cancels. The
-correlation term (.40) is the exception and does carry signal — it detects a
-dropped or unresolved matrix (52–67 against 80–100 repaired) — but it too
-reproduces a wrong *declared* correlation faithfully.
-
-Net: the score measures whether the synthesizer did what it was told, never
-whether it was told the right thing. That is the common cause behind high
-intrinsic fidelity coexisting with weak TSTR/HGB utility, and behind extraction
-quality never surfacing in fidelity.
-
-**Acted on:** the paper was reframed rather than renumbered — no reported value
-changed. The self-refinement contribution bullet became an audit of the
-internal objective, and System Overview, Q1, Discussion, and the scoring
-appendix now state the score's scope.
-
-### End-to-end cost and latency (§9.8)
-
-The paper's quantitative claims and their re-derivation paths are indexed in
-`analysis/EVIDENCE_TO_CLAIM_MAP.md`.
-
-- `end_to_end_cost_latency_raw.csv` records every live stage, individual search
-  request, LLM attempt, retry index, token count, cost-known flag, and local
-  timing repetition.
-- `end_to_end_cost_latency.csv` averages the three local timing repetitions
-  before producing per-paper and mean-one-dataset totals.
-- `end_to_end_cost_latency_run_manifest.json` records the command, model,
-  environment, seeds, spend/attempt limits, retained cost, and physical spend
-  including a superseded corrective run. The `_cached` counterparts are the
-  deterministic no-network/no-API path.
-
-Across the three real papers, one final dataset averages **$0.01686 and
-41.84 s** (ranges $0.01327--$0.02091 and 39.07--45.64 s). That comprises three
-LLM calls, 4,977 prompt tokens, and 442 completion tokens on average. Mean time
-is 7.80 s in LLM APIs, 33.06 s in search/fetch network activity, and 0.98 s in
-local work. The retained runs cost $0.05058 over nine successful, unretried
-calls; a corrected CDC source-selection rerun brought physical experiment
-spend to $0.057425 over 12 calls. Human source-review time is excluded.
-
-The harness refuses a new attempt at either $0.25 known spend or 12 attempts.
-Provider failures remain explicit even when their cost is unknown. Live mode
-requires network access and `OPENROUTER_API_KEY`; cached mode performs no paid
-calls. `--summarize-existing` regenerates the summary without rerunning any
-stage, while `--source ID --merge-existing` supports a scoped replacement.
-
-Reproduce the new studies with:
-
-| Study | Primary outputs | Offline/API-free path | Live requirements |
-|---|---|---|---|
-| Real-paper discovery/extraction | `analysis/real_paper_*`, `results/real_paper_*` | Verify committed outputs with `paper_artifacts.py --check`; forced regex runs without a key | Network plus `OPENROUTER_API_KEY` for live discovery and LLM extraction |
-| Utility and baselines | `p0_utility_*` | Fully local; SDV may be skipped if unavailable | None |
-| Adult calibration | `adult_calibration*` | Fully local | None |
-| Extraction challenge | `extraction_challenge_*` | `--dry-run` executes regex only | `OPENROUTER_API_KEY` for LLM arms |
-| Optimizer/correlation/fidelity audits | `noise_pivot_*`, `corr_validity_*`, `fidelity_validity_probe_*` | Fully local | None |
-| End-to-end accounting | `end_to_end_cost_latency*` | `--mode cached` performs no network or API calls | Network plus `OPENROUTER_API_KEY` for live mode |
-
-```powershell
-.venv\Scripts\python.exe analysis\real_paper_eval.py --mode live
-.venv\Scripts\python.exe analysis\real_paper_eval.py --mode cached  # cached documents; LLM extraction still uses a configured key
-.venv\Scripts\python.exe analysis\p0_utility_benchmark.py --seeds 30
-.venv\Scripts\python.exe analysis\adult_calibration.py --seeds 30
-
-# Extraction challenge set and prompt ablation (§9.6)
-.venv\Scripts\python.exe analysis\build_extraction_challenge_set.py --check
-.venv\Scripts\python.exe analysis\extraction_ablation.py --dry-run          # regex only, no API key
-.venv\Scripts\python.exe analysis\extraction_ablation.py --models openai --reps 1 --cases negated_finding
-.venv\Scripts\python.exe analysis\extraction_ablation.py --reps 5           # full 3-model sweep
-
-# Synthesis and optimization diagnostics (§9.7) — no API key required
-.venv\Scripts\python.exe analysis\corr_validity_audit.py
-.venv\Scripts\python.exe analysis\noise_pivot_ablation.py --quick          # smoke grid
-.venv\Scripts\python.exe analysis\noise_pivot_ablation.py --seeds 20       # full grid
-.venv\Scripts\python.exe analysis\noise_pivot_report.py                    # tests and tables
-.venv\Scripts\python.exe analysis\fidelity_validity_probe.py --seeds 5     # what the score certifies
-
-# Full workflow cost accounting (§9.8)
-.venv\Scripts\python.exe analysis\end_to_end_cost.py --mode cached         # deterministic, no API key
-.venv\Scripts\python.exe analysis\end_to_end_cost.py --mode live           # network + paid OpenRouter calls
-.venv\Scripts\python.exe analysis\end_to_end_cost.py --mode live --summarize-existing
-
-# Rebuild or verify every result-backed manuscript table without network/API use
-.venv\Scripts\python.exe analysis\paper_artifacts.py --write
-.venv\Scripts\python.exe analysis\paper_artifacts.py --check
-
-# Paper build (run from docs\neurips after generating Figures\architecture.pdf)
-Push-Location Figures
-pdflatex architecture
-Pop-Location
-pdflatex neurips_2026
-bibtex neurips_2026
-pdflatex neurips_2026
-pdflatex neurips_2026
-```
-
-The utility benchmark computes parameters from each training fold only. Raw
-rows use the shared schema defined in `agentdataset/evaluation.py`; empty and
-failed runs remain explicit rather than disappearing during aggregation.
-The committed result files are the deterministic reviewer path: the table
-checker consumes them directly and never performs network or paid calls.
+These artifacts support a narrow but reproducible claim: AgentDataset reconstructs per-variable marginals and pairwise monotone dependence from published statistics, and its synthetic tables retain much of the downstream utility of real data at low cost. The same results define its limits — no higher-order dependence, no privacy guarantee, and a fidelity score that is blind to upstream parameter error. Current benchmark outputs are identified above; older files are retained as historical evidence and should not be read as the final measurements.
