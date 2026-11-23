@@ -2,9 +2,15 @@
 
 ## 1. Overview
 
-AgentDataset is an assisted pipeline: discover research documents → extract statistical parameters → synthesize a dataset → validate the result. Each phase is a standalone module; the `Orchestrator` wires them together. The current UI lets users review and select sources, but it does not yet pause for review of extracted parameters before merging and synthesis. The proposed system direction in §10 addresses that gap and the other limitations identified in the project audits.
+AgentDataset is an assisted pipeline: discover research documents → extract statistical parameters → synthesize a dataset → validate the result. Each phase is a standalone module; the `Orchestrator` wires them together. The CLI surfaces candidate sources and extracted parameters for review before synthesis. The proposed system direction in §10 addresses remaining gaps and limitations identified in the project audits.
 
 > **Revision status:** §2–§9 primarily document the existing implementation and completed research. §10 is the forward-looking change plan. Its items are proposals until implemented and evaluated; do not read them as current capabilities or as claims supported by the frozen results.
+>
+> **2026-11-23 update:** this document is a project log, not the current paper. The
+> paper draft and its result tables live in `docs/MANUSCRIPT.md`. Since this log
+> was written, the Streamlit UI, the regex fallback, the frozen
+> `analysis/noise_pivot_ablation.py` grid, and the `docs/neurips/` build were
+> removed. Descriptions of those items below are historical.
 
 ---
 
@@ -22,9 +28,8 @@ AgentDataset is an assisted pipeline: discover research documents → extract st
 
 ### 2.2 Extraction (`core/extractor.py`)
 
-- **LLM path** (when API key is present): calls `litellm.completion()` with a structured JSON prompt enforcing the schema below. `extraction_method = "llm"`.
-- **Regex fallback** (on any LLM failure or no key): regex patterns match mean/std pairs in either order (incl. `SD`, `σ`, `s.d.` variants, negative and scientific-notation numbers), categorical variables with any number of categories (`takes value 'a' with probability 0.2, 'b' with probability 0.3, and 'c' with probability 0.5`), and best-effort named correlations (`correlation between X and Y is 0.6`, `corr(X, Y) = -0.4`). `extraction_method = "regex_fallback"`. On LLM failure the log names the cause (e.g. `RateLimitError`).
-- **PDF parsing**: `fitz` (PyMuPDF) converts each page to text; temp file is deleted after parsing.
+- **Extraction is LLM-only.** Calls `litellm.completion()` with a structured JSON prompt enforcing the schema below. `extraction_method = "llm"`. The regex fallback was removed; a failed call is reported, not silently replaced.
+- **PDF parsing**: `pymupdf4llm` converts each page to layout-aware Markdown; PyMuPDF (`fitz`) is the fallback backend. Temp files are deleted after parsing.
 - **Statistical density check**: ratio of numeric tokens to word tokens — used to assess whether a document is worth extracting from.
 
 **LLM output schema:**
