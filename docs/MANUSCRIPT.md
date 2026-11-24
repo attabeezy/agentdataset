@@ -2,7 +2,9 @@
 
 > Draft manuscript. Every reported number is taken from a CSV under `results/`;
 > the table captions name the source file. Research artifacts under `analysis/`
-> and `results/` remain the source of truth for every claim.
+> and `results/` remain the source of truth for every claim. The current
+> submission is `docs/submission/paper.tex` (AAAI 2027 Workshop on AI for
+> Scientific Research); this draft is retained as the narrative source.
 
 ---
 
@@ -399,9 +401,12 @@ by discovery, not by the statistical pipeline.
 ## 7. Conclusion
 
 AgentDataset provides an assisted, auditable path from published statistics to
-synthetic data, with explicit operating limits and honest validation. Future
-work: claim-level evidence, study-aware reconciliation, validation against
-independent evidence, and stronger categorical dependence models.
+synthetic data, with explicit operating limits and honest validation. Extracted
+claims carry evidence locators and pass through an agentic review with a human
+override; a study-aware reconciliation module is available, though the default
+run path still uses name-based averaging. Future work: make reconciliation the
+default merge path, validate against independent evidence, and develop stronger
+categorical dependence models.
 
 ## References (selected)
 
