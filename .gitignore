@@ -49,7 +49,7 @@ htmlcov/
 
 # AgentDataset generated/runtime files
 .agentdataset_cache/
-docs/neurips/
+docs/legacy/
 docs/review-agent-dataset.pdf
 output/
 

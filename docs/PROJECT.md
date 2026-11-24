@@ -774,7 +774,7 @@ Numbers quoted in the paper are transcribed from `results/`, which stays here.
   - Add tests for new benchmark schemas, regression metrics, nonlinear-model preprocessing, threshold selection without test leakage, privacy-label changes, matrix diagnostics/repair, and challenge-set scoring.
   - Keep live web/API tests separate from the default unit-test suite.
   - **Done when:** `pytest` passes and result-schema regressions are caught automatically.
-  - **Result:** 230 default tests pass, including paper-artifact/result reconciliation; the credentialed end-to-end test is marked and excluded from the default suite.
+  - **Result:** 218 default tests pass, including paper-artifact/result reconciliation. The current suite also reports 15 skipped (gitignored cached-paper fixtures and baseline files deliberately regenerated in the 2026-11-23 snapshot) and 1 deselected (the credentialed `live_e2e` test, excluded via `addopts`).
 
 - [ ] **Perform final paper consistency and build checks.**
   - Rebuild all tables from saved result files.
