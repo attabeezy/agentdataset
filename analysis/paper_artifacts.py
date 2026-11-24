@@ -1,8 +1,9 @@
 """Generate and verify the result-backed LaTeX table rows used by the paper.
 
 The committed CSV/JSON artifacts are the source of truth. The write mode updates
-the TeX fragments consumed by docs/neurips/neurips_2026.tex; check mode fails if a
-fragment is stale or a result contract no longer holds.
+the TeX fragments that are inlined into docs/submission/paper.tex (the AAAI 2027
+AI4Research submission); check mode fails if a fragment is stale or a result
+contract no longer holds.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS = ROOT / "results"
 ANALYSIS = ROOT / "analysis"
-GENERATED = ROOT / "docs" / "neurips" / "generated_tables"
+GENERATED = ROOT / "docs" / "submission" / "generated_tables"
 
 
 def _read_csv(path: Path) -> pd.DataFrame:

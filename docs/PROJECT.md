@@ -10,7 +10,9 @@ AgentDataset is an assisted pipeline: discover research documents → extract st
 > paper draft and its result tables live in `docs/MANUSCRIPT.md`. Since this log
 > was written, the Streamlit UI, the regex fallback, the frozen
 > `analysis/noise_pivot_ablation.py` grid, and the `docs/neurips/` build were
-> removed. Descriptions of those items below are historical.
+> removed. Descriptions of those items below are historical. The current
+> submission target is the AAAI 2027 Workshop on AI for Scientific Research;
+> its LaTeX source is `docs/submission/paper.tex`.
 
 ---
 
@@ -774,7 +776,7 @@ Numbers quoted in the paper are transcribed from `results/`, which stays here.
   - Add tests for new benchmark schemas, regression metrics, nonlinear-model preprocessing, threshold selection without test leakage, privacy-label changes, matrix diagnostics/repair, and challenge-set scoring.
   - Keep live web/API tests separate from the default unit-test suite.
   - **Done when:** `pytest` passes and result-schema regressions are caught automatically.
-  - **Result:** 218 default tests pass, including paper-artifact/result reconciliation. The current suite also reports 15 skipped (gitignored cached-paper fixtures and baseline files deliberately regenerated in the 2026-11-23 snapshot) and 1 deselected (the credentialed `live_e2e` test, excluded via `addopts`).
+  - **Result:** 228 default tests pass, including result-to-paper reconciliation against `docs/submission/paper.tex` (AAAI 2027 AI4Research submission). The suite also reports 7 skipped (gitignored cached-paper fixtures and baseline files deliberately regenerated in the 2026-11-23 snapshot) and 1 deselected (the credentialed `live_e2e` test, excluded via `addopts`).
 
 - [ ] **Perform final paper consistency and build checks.**
   - Rebuild all tables from saved result files.

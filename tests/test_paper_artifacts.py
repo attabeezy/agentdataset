@@ -1,22 +1,19 @@
-"""Submission guards for P2 paper artifacts and evidence contracts."""
+"""Submission guards for the AAAI 2027 AI4Research paper and evidence contracts."""
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
-import pytest
-
 from analysis import paper_artifacts
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PAPER = ROOT / "docs" / "neurips" / "neurips_2026.tex"
-FIGURE = ROOT / "docs" / "neurips" / "Figures" / "architecture.tex"
+PAPER = ROOT / "docs" / "submission" / "paper.tex"
 
-pytestmark = pytest.mark.skipif(
-    not PAPER.exists(), reason="private paper artifacts are not present"
-)
+
+def _paper_text() -> str:
+    return PAPER.read_text(encoding="utf-8")
 
 
 def test_generated_tables_match_committed_results():
@@ -27,14 +24,21 @@ def test_generated_tables_match_committed_results():
         assert path.read_text(encoding="utf-8") == expected, name
 
 
-def test_main_consumes_every_generated_result_table():
-    text = PAPER.read_text(encoding="utf-8")
+def test_paper_consumes_every_generated_result_table():
+    text = _paper_text()
+    for name, expected in paper_artifacts.render_tables().items():
+        assert expected.strip() in text, f"paper is missing generated table {name}"
+
+
+def test_paper_has_no_stale_placeholders_or_external_inputs():
+    text = _paper_text()
     for name in paper_artifacts.render_tables():
-        assert f"\\input{{generated_tables/{name}}}" in text
+        assert "\n" + name.removesuffix(".tex") + "\n" not in text, name
+    assert "\\input{" not in text
 
 
 def test_abstract_is_compact_and_claim_scoped():
-    text = PAPER.read_text(encoding="utf-8")
+    text = _paper_text()
     abstract = re.search(
         r"\\begin\{abstract\}(.*?)\\end\{abstract\}", text, flags=re.DOTALL
     ).group(1)
@@ -48,22 +52,23 @@ def test_abstract_is_compact_and_claim_scoped():
 
 
 def test_q1_uses_final_deployed_prompt_replication():
-    text = PAPER.read_text(encoding="utf-8")
-    q1 = text.split(r"\subsection{Q1:", 1)[1].split(r"\subsection{Q2:", 1)[0]
-    assert ".222, .480, and .304" in q1
-    assert r"\$0.0343" in q1
-    assert "13.9" in q1
+    text = _paper_text()
+    q1 = text.split(r"\subsection{Q1: Real papers}", 1)[1].split(
+        r"\subsection{Q2: Downstream utility}", 1
+    )[0]
+    for token in [".222", ".480", ".304", r"\$0.0343", "13.9"]:
+        assert token in q1, token
     assert ".247" not in q1
 
 
 def test_figure_walkthrough_is_source_backed_and_candid():
-    text = FIGURE.read_text(encoding="utf-8")
+    text = _paper_text()
     for token in ["rank 1", "N{=}447", "35.7", "r{=}.64", "omitted", "96.81"]:
-        assert token in text
+        assert token in text, token
 
 
 def test_algorithm_uses_statistical_specification_not_theta():
-    text = PAPER.read_text(encoding="utf-8")
+    text = _paper_text()
     algorithm = text.split(r"\begin{algorithm}[t]", 1)[1].split(
         r"\end{algorithm}", 1
     )[0]
@@ -83,9 +88,18 @@ def test_live_web_test_remains_separate_from_default_suite():
     assert 'not live_e2e' in config
 
 
-def test_paper_uses_workshop_submission_format():
-    text = PAPER.read_text(encoding="utf-8")
-    assert r"\usepackage{neurips_2026}" in text
-    assert "Submitted to the AI for Science workshop (NeurIPS 2026)." in text
-    assert r"\input{checklist.tex}" not in text
-    assert "aaai2027" not in text
+def test_paper_uses_anonymous_aaai_submission_format():
+    text = _paper_text()
+    assert r"\usepackage[submission]{aaai2027}" in text
+    assert r"\bibliography{aaai2027}" in text
+    assert "\\author{Anonymous Submission}" in text
+    assert "neurips_2026" not in text
+    assert "Author Name" not in text
+
+
+def test_evidence_map_targets_current_submission():
+    text = (ROOT / "analysis" / "EVIDENCE_TO_CLAIM_MAP.md").read_text(
+        encoding="utf-8"
+    )
+    assert "docs/submission/paper.tex" in text
+    assert "neurips_2026" not in text

@@ -50,6 +50,8 @@ htmlcov/
 # AgentDataset generated/runtime files
 .agentdataset_cache/
 docs/legacy/
+docs/AuthorKit27/
+docs/AuthorKit27.zip
 docs/review-agent-dataset.pdf
 output/
 

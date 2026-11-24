@@ -1,0 +1,462 @@
+\documentclass[letterpaper]{article}
+\usepackage[submission]{aaai2027}
+\usepackage[hyphens]{url}
+\usepackage{graphicx}
+\urlstyle{rm}
+\def\UrlFont{\rm}
+\usepackage{natbib}
+\usepackage{caption}
+\frenchspacing
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{amsmath}
+\usepackage{booktabs}
+
+\pdfinfo{
+/TemplateVersion (2027.1)
+}
+
+\setcounter{secnumdepth}{0}
+
+\title{AgentDataset: Assisted Synthesis of Tabular Data from Published Statistics}
+\author{Anonymous Submission}
+\affiliations{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present AgentDataset, a command-line system that turns a research query into a synthetic
+tabular dataset by discovering candidate documents, extracting marginals and pairwise
+correlations with a large language model, reviewing the resulting claims, synthesizing
+correlated rows through a Gaussian copula, and validating the output. The system is assisted
+rather than autonomous: an LLM agent accepts, rejects, or defers every extracted claim against
+its evidence, and a human may override those decisions. Every artifact carries a provenance
+manifest. We reframe the internal fidelity score as a sampler-consistency diagnostic rather
+than evidence of source fidelity, and show with a controlled corruption probe that it is blind
+to upstream parameter error. On three real papers the deployed extractor reaches .304 micro-F1
+on prespecified statistics. Across four public datasets, synthetic tables preserve marginals
+and pairwise monotone association and retain much of the downstream utility of real data.
+The system does not recover higher-order dependence, and aggregate-only input is not a privacy
+mechanism. These results do not support unattended scientific curation or a privacy mechanism.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+Published papers routinely report the aggregates needed to reconstruct a plausible population:
+means, standard deviations, category probabilities, and pairwise correlations. Record-level data
+are often unavailable for privacy, contractual, or licensing reasons, and record-trained
+synthesizers such as SDV \citep{patki2016} require individual rows that this setting does not
+provide. AgentDataset automates the translation from published aggregates into a usable table
+while keeping source selection and claim approval reviewable.
+
+The contributions are: (1) an end-to-end assisted workflow exposed as a CLI, with an agentic
+review gate and a human override; (2) a copula-based synthesizer with correlation diagnostics and
+an opt-in nearest-PSD repair; (3) an evidence-aware reconciliation module that flags and separates
+incompatible cross-source measures; and (4) an honest validation story that separates sampler
+consistency from source fidelity and states an explicit operating envelope. The evaluation is
+designed around questions of interest to AI-for-science research: can the pipeline find and read
+real papers, how much utility survives, and what do the internal scores actually certify?
+
+\section{System}
+\label{sec:system}
+
+\subsection{Discovery and extraction}
+\label{sec:extract}
+
+\texttt{optimize\_query()} expands the user query with an LLM; a search API returns ranked
+candidates that are deduplicated by normalized URL and scored for statistical availability.
+HTML is converted with trafilatura and PDFs with a layout-aware parser. LLM extraction from
+scientific text is a growing area \citep{nasar2018,liu2025,song2025,sror2026}, but reported
+failure modes include hallucinated numbers and context errors. Extraction is LLM-only:
+long documents are chunked (8000 characters, 500 overlap), each chunk is parsed with a
+natural-language prompt that enforces the output schema, and results are merged by normalized
+variable name and correlation pair. Each claim carries an evidence passage, source identity,
+and an evidence type (reported, derived, or inferred). Unresolvable names and unsupported values
+are preserved as claims rather than silently dropped.
+
+\subsection{Agentic review and reconciliation}
+\label{sec:review}
+
+Before synthesis, an LLM agent accepts, rejects, or defers every claim against its evidence and
+the declared population, arm, and time point; only accepted claims enter the specification. A
+human can override agent decisions through the \texttt{review} command. When several sources are
+selected, the shipped run path still averages same-named variables and correlation pairs. A
+separate reconciliation module groups measures by normalized name, unit, and study context,
+keeps per-study estimates side by side, and records an explicit decision for each merge; values
+from incompatible populations remain separate. Wiring that module into the default workflow is
+ongoing work.
+
+\subsection{Synthesis}
+\label{sec:synth}
+
+The synthesizer draws parametric marginals (normal, uniform, gamma, categorical) and imposes
+pairwise correlations via a rank transform over a latent Gaussian
+\citep{joe2014,trivedi2006}; vine-copula alternatives \citep{aas2009} need richer reported
+statistics than a typical paper provides. Diagnostics record declared,
+applied, and skipped pairs plus matrix conditioning. Positive-definiteness is measured by
+eigendecomposition, not inferred from a Cholesky failure. An opt-in nearest-PSD repair is
+available, with the unmodified matrix retained. Categorical variables are drawn as integer codes
+and rank-transformed; treating arbitrary label order as ordinal is a documented limitation.
+
+\subsection{Validation and the agentic loop}
+\label{sec:loop}
+
+The validator reports KS (or chi-square for categorical) fit, correlation similarity, bias, and a
+synthetic-row dispersion diagnostic. Plausibility, grounding, and claim-grounding scores feed a
+trust score, and an LLM critique suggests the next action. Algorithm~\ref{alg:pivot} summarizes
+the noise-pivot loop; $\eta$ is the noise level, $p$ patience, $\alpha$ the exploitation factor,
+$\beta$ the exploration multiplier, $\rho$ the reset interval, and $p\rho$ the reset multiple.
+
+\begin{algorithm}[t]
+\caption{Synthesis--validation--critique loop.}
+\label{alg:pivot}
+\textbf{Input}: reviewed specification $S$, iterations $T$, initial noise $\eta_0$ \\
+\textbf{Parameter}: $\eta_{\min}$, $\eta_{\max}$, $p$, $\alpha$, $\beta$, $\rho$, $p\rho$ \\
+\textbf{Output}: best table and its report
+\begin{algorithmic}[1]
+\STATE $\eta \leftarrow \eta_0$; $b \leftarrow -\infty$; $u \leftarrow 0$
+\FOR{$t = 1$ to $T$}
+  \STATE $D \leftarrow \textsc{Synthesize}(S, \eta)$
+  \STATE $r \leftarrow \textsc{Validate}(D, S, \text{evidence})$
+  \IF{$r.\text{score} > b$}
+    \STATE $b \leftarrow r.\text{score}$; save artifacts; $u \leftarrow 0$
+  \ELSE
+    \STATE $u \leftarrow u + 1$
+    \IF{$u \bmod (p\rho) = 0$}
+      \STATE $\eta \leftarrow \eta_0$
+    \ELSIF{$u \bmod p = 0$}
+      \STATE $\eta \leftarrow \max(\eta_{\min}, \alpha\eta)$
+    \ELSE
+      \STATE $\eta \leftarrow \min(\eta_{\max}, \beta\eta)$
+    \ENDIF
+  \ENDIF
+  \STATE $a \leftarrow \textsc{Critique}(r, \text{evidence})$
+  \STATE halt if $a = \text{stop}$
+\ENDFOR
+\STATE \textbf{return} best saved table
+\end{algorithmic}
+\end{algorithm}
+
+\section{Evaluation questions}
+\label{sec:questions}
+
+All live calls were routed through OpenRouter via \texttt{litellm}; the default extraction model
+is \texttt{openrouter/openai/gpt-4o} and the agent-loop model is \texttt{openrouter/auto}. Seeds
+control data splits and synthesis, and reported values are means over seeds unless noted.
+
+\begin{description}
+\item[Q1: Real documents.] Three heterogeneous papers (a randomized trial, an NHANES
+  comparison, and a student mental-health survey) are processed end to end; discovery, parsing,
+  extraction, and synthesis are scored separately over 30 synthesis seeds.
+\item[Q2: Downstream utility.] Adult, Pima, German Credit, and Concrete are evaluated over 30
+  paired splits using gold summaries computed from each training fold, so extraction is held
+  perfect. Logistic regression, gradient-boosted trees, one-shot synthesis, independent
+  marginals, and an SDV Gaussian copula fitted on real records are compared.
+\item[Q3: Extraction.] A 30-case challenge set covers ten failure categories with five
+  repetitions per case and arm. Prompt style and model are varied; precision, recall, F1,
+  hallucination, abstention, tokens, and cost are measured.
+\item[Q4: Optimization.] An eight-domain $\times$ five-seed $\times$ six-budget sweep yields
+  240 cells with a fresh synthesizer per cell, plus a noise-matched one-shot control and paired
+  tests of zero versus five iterations.
+\item[Q5: Cost.] Per-call cost and latency are augmented with instrumented end-to-end runs over
+  the real-paper pipeline, separating API, network, and local time.
+\item[Q6: Diagnostics.] Controlled parameter corruption, correlation-matrix stress tests, and
+  Adult calibration studies probe what the internal score certifies.
+\end{description}
+
+\section{Results}
+\label{sec:results}
+
+\subsection{Q1: Real papers}
+\label{sec:q1}
+
+Discovery found all three prespecified sources; the CALERIE trial first appears at rank 13, so
+this is target recovery rather than recall@5. On the prespecified fields, LLM extraction reaches
+precision .222, recall .480, and .304 micro-F1, while the regex baseline extracts none of them.
+The three-paper extraction replicate cost \$0.0343 and took 13.9 seconds. Synthesis from LLM
+extractions approaches synthesis from hand-curated gold statistics on the trial and the survey,
+but the coarse categorical NHANES specification remains hard even with gold inputs
+(Table~\ref{tab:realpapers} in Appendix~\ref{sec:appendix}). Extraction is the bottleneck, not
+synthesis. Figure~\ref{fig:walkthrough} shows one end-to-end example.
+
+\begin{figure*}[t]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+Query & student mental-health survey \\
+Source & rank 1 paper \\
+Statistic & SAS-SV, N{=}447, mean 35.7, r{=}.64 \\
+Output & 447 rows, fidelity 96.81 \\
+Caveat & omitted correlation not recovered \\
+\bottomrule
+\end{tabular}
+\caption{A real-paper walkthrough. The reported correlation is applied; a correlation the source
+does not report is not invented, so high internal fidelity does not imply source fidelity.}
+\label{fig:walkthrough}
+\end{figure*}
+
+\subsection{Q2: Downstream utility}
+\label{sec:q2}
+
+With gold training-fold summaries, AgentDataset tracks SDV closely on the three classification
+tasks (for example, Adult accuracy .799 for both) and beats independent marginals wherever
+dependence matters. The one-shot copula is nearly as good as the loop, so most of the benefit
+comes from the reported correlations rather than refinement. On Concrete regression, SDV is
+clearly better (R$^2$ .622 versus .528), which is expected because it sees record-level data and
+can model nonlinear structure beyond the reported pairwise correlations
+(Table~\ref{tab:utility}). Threshold selection on synthetic validation data recovers most of the
+Adult minority-F1 gap without using real test labels, but cannot restore ranking loss
+(Table~\ref{tab:calibration}).
+
+\subsection{Q3: Extraction}
+\label{sec:q3}
+
+The compressed Caveman prompt saves billed prompt tokens but lowers quality: on the challenge
+set its F1 is .710 versus .778 for the schema-matched natural-language prompt, with hallucination
+rising from .098 to .154. Regex reaches F1 .156 and is retained only as a documented, near-silent
+baseline. Variable-name accuracy stays in the 0.44--0.56 range, so value extraction is much
+easier than assigning the correct variable identity. Provider-level cost and latency are small
+but non-trivial (Table~\ref{tab:provider}).
+
+\subsection{Q4: Optimization budget}
+\label{sec:q4}
+
+The jump from zero to three iterations is largely a noise-level effect: a noise-matched one-shot
+control at the loop's starting noise scores 95.82, identical to the one-iteration arm, while
+three iterations add 4.02 fidelity points (paired $t$ $p=0.0034$). In a wider schedule sweep, a
+fixed noise of 0.01 beats the shipped adaptive schedule at the same budget (99.88 versus 88.50),
+and the reset branch is inert at the shipped settings. The defaults are retained for
+reproducibility; iteration count is a weak substitute for a well-chosen starting noise
+(Tables~\ref{tab:noise} and~\ref{tab:pivot}).
+
+\subsection{Q5: Cost and latency}
+\label{sec:q5}
+
+One finished dataset averages \$0.01686 and 41.84 seconds. Of that, 33.06 seconds is network
+time, 7.80 seconds is LLM API time across three calls (query expansion, source suggestion, and
+extraction), and under one second is local computation. Human source-review time is excluded.
+Discovery, not statistical modelling, dominates cost and latency (Table~\ref{tab:e2e}).
+
+\subsection{Q6: What the score certifies}
+\label{sec:q6}
+
+Perturbing declared parameters before synthesis leaves reported fidelity, correlation, and KS
+scores unchanged at every corruption level, while external KS distance against real data rises
+from 0.13 to 0.97. The score checks whether the sampler followed its specification, not whether
+the specification was correct. Correlation diagnostics do carry signal about synthesis failures:
+name resolution, not matrix non-PD, was the dominant way declared dependence was lost on real
+inputs, and the repaired path applies all resolvable pairs (Tables~\ref{tab:validity}
+and~\ref{tab:correlation}). Repair cannot recover information that was never declared.
+
+\section{Discussion and limitations}
+\label{sec:discussion}
+
+AgentDataset reproduces per-variable marginals and pairwise monotone association, and nothing
+beyond that: no higher-order dependence, no defensible categorical dependence model, and no
+formal privacy guarantee. Aggregate-only input follows a long tradition of disclosure control
+\citep{hundepool2012,rubin1993,taub2018} but does not itself establish anonymity. Internal fidelity is a sampler-consistency diagnostic; trust and
+external utility tests carry the evidential weight. Extraction is reliable on explicitly stated
+numbers but weak on variable identity, scope, and abstention. Cost figures exclude human review,
+and results are bounded by the four evaluated datasets and three papers. Distribution shift
+between a published summary and a target population remains an open risk. Validation against
+independent evidence and use of the reconciliation module as the default merge path are the next
+steps.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented an assisted, auditable path from published statistics to synthetic data, with
+explicit operating limits and result-backed evaluation. The system is useful where record-level
+data cannot be shared but aggregate statistics are public, provided its claims are read at the
+narrow scope supported by the evidence.
+
+\appendix
+\section{Result-backed tables}
+\label{sec:appendix}
+
+All tables below are generated from committed result files by \texttt{analysis/paper\_artifacts.py}
+and checked against the repository results by the test suite.
+
+\begin{table*}[t]
+\centering
+\begin{tabular}{llllll}
+\toprule
+Source & Rank & Parse & LLM F1 & Regex F1 & Gold/LLM fidelity \\
+\midrule
+CDC/NHANES & 1 & OK & .222 & .000 & 63.35 / 61.63 \\
+CALERIE RCT & 13 & OK & .000 & .000 & 98.61 / 97.41 \\
+Student health & 1 & OK & .645 & .000 & 98.45 / 96.81 \\
+\bottomrule
+\end{tabular}
+\caption{Real-paper discovery, extraction, and synthesis (Q1).}
+\label{tab:realpapers}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\begin{tabular}{lllllll}
+\toprule
+Dataset & Model & TRTR & AgentDataset & One-shot & Independent & SDV \\
+\midrule
+Adult & LR & .542/.850 & .381/.850 & .382/.850 & .000/.509 & .112/.838 \\
+ & HGB & .586/.873 & .359/.847 & .362/.847 & .000/.517 & .102/.836 \\
+Pima & LR & .621/.819 & .560/.818 & .547/.818 & .000/.413 & .548/.818 \\
+ & HGB & .591/.781 & .519/.725 & .514/.718 & .281/.496 & .483/.695 \\
+German & LR & .184/.627 & .085/.611 & .067/.624 & .000/.470 & .036/.619 \\
+ & HGB & .345/.613 & .251/.531 & .271/.536 & .234/.485 & .245/.542 \\
+\midrule
+Concrete & LR & .598/10.44 & .587/10.59 & .586/10.60 & -.026/16.73 & -1.320/20.22 \\
+ & HGB & .926/4.46 & .528/11.31 & .497/11.66 & -.256/18.48 & .622/10.08 \\
+\bottomrule
+\end{tabular}
+\caption{Extended TSTR utility, 30 seeds (Q2). Cells are minority-F1/ROC-AUC for classification
+and R$^2$/RMSE for regression; the last two columns are independent marginals and SDV.}
+\label{tab:utility}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\begin{tabular}{llll}
+\toprule
+Metric & Caveman & Natural & Regex \\
+\midrule
+$F_1$ & .710 & .778 & .156 \\
+Precision & .638 & .720 & 1.000 \\
+Recall & .960 & .989 & .150 \\
+Hallucination rate & .154 & .098 & .000 \\
+Context-error rate & .115 & .101 & .000 \\
+Correct abstention & .000 & .111 & 1.000 \\
+\midrule
+Prompt tokens & 283 & 405 & 0 \\
+Cost (\$/call) & .0024 & .0025 & 0 \\
+\bottomrule
+\end{tabular}
+\caption{Extraction challenge set (Q3), five repetitions per case and arm.}
+\label{tab:extraction}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\begin{tabular}{lllll}
+\toprule
+Provider & Latency (s) & Cost / call & Prompt tok. & Completion tok. \\
+\midrule
+Google & 2.15 & 0.0006 & 367 & 194 \\
+OpenAI & 2.00 & 0.0023 & 363 & 140 \\
+Anthropic & 3.95 & 0.0042 & 379 & 201 \\
+\bottomrule
+\end{tabular}
+\caption{Extraction cost and latency (Q3), five calls per provider.}
+\label{tab:provider}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\begin{tabular}{lllllll}
+\toprule
+Statistic & \multicolumn{6}{l}{Iterations: 0, 1, 2, 3, 5, 10} \\
+\midrule
+Mean fidelity & 59.82 & 95.82 & 99.33 & 99.84 & 99.84 & 99.84 \\
+Std & 0.09 & 8.14 & 3.16 & 0.08 & 0.08 & 0.08 \\
+\bottomrule
+\end{tabular}
+\caption{Fidelity by agent-loop budget (Q4), 40 paired cells per column.}
+\label{tab:noise}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\begin{tabular}{lll}
+\toprule
+Schedule & Mean & Std \\
+\midrule
+Noise pivot (shipped) & 88.50 & 10.72 \\
+Fixed noise $0.01$ & 99.88 & 0.09 \\
+Fixed noise $0.05$ & 99.81 & 0.69 \\
+Fixed noise $0.10$ & 82.66 & 10.20 \\
+Random search & 99.49 & 1.85 \\
+\bottomrule
+\end{tabular}
+\caption{Schedule comparison at a five-iteration budget (Q4).}
+\label{tab:pivot}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\begin{tabular}{llll}
+\toprule
+Corruption & Reported fidelity & External KS & Mean error (SD) \\
+\midrule
+None & 95.7 & 0.13 & 0.02 \\
+Mean $+1$\,SD & 95.7 & 0.48 & 1.02 \\
+Mean $+2$\,SD & 95.7 & 0.72 & 2.02 \\
+Statistics swapped & 95.7 & 0.97 & 50.53 \\
+\bottomrule
+\end{tabular}
+\caption{Parameter-corruption probe (Q6). Reported scores are invariant to corruption.}
+\label{tab:validity}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\begin{tabular}{lllll}
+\toprule
+Source class & Matrices & PD rate & Before & After \\
+\midrule
+Templated & 11 & 1.00 & 11/20 & 20/20 \\
+Gold & 2 & 1.00 & 3/4 & 3/4 \\
+Auto-extracted & 8 & 1.00 & 0/8 & 8/8 \\
+Constructed invalid & 5 & 0.20 & 16/16 & 16/16 \\
+\bottomrule
+\end{tabular}
+\caption{Correlation-matrix validity and applied pairs (Q6).}
+\label{tab:correlation}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\begin{tabular}{lllll}
+\toprule
+Strategy & TRTR & AgentDataset & Independent & SDV \\
+\midrule
+Uncalibrated ($0.5$) & .542/.586 & .381/.359 & .000/.000 & .112/.102 \\
+Platt ($0.5$) & .541/.587 & .379/.353 & .000/.000 & .113/.085 \\
+Isotonic ($0.5$) & .528/.584 & .347/.338 & .000/.000 & .121/.106 \\
+Threshold on synth.\ val. & .624/.642 & .617/.610 & .387/.386 & .554/.557 \\
+\midrule
+Oracle threshold$^\ddagger$ & .628/.646 & .626/.621 & .436/.414 & .605/.601 \\
+\bottomrule
+\end{tabular}
+\caption{Adult minority-F1 calibration strategies (Q6); cells are LR/HGB.}
+\label{tab:calibration}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\begin{tabular}{lllll}
+\toprule
+Stage & API cost & API seconds & Network seconds & Local seconds \\
+\midrule
+Query expansion & .00094 & 2.22 & --- & --- \\
+Web search & --- & --- & 27.97 & --- \\
+Source suggestion & .00647 & 1.90 & --- & --- \\
+Fetch & --- & --- & 5.09 & --- \\
+Parse & --- & --- & --- & .63 \\
+Extraction & .00945 & 3.69 & --- & --- \\
+Synthesis & --- & --- & --- & .05 \\
+Validation & --- & --- & --- & .21 \\
+Refinement overhead & --- & --- & --- & $<$.01 \\
+Artifact writing & --- & --- & --- & .08 \\
+\midrule
+\textbf{One dataset} & \textbf{.01686} & \textbf{7.80} & \textbf{33.06} & \textbf{.98} \\
+\bottomrule
+\end{tabular}
+\caption{End-to-end cost and latency per finished dataset (Q5).}
+\label{tab:e2e}
+\end{table*}
+
+\bibliography{aaai2027}
+\end{document}
