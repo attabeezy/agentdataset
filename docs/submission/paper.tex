@@ -178,8 +178,9 @@ precision .222, recall .480, and .304 micro-F1, while the regex baseline extract
 The three-paper extraction replicate cost \$0.0343 and took 13.9 seconds. Synthesis from LLM
 extractions approaches synthesis from hand-curated gold statistics on the trial and the survey,
 but the coarse categorical NHANES specification remains hard even with gold inputs
-(Table~\ref{tab:realpapers} in Appendix~\ref{sec:appendix}). Extraction is the bottleneck, not
-synthesis. Figure~\ref{fig:walkthrough} shows one end-to-end example.
+(Table~\ref{tab:realpapers} in Appendix~\ref{sec:appendix}). These runs use the extractor
+directly; the review gate is evaluated separately in §\ref{sec:q7}. Extraction is the bottleneck,
+not synthesis. Figure~\ref{fig:walkthrough} shows one end-to-end example.
 
 \begin{figure*}[t]
 \centering
@@ -251,6 +252,23 @@ name resolution, not matrix non-PD, was the dominant way declared dependence was
 inputs, and the repaired path applies all resolvable pairs (Tables~\ref{tab:validity}
 and~\ref{tab:correlation}). Repair cannot recover information that was never declared.
 
+\subsection{Q7: Review gate and reconciliation}
+\label{sec:q7}
+
+The frozen benchmarks above bypass the review stage, so we ran a dedicated study
+of the gate itself. From three source documents we built 55 claims: 20 statistics
+from the dual-pass gold standard with real evidence passages and 35 recorded
+unsupported extractions with none. The production reviewer rejected all 35
+unsupported claims (100\%) but accepted only 3 of the 20 verified claims, deferring
+12 and rejecting 5. Filtering to reviewed claims therefore removes unsupported
+statistics at the cost of discarding most verified ones: two of the three sources
+end with no synthesizable variables (Table~\ref{tab:review_gate} in
+Appendix~\ref{sec:appendix}). The current gate is conservative rather than
+selective. Reconciliation of the three gold specifications kept the one shared
+variable (\texttt{age}) separate rather than averaging across incompatible
+studies. These are mechanism and calibration results, not evidence that review
+improves downstream utility.
+
 \section{Discussion and limitations}
 \label{sec:discussion}
 
@@ -259,11 +277,12 @@ beyond that: no higher-order dependence, no defensible categorical dependence mo
 formal privacy guarantee. Aggregate-only input follows a long tradition of disclosure control
 \citep{hundepool2012,rubin1993,taub2018} but does not itself establish anonymity. Internal fidelity is a sampler-consistency diagnostic; trust and
 external utility tests carry the evidential weight. Extraction is reliable on explicitly stated
-numbers but weak on variable identity, scope, and abstention. Cost figures exclude human review,
-and results are bounded by the four evaluated datasets and three papers. Distribution shift
-between a published summary and a target population remains an open risk. Validation against
-independent evidence and use of the reconciliation module as the default merge path are the next
-steps.
+numbers but weak on variable identity, scope, and abstention. The review gate rejects unsupported
+claims reliably but discards most verified ones, so prompt calibration and the human override are
+required before it can be the default. Cost figures exclude human review, and results are bounded
+by the four evaluated datasets and three papers. Distribution shift between a published summary
+and a target population remains an open risk. Validation against independent evidence and use of
+the reconciliation module as the default merge path are the next steps.
 
 \section{Conclusion}
 \label{sec:conclusion}
@@ -456,6 +475,32 @@ Artifact writing & --- & --- & --- & .08 \\
 \end{tabular}
 \caption{End-to-end cost and latency per finished dataset (Q5).}
 \label{tab:e2e}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\begin{tabular}{llllll}
+\toprule
+Source & Condition & Variables & Pairs applied & Fidelity & Correlation \\
+\midrule
+CDC/NHANES & Gold & 3.0 & 0.0 & 95.3 & 99.3 \\
+ & No review gate & 7.0 & 0.0 & 96.7 & 99.4 \\
+ & Agent reviewed & 1.0 & 0.0 & 98.7 & 100.0 \\
+\midrule
+CALERIE RCT & Gold & 3.0 & 0.0 & 95.2 & 96.8 \\
+ & No review gate & 12.0 & 0.0 & 96.9 & 96.7 \\
+ & Agent reviewed & 0.0 & 0.0 & 0.0 & 0.0 \\
+\midrule
+Student health & Gold & 4.0 & 3.0 & 97.4 & 98.4 \\
+ & No review gate & 7.0 & 3.0 & 97.4 & 98.1 \\
+ & Agent reviewed & 0.0 & 0.0 & 0.0 & 0.0 \\
+\bottomrule
+\end{tabular}
+\caption{Agentic review gate and reconciliation study (§4.7). Gold is the
+dual-pass specification; ``no review gate'' accepts every claim, including
+recorded unsupported extractions; ``agent reviewed'' accepts only claims the
+production reviewer approved. Metrics are means over 30 seeds at fixed noise.}
+\label{tab:review_gate}
 \end{table*}
 
 \bibliography{aaai2027}

@@ -1,0 +1,56 @@
+source_id,claim_id,group,statistic_type,decision,review_note
+cdc_nhanes_rural_urban,cdc_001,verified,mean,rejected,"agent: The evidence passage does not provide a complete value for the mean of urban residents' activity, only a partial comparison with rural residents."
+cdc_nhanes_rural_urban,cdc_002,verified,std,rejected,"agent: The evidence passage does not provide a complete value for the standard deviation of urban residents' activity, only a partial comparison with rural residents."
+cdc_nhanes_rural_urban,cdc_003,verified,mean,accepted,agent: The evidence passage supports the mean value of 188.3 for physical activity in any bout length for urban residents.
+cdc_nhanes_rural_urban,cdc_004,verified,std,accepted,agent: The evidence passage supports the standard deviation value of 4.3 for physical activity in any bout length for urban residents.
+cdc_nhanes_rural_urban,cdc_005,verified,mean,deferred,agent: The evidence passage mentions the sample size but does not provide specific statistics for age.
+cdc_nhanes_rural_urban,cdc_006,verified,std,deferred,agent: The evidence passage mentions the sample size but does not provide specific statistics for age.
+cdc_nhanes_rural_urban,cdc_nhanes_rural_urban_unsupported_0,unsupported,mean,rejected,agent: There is no evidence provided to support the mean value of 42.5 for high-intensity long bout activity.
+cdc_nhanes_rural_urban,cdc_nhanes_rural_urban_unsupported_1,unsupported,std,rejected,agent: There is no evidence provided to support the standard deviation value of 6.2 for high-intensity long bout activity.
+cdc_nhanes_rural_urban,cdc_nhanes_rural_urban_unsupported_2,unsupported,mean,rejected,agent: There is no evidence provided to support the mean value of 0.0 for low-intensity activity.
+cdc_nhanes_rural_urban,cdc_nhanes_rural_urban_unsupported_3,unsupported,std,rejected,agent: There is no evidence provided to support the standard deviation value of 1.0 for low-intensity activity.
+cdc_nhanes_rural_urban,cdc_nhanes_rural_urban_unsupported_4,unsupported,mean,rejected,agent: There is no evidence provided to support the mean value of 438.3 for total physical activity in rural areas.
+cdc_nhanes_rural_urban,cdc_nhanes_rural_urban_unsupported_5,unsupported,std,rejected,agent: There is no evidence provided to support the standard deviation value of 35.3 for total physical activity in rural areas.
+cdc_nhanes_rural_urban,cdc_nhanes_rural_urban_unsupported_6,unsupported,mean,rejected,agent: There is no evidence provided to support the mean value of 371.2 for total physical activity in urban areas.
+cdc_nhanes_rural_urban,cdc_nhanes_rural_urban_unsupported_7,unsupported,std,rejected,agent: There is no evidence provided to support the standard deviation value of 12.5 for total physical activity in urban areas.
+calerie_rct,calerie_001,verified,mean,rejected,agent: The evidence provided does not support the claim about the mean age of 38.0 for the calorie restriction arm at baseline.
+calerie_rct,calerie_002,verified,std,rejected,agent: The evidence provided does not support the claim about the standard deviation of age being 7.2 for the calorie restriction arm at baseline.
+calerie_rct,calerie_rct_unsupported_0,unsupported,mean,rejected,agent: There is no evidence provided to support the claim about the mean CRP value.
+calerie_rct,calerie_rct_unsupported_1,unsupported,std,rejected,agent: There is no evidence provided to support the claim about the standard deviation of CRP.
+calerie_rct,calerie_rct_unsupported_2,unsupported,mean,rejected,agent: There is no evidence provided to support the claim about the mean TNF-α value.
+calerie_rct,calerie_rct_unsupported_3,unsupported,std,rejected,agent: There is no evidence provided to support the claim about the standard deviation of TNF-α.
+calerie_rct,calerie_rct_unsupported_4,unsupported,mean,rejected,agent: There is no evidence provided to support the claim about the mean WBC value.
+calerie_rct,calerie_rct_unsupported_5,unsupported,std,rejected,agent: There is no evidence provided to support the claim about the standard deviation of WBC.
+calerie_rct,calerie_rct_unsupported_6,unsupported,mean,rejected,agent: There is no evidence provided to support the claim about the mean BMI value.
+calerie_rct,calerie_rct_unsupported_7,unsupported,std,rejected,agent: There is no evidence provided to support the claim about the standard deviation of BMI.
+calerie_rct,calerie_rct_unsupported_8,unsupported,mean,rejected,agent: There is no evidence provided to support the claim about the mean Body Fat value.
+calerie_rct,calerie_rct_unsupported_9,unsupported,std,rejected,agent: There is no evidence provided to support the claim about the standard deviation of Body Fat.
+calerie_rct,calerie_rct_unsupported_10,unsupported,mean,rejected,agent: There is no evidence provided to support the claim about the mean Glucose value.
+calerie_rct,calerie_rct_unsupported_11,unsupported,std,rejected,agent: There is no evidence provided to support the claim about the standard deviation of Glucose.
+calerie_rct,calerie_rct_unsupported_12,unsupported,mean,rejected,agent: There is no evidence provided to support the claim about the mean Insulin value.
+calerie_rct,calerie_rct_unsupported_13,unsupported,std,rejected,agent: There is no evidence provided to support the claim about the standard deviation of Insulin.
+calerie_rct,calerie_rct_unsupported_14,unsupported,mean,rejected,agent: There is no evidence provided to support the claim about the mean HDL-C value.
+calerie_rct,calerie_rct_unsupported_15,unsupported,std,rejected,agent: There is no evidence provided to support the claim about the standard deviation of HDL-C.
+calerie_rct,calerie_rct_unsupported_16,unsupported,mean,rejected,agent: There is no evidence provided to support the claim about the mean LDL-C value.
+calerie_rct,calerie_rct_unsupported_17,unsupported,std,rejected,agent: There is no evidence provided to support the claim about the standard deviation of LDL-C.
+calerie_rct,calerie_rct_unsupported_18,unsupported,mean,rejected,agent: There is no evidence provided to support the claim about the mean Tg value.
+calerie_rct,calerie_rct_unsupported_19,unsupported,std,rejected,agent: There is no evidence provided to support the claim about the standard deviation of Tg.
+calerie_rct,calerie_rct_unsupported_20,unsupported,mean,rejected,agent: There is no evidence provided to support the claim about the mean Weight Loss value.
+calerie_rct,calerie_rct_unsupported_21,unsupported,std,rejected,agent: There is no evidence provided to support the claim about the standard deviation of Weight Loss.
+student_mental_health,student_001,verified,mean,deferred,"agent: The evidence passage does not provide specific numerical values for smartphone addiction mean, making it difficult to verify the claim."
+student_mental_health,student_002,verified,std,deferred,"agent: The evidence passage does not provide specific numerical values for smartphone addiction standard deviation, making it difficult to verify the claim."
+student_mental_health,student_003,verified,mean,deferred,"agent: The evidence passage does not provide specific numerical values for internet addiction mean, making it difficult to verify the claim."
+student_mental_health,student_004,verified,std,deferred,"agent: The evidence passage does not provide specific numerical values for internet addiction standard deviation, making it difficult to verify the claim."
+student_mental_health,student_005,verified,mean,deferred,"agent: The evidence passage does not provide specific numerical values for loneliness mean, making it difficult to verify the claim."
+student_mental_health,student_006,verified,std,deferred,"agent: The evidence passage does not provide specific numerical values for loneliness standard deviation, making it difficult to verify the claim."
+student_mental_health,student_007,verified,mean,deferred,"agent: The evidence passage does not provide specific numerical values for depression mean, making it difficult to verify the claim."
+student_mental_health,student_008,verified,std,deferred,"agent: The evidence passage does not provide specific numerical values for depression standard deviation, making it difficult to verify the claim."
+student_mental_health,student_009,verified,correlation,deferred,"agent: The evidence passage does not provide specific numerical values for the correlation between smartphone addiction and internet addiction, making it difficult to verify the claim."
+student_mental_health,student_010,verified,correlation,rejected,agent: The evidence passage does not mention a correlation value of 0.4 between internet addiction and depression.
+student_mental_health,student_011,verified,correlation,accepted,"agent: The evidence passage mentions a positive correlation between loneliness and depression, supporting the claim."
+student_mental_health,student_012,verified,mean,deferred,"agent: The evidence passage does not provide specific numerical values for social support mean, making it difficult to verify the claim."
+student_mental_health,student_mental_health_unsupported_0,unsupported,mean,rejected,agent: The evidence passage is empty and does not support the claim of a mean sleep quality of 0.0.
+student_mental_health,student_mental_health_unsupported_1,unsupported,std,rejected,agent: The evidence passage is empty and does not support the claim of a standard deviation of 1.0 for sleep quality.
+student_mental_health,student_mental_health_unsupported_2,unsupported,std,rejected,agent: The evidence passage is empty and does not support the claim of a standard deviation of 1.0 for social support.
+student_mental_health,student_mental_health_unsupported_3,unsupported,mean,rejected,agent: The evidence passage is empty and does not support the claim of a mean eHealth literacy of 0.0.
+student_mental_health,student_mental_health_unsupported_4,unsupported,std,rejected,agent: The evidence passage is empty and does not support the claim of a standard deviation of 1.0 for eHealth literacy.

@@ -102,6 +102,7 @@ uv run pytest -m live_e2e -v tests/test_e2e_live.py     # requires API credentia
 uv run python benchmark.py --only empirical            # utility table
 uv run python benchmark.py --only ablation-b           # resumes from checkpoint
 uv run python benchmark.py --only cost                 # live cost measurements
+uv run python analysis/pipeline_review_study.py        # live review-gate study (API key)
 ```
 
 Add `--fresh` to `ablation-b` to discard its checkpoint. Result files and the baseline manifest are documented in the [results index](results/README.md).

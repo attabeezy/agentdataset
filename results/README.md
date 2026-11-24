@@ -47,6 +47,23 @@ Cost was measured both per extraction call and over the complete discovery-to-va
 - **Stage breakdown.** Mean wall time is 7.80 s in LLM APIs, 33.06 s in search and fetch network activity, and under 1 s in local synthesis and validation. Human source-review time is excluded.
 - **Current versus frozen cost files.** `extraction_cost_latency.csv` is the current per-call measurement; `cost_latency.csv` and `caveman_token_savings.csv` are frozen historical baselines and are not overwritten. Older end-to-end artifacts also predate the 2026-11-23 refresh.
 
+**<u>Agentic review and reconciliation (new pipeline)</u>**
+
+The frozen benchmark artifacts call `Extractor.extract_parameters()` directly and do not
+exercise the review stage added after those runs. A separate study closes that gap:
+
+- `review_gate_study_raw.csv`, `review_gate_study_summary.csv`,
+  `review_gate_study_decisions.csv`, and `review_gate_study_manifest.json` come from
+  `analysis/pipeline_review_study.py`. It fetches the three real-paper sources, builds 55
+  claims (20 gold-standard statistics with real evidence passages, 35 recorded unsupported
+  extractions without one), and runs the production LLM reviewer over them with 30
+  deterministic synthesis seeds at noise 0.02.
+- The reviewer rejected 35/35 unsupported claims but accepted only 3/20 verified claims
+  (12 deferred, 5 rejected), leaving two sources with no synthesizable variables. The current
+  gate is conservative; these are mechanism and calibration results, not evidence that review
+  improves downstream utility. Reconciliation of the three gold specifications kept the one
+  shared variable (`age`) separate rather than averaging across incompatible studies.
+
 **<u>Provenance and reproduction</u>**
 
 `baseline_manifest.json` records hashes and repository provenance for six result files. Three of them were deliberately regenerated in the 2026-11-23 refresh; the other three remain frozen.

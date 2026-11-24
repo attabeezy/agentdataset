@@ -344,6 +344,33 @@ def _e2e_rows() -> str:
     return "\n".join(lines) + "\n"
 
 
+def _review_gate_rows() -> str:
+    frame = _read_csv(RESULTS / "review_gate_study_summary.csv")
+    labels = {
+        "cdc_nhanes_rural_urban": "CDC/NHANES",
+        "calerie_rct": "CALERIE RCT",
+        "student_mental_health": "Student health",
+    }
+    conditions = {
+        "gold": "Gold",
+        "unreviewed": "No review gate",
+        "reviewed": "Agent reviewed",
+    }
+    lines = []
+    for source_id, label in labels.items():
+        for condition, condition_label in conditions.items():
+            row = _one(frame, source_id=source_id, condition=condition)
+            lines.append(
+                f"{label if condition == 'gold' else ''} & {condition_label} & "
+                f"{_mean(frame.loc[frame['source_id'].eq(source_id) & frame['condition'].eq(condition)], 'n_variables_mean'):.1f} & "
+                f"{float(row['n_pairs_applied_mean']):.1f} & "
+                f"{float(row['fidelity_score_mean']):.1f} & "
+                f"{float(row['correlation_score_mean']):.1f} \\\\"
+            )
+        lines.append("\\midrule")
+    return "\n".join(lines[:-1]) + "\n"
+
+
 def render_tables() -> dict[str, str]:
     bodies = {
         "realpapers.tex": _real_paper_rows(),
@@ -356,6 +383,7 @@ def render_tables() -> dict[str, str]:
         "correlation.tex": _corr_rows(),
         "calibration.tex": _calibration_rows(),
         "end_to_end_cost.tex": _e2e_rows(),
+        "review_gate.tex": _review_gate_rows(),
     }
     # Booktabs rules must be expanded immediately after the final row; placing
     # \bottomrule after an \input boundary makes TeX treat it as misplaced.

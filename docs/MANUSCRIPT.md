@@ -384,6 +384,24 @@ across three calls (query expansion, source suggestion, extraction), and under
 1 s is local synthesis and validation. Cost and latency are therefore dominated
 by discovery, not by the statistical pipeline.
 
+### 5.7 Agentic review gate
+
+The frozen benchmarks above call the extractor directly and do not exercise the
+review stage. A dedicated study (`results/review_gate_study_raw.csv`,
+`results/review_gate_study_summary.csv`, `results/review_gate_study_decisions.csv`)
+builds 55 claims from the same three sources: 20 statistics from the dual-pass
+gold standard with real evidence passages from the fetched documents, and 35
+recorded unsupported extractions with no passage. The production LLM reviewer
+rejected all 35 unsupported claims (100%) but accepted only 3 of the 20 verified
+claims, deferring 12 and rejecting 5. Filtering to reviewed claims therefore
+removes unsupported statistics at the cost of discarding most verified ones: two
+of the three sources end with no synthesizable variables, so the current gate is
+conservative rather than selective. Reconciliation of the three gold
+specifications kept the one shared variable (`age`) separate rather than
+averaging across incompatible studies. Synthesis in this study is a single
+fixed-noise sample per seed (noise 0.02, 30 seeds), so these are mechanism and
+calibration results, not evidence that review improves downstream utility.
+
 ## 6. Discussion and limitations
 
 - Fidelity score is sampler-consistency, not source fidelity; the corruption probe
@@ -395,6 +413,9 @@ by discovery, not by the statistical pipeline.
 - Extraction is accurate on explicit numbers but weak on variable identity and
   scope: name accuracy is 0.44–0.56 and hallucination 9–20% on the adversarial
   challenge set. Abstention is unreliable.
+- The review gate rejects unsupported claims but also discards most verified
+  ones; prompt calibration and the human override are required before it can be
+  the default.
 - Threshold choice, not only dependence loss, drives the Adult minority-F1 gap.
 - No formal privacy guarantee; aggregate inputs may still disclose.
 
@@ -404,9 +425,9 @@ AgentDataset provides an assisted, auditable path from published statistics to
 synthetic data, with explicit operating limits and honest validation. Extracted
 claims carry evidence locators and pass through an agentic review with a human
 override; a study-aware reconciliation module is available, though the default
-run path still uses name-based averaging. Future work: make reconciliation the
-default merge path, validate against independent evidence, and develop stronger
-categorical dependence models.
+run path still uses name-based averaging. Future work: calibrate the review gate,
+make reconciliation the default merge path, validate against independent
+evidence, and develop stronger categorical dependence models.
 
 ## References (selected)
 

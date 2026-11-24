@@ -16,6 +16,18 @@ not treated as empirical evidence.
 | Source scope and extracted claims require agentic/human review. | Abstract; §2.2; §4.1; §5 | `analysis/real_paper_errors.csv`; `analysis/real_paper_extraction_summary.csv` | This is an operating bound supported by incomplete extraction and recorded error categories, not a performance claim about human review. |
 | The three-paper extraction replicate cost $0.0343 and took 13.9 seconds. | §4.1 (Q1) | `results/real_paper_run_manifest.json` | Sum the retained extraction-call costs and latencies recorded by the real-paper study. Do not substitute the broader §9.8 workflow totals. |
 
+## Agentic review and reconciliation (new-pipeline evidence)
+
+The frozen benchmark artifacts call `Extractor.extract_parameters` directly and
+do not exercise the review stage. The rows below come from a separate study of
+the shipped gate (`analysis/pipeline_review_study.py`) and must not be presented
+as part of the frozen real-paper benchmark.
+
+| Claim | Paper location | Evidence | Re-derive or bound |
+|---|---|---|---|
+| The review gate rejects unsupported claims but is conservative on verified ones. | §4.7 (Q7); `tab:review_gate` | `results/review_gate_study_decisions.csv`; `results/review_gate_study_summary.csv` | 35/35 unsupported claims rejected; 3/20 verified accepted, 12 deferred, 5 rejected. Two sources end with no synthesizable variables. This measures the current prompt, not review quality in general. |
+| Reconciliation flags incompatible cross-source measures instead of averaging them. | §4.7 (Q7) | `results/review_gate_study_manifest.json` (`reconciliation_decisions`) | The only shared variable (`age`) is `kept_separate`; no `pooled_average` decisions. |
+
 ## Downstream utility and baseline-input claims
 
 | Claim | Paper location | Evidence | Re-derive or bound |

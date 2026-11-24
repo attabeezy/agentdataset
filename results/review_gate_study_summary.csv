@@ -1,0 +1,10 @@
+source_id,condition,n_variables_mean,n_variables_std,n_pairs_declared_mean,n_pairs_declared_std,n_pairs_applied_mean,n_pairs_applied_std,fidelity_score_mean,fidelity_score_std,correlation_score_mean,correlation_score_std,ks_score_mean,ks_score_std,bias_score_mean,bias_score_std
+calerie_rct,gold,3.0,0.0,0.0,0.0,0.0,0.0,95.1553,6.7927,96.7783,1.2974,92.223,14.338,97.778,8.4561
+calerie_rct,reviewed,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+calerie_rct,unreviewed,12.0,0.0,0.0,0.0,0.0,0.0,96.8957,2.6807,96.6843,0.2832,95.834,6.4733,99.4447,2.1134
+cdc_nhanes_rural_urban,gold,3.0,0.0,0.0,0.0,0.0,0.0,95.295,7.2561,99.348,0.3078,88.8897,18.2216,100.0,0.0
+cdc_nhanes_rural_urban,reviewed,1.0,0.0,0.0,0.0,0.0,0.0,98.6667,7.303,100.0,0.0,96.6667,18.2574,100.0,0.0
+cdc_nhanes_rural_urban,unreviewed,7.0,0.0,0.0,0.0,0.0,0.0,96.697,4.6847,99.3597,0.1255,92.38,11.705,100.0,0.0
+student_mental_health,gold,4.0,0.0,3.0,0.0,3.0,0.0,97.364,4.8194,98.4077,0.6732,95.0,12.1059,100.0,0.0
+student_mental_health,reviewed,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+student_mental_health,unreviewed,7.0,0.0,3.0,0.0,3.0,0.0,97.3513,3.46,98.14,0.3895,95.2373,8.6647,100.0,0.0

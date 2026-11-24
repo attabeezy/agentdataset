@@ -12,7 +12,10 @@ AgentDataset is an assisted pipeline: discover research documents → extract st
 > `analysis/noise_pivot_ablation.py` grid, and the `docs/neurips/` build were
 > removed. Descriptions of those items below are historical. The current
 > submission target is the AAAI 2027 Workshop on AI for Scientific Research;
-> its LaTeX source is `docs/submission/paper.tex`.
+> its LaTeX source is `docs/submission/paper.tex`. The frozen benchmark files do
+> not exercise the later review/reconciliation stages; a separate study
+> (`analysis/pipeline_review_study.py`) measures them and is reported apart from
+> the frozen results.
 
 ---
 
@@ -776,7 +779,7 @@ Numbers quoted in the paper are transcribed from `results/`, which stays here.
   - Add tests for new benchmark schemas, regression metrics, nonlinear-model preprocessing, threshold selection without test leakage, privacy-label changes, matrix diagnostics/repair, and challenge-set scoring.
   - Keep live web/API tests separate from the default unit-test suite.
   - **Done when:** `pytest` passes and result-schema regressions are caught automatically.
-  - **Result:** 228 default tests pass, including result-to-paper reconciliation against `docs/submission/paper.tex` (AAAI 2027 AI4Research submission). The suite also reports 7 skipped (gitignored cached-paper fixtures and baseline files deliberately regenerated in the 2026-11-23 snapshot) and 1 deselected (the credentialed `live_e2e` test, excluded via `addopts`).
+  - **Result:** 233 default tests pass, including result-to-paper reconciliation against `docs/submission/paper.tex` (AAAI 2027 AI4Research submission) and the new review-gate study contracts. The suite also reports 7 skipped (gitignored cached-paper fixtures and baseline files deliberately regenerated in the 2026-11-23 snapshot) and 1 deselected (the credentialed `live_e2e` test, excluded via `addopts`).
 
 - [ ] **Perform final paper consistency and build checks.**
   - Rebuild all tables from saved result files.
