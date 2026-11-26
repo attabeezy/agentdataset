@@ -26,98 +26,119 @@
 \maketitle
 
 \begin{abstract}
-AgentDataset turns a research query into a synthetic tabular dataset: it discovers
-documents, extracts marginals and pairwise correlations with a language model,
-optionally reviews each claim against its evidence, synthesizes correlated rows
-through a Gaussian copula, and validates the result. Source selection and claim
-approval remain reviewable by a human, and artifacts carry provenance manifests.
-We evaluate seven questions on real papers and four public datasets. The deployed
-extractor reaches .304 micro-F1 on prespecified statistics from three papers.
-Synthetic tables preserve marginals and pairwise monotone association but lose
-minority-class and nonlinear utility. A corruption probe shows the internal
-fidelity score is blind to upstream parameter error; a dedicated study shows the
-review gate rejects all unsupported claims yet accepts only 3 of 20 verified ones.
-These results support an assisted, auditable workflow, not unattended scientific
-curation or a privacy mechanism.
+Reconstructing a tabular dataset from published statistics is useful when record-level data
+cannot be shared, but existing synthesizers fit individual rows. The harder problem is deciding
+which reported numbers are trustworthy and verifying a table without ground truth. We argue that
+each statistic should be represented as an evidence-bearing claim, kept reviewable by an agent or
+human, and evaluated separately from the sampler that consumes it. AgentDataset implements this
+idea as a CLI pipeline: it discovers documents, extracts marginals and pairwise correlations with
+a language model, reviews claims, reconciles incompatible sources, synthesizes through a Gaussian
+copula, and validates with diagnostics that distinguish sampler consistency from source fidelity.
+An extraction-only evaluation on three papers reaches .304 micro-F1 on prespecified statistics;
+a 30-seed study on four datasets shows preserved ranking signal but lost minority-class and
+nonlinear utility. A corruption probe shows internal fidelity is blind to upstream parameter
+error, and a dedicated review study finds the gate rejects all unsupported claims yet accepts
+only 3 of 20 verified ones. These results support an assisted, auditable workflow, not unattended
+scientific curation or a privacy mechanism.
 \end{abstract}
 
 \section{Introduction}
 \label{sec:intro}
 
-Published papers routinely report the aggregates needed to reconstruct a plausible
-population: means, standard deviations, category probabilities, and pairwise
-correlations. Record-level data are often unavailable for privacy, contractual, or
-licensing reasons, and record-trained synthesizers such as SDV~\citep{patki2016}
-require individual rows that this setting does not provide. AgentDataset automates
-the translation from published aggregates into a usable table while keeping source
-selection and claim approval reviewable.
+Published papers routinely report the aggregates needed to reconstruct a plausible population:
+means, standard deviations, category probabilities, and pairwise correlations. This paper studies
+the task of turning those aggregates into a synthetic table. The task matters when record-level
+data cannot be shared because of privacy, contractual, or licensing restrictions. Record-trained
+synthesizers such as SDV~\citep{patki2016} fit individual rows, which are unavailable in this
+setting; they therefore serve as data-access upper bounds rather than direct competitors.
 
-This paper makes four contributions: (1) an end-to-end assisted workflow exposed as
-a CLI, with an agentic review gate and a human override; (2) a copula synthesizer
-with correlation diagnostics and an opt-in nearest-PSD repair; (3) an evidence-aware
-reconciliation module that flags incomparable cross-source measures; and (4) an
-evaluation that separates sampler consistency from source fidelity and states an
-explicit operating envelope. Two findings are deliberately negative: the internal
-score cannot detect upstream parameter error, and the current review gate is too
-conservative to be the default. The evaluation is organized around questions of
-interest to AI-for-science research: can the pipeline find and read real papers,
-how much downstream utility survives, and what do the internal scores certify?
+The task is hard for three reasons. First, extracting statistics from scientific text is
+error-prone: reported values can be hallucinated, mislabeled, or taken from the wrong population
+or arm, and language-model extraction has documented failure modes
+~\citep{nasar2018,liu2025,song2025,sror2026}. Second, papers selected for the same query may
+report incompatible measures under the same name, so averaging them without context can create a
+specification that no source supports. Third, the usual internal fidelity score compares
+generated rows with the specification that generated them, so it cannot detect an error in that
+specification. These three issues concern evidence, not sampling, and are not addressed by a
+better synthesizer alone.
 
-\section{System}
-\label{sec:system}
+Our insight is to separate evidence from synthesis. We represent every statistic as a
+\textit{claim} with an evidence passage and source identity, and we treat the \textit{specification}
+consumed by the sampler as an explicit, reviewable object rather than an implicit by-product of
+extraction. AgentDataset implements this insight as a CLI pipeline: discovery and evidence-bearing
+extraction produce claims; an agent accepts, rejects, or defers each claim, with a human override;
+a reconciliation module keeps incompatible cross-source measures separate; a copula synthesizer
+draws the table; and a validator reports sampler diagnostics alongside external utility checks.
+Figure~\ref{fig:walkthrough} in Section~\ref{sec:q1} shows a concrete walkthrough.
 
-\subsection{Discovery and extraction}
+The contributions are (1) an end-to-end assisted workflow with an agentic review gate, (2) a copula
+synthesizer with correlation diagnostics and an opt-in nearest-PSD repair, (3) an evidence-aware
+reconciliation module, and (4) an evaluation that separates sampler consistency from source
+fidelity. Two findings are deliberately negative: the internal score cannot detect upstream
+parameter error, and the current review gate is too conservative to be the default. The evaluation
+is organized around seven questions: can the pipeline find and read real papers, how much
+downstream utility survives, what the internal scores certify, and whether the review and
+reconciliation stages work as intended.
+
+\section{Method}
+\label{sec:method}
+
+AgentDataset converts a research query into a synthetic table through four modules. Each module
+takes an explicit artifact as input and emits an explicit artifact: source records, claims, a
+reviewed specification, and finally a table with a validation report. This design makes it
+possible to audit which source supports each generated statistic, and to measure modules
+separately rather than only through end-to-end scores.
+
+\subsection{Discovery and evidence-bearing extraction}
 \label{sec:extract}
 
-\texttt{optimize\_query()} expands the user query with an LLM; a search API returns
-ranked candidates that are deduplicated by normalized URL and scored for
-statistical availability. HTML is converted with trafilatura and PDFs with a
-layout-aware parser. LLM extraction from scientific text is an active research
-area~\citep{nasar2018,liu2025,song2025,sror2026}, but reported failure modes include
-hallucinated numbers and context errors. Extraction is LLM-only: long documents are
-chunked (8000 characters, 500 overlap), each chunk is parsed with a natural-language
-prompt that enforces the output schema, and results are merged by normalized
-variable name and correlation pair. Each claim carries an evidence passage, source
-identity, and an evidence type (reported, derived, or inferred). Unresolvable names
-and unsupported values are preserved as claims rather than silently dropped.
+Discovery expands the query with an LLM, searches a ranked candidate pool, deduplicates by
+normalized URL, and scores candidates for statistical availability. It is needed because a query
+rarely names the exact document that contains the desired statistics. HTML is converted with
+trafilatura and PDFs with a layout-aware parser; the resulting text is chunked (8000 characters,
+500 overlap) and parsed by a natural-language prompt that enforces the output schema. Results are
+merged by normalized variable name and correlation pair. The output is a list of claims, each
+carrying a value, an evidence passage, a source identity, and a type (reported, derived, or
+inferred). Because unsupported values and unresolvable names are preserved as claims rather than
+dropped, later stages can inspect them instead of silently inheriting them.
 
 \subsection{Agentic review and reconciliation}
 \label{sec:review}
 
-Before synthesis, an LLM agent accepts, rejects, or defers every claim against its
-evidence and the declared population, arm, and time point; the \texttt{run} command
-builds the specification only from accepted claims. A human can override agent
-decisions through \texttt{review}. When several sources are selected, the shipped
-run path still averages same-named variables and correlation pairs. A separate
-reconciliation module groups measures by normalized name, unit, and study context,
-keeps per-study estimates side by side, and records an explicit decision for each
-merge; incompatible populations remain separate. Wiring that module into the
-default workflow is ongoing work, and Section~\ref{sec:q7} measures the gate rather
-than assuming it helps.
+The review gate exists because extraction precision is not high enough to trust every claim.
+Before synthesis, an LLM agent accepts, rejects, or defers each claim against its evidence and the
+declared population, arm, and time point; the \texttt{run} command builds the specification only
+from accepted claims, and \texttt{review} lets a human override any decision. A second challenge
+is cross-source disagreement. The shipped run path still averages same-named variables and
+correlation pairs. A separate reconciliation module instead groups measures by normalized name,
+unit, and study context, keeps per-study estimates side by side, and records a decision for each
+merge; incompatible populations remain separate. Wiring that module into the default workflow is
+ongoing work, and Section~\ref{sec:q7} measures the gate rather than assuming that it helps.
 
-\subsection{Synthesis}
+\subsection{Gaussian-copula synthesis}
 \label{sec:synth}
 
-The synthesizer draws parametric marginals (normal, uniform, gamma, categorical)
-and imposes pairwise correlations via a rank transform over a latent
-Gaussian~\citep{joe2014,trivedi2006}; vine-copula alternatives~\citep{aas2009} need
-richer reported statistics than a typical paper provides. Diagnostics record
-declared, applied, and skipped pairs plus matrix conditioning. Positive-definiteness
-is measured by eigendecomposition, not inferred from a Cholesky failure. An opt-in
-nearest-PSD repair is available, with the unmodified matrix retained. Categorical
-variables are drawn as integer codes and rank-transformed; treating arbitrary label
-order as ordinal is a documented limitation.
+The synthesizer is needed because the available inputs are marginals and pairwise correlations,
+not rows. It draws parametric marginals (normal, uniform, gamma, categorical) and imposes
+pairwise correlations through a rank transform over a latent Gaussian
+~\citep{joe2014,trivedi2006}; vine-copula alternatives~\citep{aas2009} require richer reported
+statistics than a typical paper provides. Diagnostics record declared, applied, and skipped pairs
+and matrix conditioning; positive-definiteness is measured by eigendecomposition rather than
+inferred from a Cholesky failure. An opt-in nearest-PSD repair is available with the unmodified
+matrix retained. Categorical variables are drawn as integer codes and rank-transformed, so
+treating arbitrary label order as ordinal is a documented limitation of this design.
 
 \subsection{Validation and the agentic loop}
 \label{sec:loop}
 
-The validator reports KS (or chi-square for categorical) fit, correlation
-similarity, bias, and a synthetic-row dispersion diagnostic. Plausibility,
-grounding, and claim-grounding scores feed a trust score, and an LLM critique
-suggests the next action. Algorithm~\ref{alg:pivot} summarizes the noise-pivot loop;
-$\eta$ is the noise level, $p$ patience, $\alpha$ the exploitation factor, $\beta$
-the exploration multiplier, $\rho$ the reset interval, and $p\rho$ the reset
-multiple.
+Validation is needed because the sampler can only reproduce the specification it receives. The
+validator reports KS (or chi-square for categorical) fit, correlation similarity, bias, and a
+synthetic-row dispersion diagnostic. Plausibility, grounding, and claim-grounding scores feed a
+trust score, while an LLM critique suggests the next action. Algorithm~\ref{alg:pivot} summarizes
+the noise-pivot loop, where $\eta$ is the noise level, $p$ is patience, $\alpha$ the exploitation
+factor, $\beta$ the exploration multiplier, $\rho$ the reset interval, and $p\rho$ the reset
+multiple. The advantage of this separation is that sampler diagnostics remain comparable across
+runs while trust and external utility tests carry the claims about source fidelity.
 
 \begin{algorithm}[t]
 \caption{Synthesis--validation--critique loop.}
@@ -149,41 +170,36 @@ multiple.
 \end{algorithmic}
 \end{algorithm}
 
-\section{Evaluation questions}
+\section{Evaluation}
 \label{sec:questions}
 
-All live calls were routed through OpenRouter via \texttt{litellm}; the default
-extraction model is \texttt{openrouter/openai/gpt-4o} and the agent-loop model is
-\texttt{openrouter/auto}. Seeds control data splits and synthesis, and reported
-values are means over seeds unless noted. Results come in two tiers: Q1--Q6 are
-frozen measurements of the extraction--synthesis core, while Q7 is a separate
-study of the review and reconciliation stages. The two tiers are not mixed.
+The evaluation separates two evidence tiers. Q1--Q6 are frozen measurements of the
+extraction--synthesis core; Q7 is a separate study of the review and reconciliation stages. The
+two tiers are reported separately because mixing them would imply that the frozen benchmarks
+measured stages they bypass. All live calls were routed through OpenRouter via \texttt{litellm};
+the extraction model is \texttt{openrouter/openai/gpt-4o} and the agent-loop model is
+\texttt{openrouter/auto}. Seeds control data splits and synthesis, and reported values are means
+over seeds unless noted.
 
 \begin{description}
-\item[Q1: Real documents.] Three heterogeneous papers (a randomized trial, an
-  NHANES comparison, and a student mental-health survey) are processed end to end;
-  discovery, parsing, extraction, and synthesis are scored separately over 30
-  synthesis seeds.
-\item[Q2: Downstream utility.] Adult, Pima, German Credit, and Concrete are
-  evaluated over 30 paired splits using gold summaries computed from each training
-  fold, so extraction is held perfect. Logistic regression, gradient-boosted trees,
-  one-shot synthesis, independent marginals, and an SDV Gaussian copula fitted on
-  real records are compared.
-\item[Q3: Extraction.] A 30-case challenge set covers ten failure categories with
-  five repetitions per case and arm. Prompt style and model are varied; precision,
-  recall, F1, hallucination, abstention, tokens, and cost are measured.
-\item[Q4: Optimization.] An eight-domain $\times$ five-seed $\times$ six-budget
-  sweep yields 240 cells with a fresh synthesizer per cell, plus a noise-matched
-  one-shot control and paired tests of zero versus five iterations.
-\item[Q5: Cost.] Per-call cost and latency are augmented with instrumented
-  end-to-end runs over the real-paper pipeline, separating API, network, and local
-  time.
-\item[Q6: Diagnostics.] Controlled parameter corruption, correlation-matrix
-  stress tests, and Adult calibration studies probe what the internal score
-  certifies.
-\item[Q7: Review gate.] A dedicated study runs the production reviewer on saved
-  verified and unsupported claims and measures its effect on deterministic
-  synthesis and cross-source reconciliation.
+\item[Q1: Real documents.] Three heterogeneous papers (a randomized trial, an NHANES comparison,
+  and a student mental-health survey) are processed end to end; discovery, parsing, extraction,
+  and synthesis are scored separately over 30 synthesis seeds.
+\item[Q2: Downstream utility.] Adult, Pima, German Credit, and Concrete are evaluated over 30
+  paired splits using gold summaries computed from each training fold, so extraction is held
+  perfect. Logistic regression, gradient-boosted trees, one-shot synthesis, independent
+  marginals, and an SDV Gaussian copula fitted on real records are compared.
+\item[Q3: Extraction.] A 30-case challenge set covers ten failure categories with five
+  repetitions per case and arm; prompt style and model are varied, and precision, recall, F1,
+  hallucination, abstention, tokens, and cost are measured.
+\item[Q4: Optimization.] An eight-domain $\times$ five-seed $\times$ six-budget sweep yields 240
+  cells with a fresh synthesizer per cell, plus a noise-matched one-shot control.
+\item[Q5: Cost.] Per-call cost and latency are augmented with instrumented end-to-end runs over
+  the real-paper pipeline, separating API, network, and local time.
+\item[Q6: Diagnostics.] Parameter corruption, correlation-matrix stress tests, and Adult
+  calibration probe what the internal score certifies.
+\item[Q7: Review gate.] A dedicated study runs the production reviewer on saved verified and
+  unsupported claims and measures its effect on deterministic synthesis and reconciliation.
 \end{description}
 
 \section{Results}
@@ -192,17 +208,19 @@ study of the review and reconciliation stages. The two tiers are not mixed.
 \subsection{Q1: Real papers}
 \label{sec:q1}
 
-Discovery found all three prespecified sources; the CALERIE trial first appears at
-rank 13, so this is target recovery rather than recall@5. On the prespecified
-fields, LLM extraction reaches precision .222, recall .480, and .304 micro-F1, while
-the regex baseline extracts none of them. The three-paper extraction replicate cost
-\$0.0343 and took 13.9 seconds. Synthesis from LLM extractions approaches synthesis
-from hand-curated gold statistics on the trial (97.41 vs 98.61 fidelity) and the
-survey (96.81 vs 98.45), but the coarse categorical NHANES specification remains
-hard even with gold inputs (61.63 vs 63.35; Table~\ref{tab:realpapers} in
-Appendix~\ref{sec:appendix}). These runs use the extractor directly; the review gate
-is evaluated separately in Section~\ref{sec:q7}. Extraction is the bottleneck, not
-synthesis. Figure~\ref{fig:walkthrough} shows one end-to-end example.
+Discovery found all three prespecified sources, and extraction is the bottleneck in the pipeline.
+The CALERIE trial first appears at rank 13, so this is target recovery rather than recall@5. On
+the prespecified fields, LLM extraction reaches precision .222, recall .480, and .304 micro-F1,
+while the regex baseline extracts none of them; the three-paper extraction replicate costs
+\$0.0343 and takes 13.9 seconds. These are extraction-only measurements: the runs call
+\texttt{extract\_parameters()} directly, and Section~\ref{sec:q7} evaluates the review gate
+separately. Figure~\ref{fig:walkthrough} shows one end-to-end example.
+
+Synthesis from LLM extractions approaches synthesis from hand-curated gold statistics on the trial
+(97.41 vs 98.61 fidelity) and the survey (96.81 vs 98.45), but the coarse categorical NHANES
+specification remains hard even with gold inputs (61.63 vs 63.35; Table~\ref{tab:realpapers}).
+The fidelity score measures reproduction of the declared specification, not correctness of that
+specification, so these values should not be read as utility against the source population.
 
 \begin{figure*}[t]
 \centering
@@ -224,119 +242,109 @@ does not report is not invented, so high internal fidelity does not imply source
 \subsection{Q2: Downstream utility}
 \label{sec:q2}
 
-Table~\ref{tab:utility} reports minority-F1/ROC-AUC for classification and
-R$^2$/RMSE for regression over 30 paired splits with gold training-fold summaries.
-On Adult, AgentDataset reaches .381/.850 versus TRTR .542/.850 and SDV .112/.838;
-independent marginals collapse to .000/.509. ROC-AUC matches TRTR and is close to
-SDV, so much of the ranking signal survives, but minority F1 is far more sensitive
-to the decision threshold. The one-shot copula is essentially identical (.382/.850),
-which indicates that the reported correlations, rather than refinement, supply the
-benefit. On Concrete, AgentDataset reaches R$^2$ .528 versus .622 for SDV, as
-expected because SDV fits record-level data and captures nonlinear structure beyond
-reported pairwise correlations. Selecting the threshold on synthetic validation data
-raises Adult minority F1 from .381 to .617 without using real test labels, but cannot
-remove the ranking deficit (Table~\ref{tab:calibration}).
+With perfect extraction, the reported correlations preserve much of the ranking signal but not
+all task utility. Table~\ref{tab:utility} reports minority-F1/ROC-AUC for classification and
+R$^2$/RMSE for regression over 30 paired splits. On Adult, AgentDataset reaches .381/.850 versus
+TRTR .542/.850 and SDV .112/.838; independent marginals collapse to .000/.509. ROC-AUC matches
+TRTR and is close to SDV, whereas minority F1 is sensitive to the decision threshold. The one-shot
+copula is nearly identical (.382/.850), so the reported correlations, not refinement, supply the
+benefit. On Concrete, AgentDataset reaches R$^2$ .528 versus .622 for SDV, which fits record-level
+data and captures nonlinear structure beyond pairwise correlations. Selecting a threshold on
+synthetic validation data raises Adult minority F1 from .381 to .617 without real test labels, but
+cannot remove the ranking deficit (Table~\ref{tab:calibration}).
 
 \subsection{Q3: Extraction}
 \label{sec:q3}
 
-The compressed Caveman prompt saves billed prompt tokens but lowers quality: on the
-challenge set its F1 is .710 versus .778 for the schema-matched natural-language
-prompt, with hallucination rising from .098 to .154. Regex reaches F1 .156 and is
-retained only as a documented, near-silent baseline. Variable-name accuracy stays
-in the 0.44--0.56 range (\texttt{results/extraction\_challenge\_summary.csv}), so
-value extraction is much easier than assigning the correct variable identity.
-Provider-level cost and latency are small but non-trivial
+Prompt compression saves tokens but costs extraction quality. On the challenge set, the Caveman
+prompt reaches F1 .710 against .778 for the schema-matched natural-language prompt, with
+hallucination rising from .098 to .154; regex reaches F1 .156 and is retained only as a documented,
+near-silent baseline. Variable-name accuracy stays in the 0.44--0.56 range
+(\texttt{results/extraction\_challenge\_summary.csv}): extracting a number is easier than
+assigning it to the right variable. Provider cost and latency are small but non-trivial
 (Table~\ref{tab:provider}).
 
 \subsection{Q4: Optimization budget}
 \label{sec:q4}
 
-The jump from zero to three iterations is largely a noise-level effect. Budget zero
-uses the standalone default noise of 0.1 and scores 59.82; the loop starts at 0.02.
-A separate noise-matched one-shot control at 0.02 scores 95.82 over the same 40
-(text, seed) cells (\texttt{results/one\_shot\_noise\_matched.csv}), identical to the
-one-iteration arm in Table~\ref{tab:noise}; three iterations add 4.02 fidelity
-points (paired $t$ $p=0.0034$). In a wider schedule sweep, a fixed noise of 0.01
-beats the shipped adaptive schedule at the same budget (99.88 versus 88.50), and the
-reset branch is inert at the shipped settings (Table~\ref{tab:pivot}). The defaults
-are retained for reproducibility; iteration count is a weak substitute for a
-well-chosen starting noise.
+Most of the gain attributed to iteration count is a noise-level effect. Budget zero uses the
+standalone default noise of 0.1 and scores 59.82, while the loop starts at 0.02. A noise-matched
+one-shot control at 0.02 scores 95.82 over the same 40 (text, seed) cells
+(\texttt{results/one\_shot\_noise\_matched.csv}), identical to the one-iteration arm in
+Table~\ref{tab:noise}; three iterations add 4.02 fidelity points (paired $t$ $p=0.0034$). In a
+wider schedule sweep, fixed noise 0.01 beats the shipped schedule at the same budget (99.88 vs
+88.50), and the reset branch is inert at the shipped settings (Table~\ref{tab:pivot}). The
+defaults are retained for reproducibility; iteration count is a weak substitute for a well-chosen
+starting noise.
 
 \subsection{Q5: Cost and latency}
 \label{sec:q5}
 
-One finished dataset averages \$0.01686 and 41.84 seconds. Of that, 33.06 seconds is
-network time, 7.80 seconds is LLM API time across three calls (query expansion,
-source suggestion, and extraction), and under one second is local computation. Human
-source-review time is excluded. Discovery, not statistical modelling, dominates cost
-and latency (Table~\ref{tab:e2e}).
+Discovery dominates the cost of producing a dataset. One finished dataset averages \$0.01686 and
+41.84 seconds: 33.06 seconds of network time, 7.80 seconds of LLM API time across three calls
+(query expansion, source suggestion, extraction), and under one second of local computation. Human
+source-review time is excluded. This means cheaper synthesis would not materially reduce the cost
+of the full pipeline (Table~\ref{tab:e2e}).
 
 \subsection{Q6: What the score certifies}
 \label{sec:q6}
 
-Perturbing declared parameters before synthesis leaves reported fidelity,
-correlation, and KS scores unchanged at every corruption level, while external KS
-distance against real data rises from 0.13 to 0.97. The score checks whether the
-sampler followed its specification, not whether the specification was correct.
-Correlation diagnostics do carry signal about synthesis failures: name resolution,
-not matrix non-PD, was the dominant way declared dependence was lost on real inputs,
-and the repaired path applies all resolvable pairs
-(Tables~\ref{tab:validity} and~\ref{tab:correlation}). Repair cannot recover information that was never declared.
+The internal fidelity score certifies sampler consistency, not source fidelity. Perturbing declared
+parameters before synthesis leaves reported fidelity, correlation, and KS unchanged at every
+corruption level, while external KS distance against real data rises from 0.13 to 0.97
+(Table~\ref{tab:validity}). Correlation diagnostics do carry signal about synthesis failures: name
+resolution, not matrix non-PD, was the dominant way declared dependence was lost on real inputs,
+and the repaired path applies all resolvable pairs (Table~\ref{tab:correlation}). Repair cannot
+recover information that was never declared.
 
 \subsection{Q7: Review gate and reconciliation}
 \label{sec:q7}
 
-The frozen benchmarks above bypass the review stage, so we ran a dedicated study of
-the gate itself. From three source documents we built 55 claims: 20 statistics from
-the dual-pass gold standard with real evidence passages, and 35 recorded unsupported
-extractions with none. The production reviewer rejected all 35 unsupported claims
-(100\%) but accepted only 3 of the 20 verified claims, deferring 12 and rejecting 5.
-Filtering to reviewed claims therefore removes unsupported statistics at the cost of
-discarding most verified ones: two of the three sources end with no synthesizable
-variables (Table~\ref{tab:review_gate}). The \texttt{gold} row there is a reduced
-specification built only from numeric marginal and correlation rows of the ground
-truth file and is synthesized once at fixed noise; its fidelity values are not
-comparable to the looped 30-seed values in Q1. Reconciliation of the three gold
-specifications kept the one shared variable (\texttt{age}) separate rather than
-averaging across incompatible studies. These are mechanism and calibration results,
-not evidence that review improves downstream utility.
+The review gate filters unsupported claims reliably but is too conservative to be the default. We
+built 55 claims from three source documents: 20 statistics from the dual-pass gold standard with
+real evidence passages, and 35 recorded unsupported extractions without one. The production
+reviewer rejected all 35 unsupported claims (100\%) but accepted only 3 of 20 verified claims,
+deferring 12 and rejecting 5; two sources end with no synthesizable variables
+(Table~\ref{tab:review_gate}). The \texttt{gold} row there is a reduced numeric specification
+synthesized once at fixed noise, so its fidelity values are not comparable to the looped Q1 gold
+values. Reconciliation of the three gold specifications kept the one shared variable
+(\texttt{age}) separate rather than averaging across incompatible studies. These are mechanism
+and calibration results, not evidence that review improves downstream utility.
 
 \section{Discussion and limitations}
 \label{sec:discussion}
 
-AgentDataset reproduces per-variable marginals and pairwise monotone association,
-and nothing beyond that: no higher-order dependence, no defensible categorical
-dependence model, and no formal privacy guarantee. Aggregate-only input follows a
-long tradition of disclosure control~\citep{hundepool2012,rubin1993,taub2018} but
-does not itself establish anonymity. Internal fidelity is a sampler-consistency
-diagnostic; trust and external utility tests carry the evidential weight. Extraction
-is reliable on explicitly stated numbers but weak on variable identity, scope, and
-abstention. The review gate rejects unsupported claims reliably but discards most
-verified ones, so prompt calibration and the human override are required before it
-can be the default. Cost figures exclude human review, and results are bounded by
-the four evaluated datasets and three papers. Distribution shift between a published
-summary and a target population remains an open risk. Validation against independent
-evidence and use of the reconciliation module as the default merge path are the next
-steps.
+The operating envelope is narrow. AgentDataset reproduces per-variable marginals and pairwise
+monotone association, not higher-order structure; categorical dependence is ordinal by
+construction; and aggregate-only input is not a privacy mechanism despite its roots in disclosure
+control~\citep{hundepool2012,rubin1993,taub2018}. Extraction is reliable on explicit numbers but
+weak on variable identity, scope, and abstention. The review gate rejects unsupported claims but
+also discards most verified ones, so prompt calibration and the human override are required before
+it can be the default. Results are bounded by four datasets and three papers, exclude human review
+time, and do not address distribution shift between a published summary and a target population.
+
+The evidence is also tiered. The frozen core measurements support claims about extraction,
+synthesis, and diagnostics; the separate Q7 study supports claims about the review and
+reconciliation stages only at the mechanism level. Validation against independent evidence and
+wiring reconciliation into the default merge path remain the next steps.
 
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented an assisted, auditable path from published statistics to synthetic data,
-with explicit operating limits and two tiers of evidence: frozen measurements of the
-statistical core and a separate study of the review and reconciliation stages. The
-system is useful where record-level data cannot be shared but aggregate statistics
-are public, provided its claims are read at the narrow scope supported by those
-measurements.
+This paper addressed reconstruction of a synthetic table from published aggregates by treating
+each statistic as an evidence-bearing claim and keeping the synthesis specification reviewable.
+Experiments show that ranking signal and marginals survive, while minority-class and nonlinear
+utility do not, and that the internal score cannot detect upstream parameter error. The practical
+insight is that an assisted pipeline can be auditable without claiming source fidelity or privacy.
+A current limitation is the narrow dependence model and the conservative review gate; validating
+against independent evidence is the concrete next step.
 
 \appendix
 \section{Result-backed tables}
 \label{sec:appendix}
 
 All tables below are generated from committed result files by
-\texttt{analysis/paper\_artifacts.py} and checked against the repository results by
-the test suite.
+\texttt{analysis/paper\_artifacts.py} and checked against the repository results by the test suite.
 
 \begin{table*}[t]
 \centering
