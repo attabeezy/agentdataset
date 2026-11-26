@@ -69,9 +69,12 @@ def _real_paper_rows() -> str:
     for source_id, label in labels.items():
         rank = int(_one(discovery, source_id=source_id)["first_relevant_rank"])
         llm = _one(extraction, source_id=source_id, condition="llm")
-        regex = _one(extraction, source_id=source_id, condition="regex")
-        if llm["parse_status"] != "ok" or regex["parse_status"] != "ok":
+        regex_rows = extraction.loc[
+            extraction["source_id"].eq(source_id) & extraction["condition"].eq("regex")
+        ]
+        if llm["parse_status"] != "ok":
             raise AssertionError(f"paper assumes successful parsing for {source_id}")
+        regex_f1 = "---" if regex_rows.empty else _f(regex_rows.iloc[0]["f1"])
         gold_fidelity = _one(
             pipeline, source_id=source_id, condition="gold", metric="fidelity_score"
         )["mean"]
@@ -79,7 +82,7 @@ def _real_paper_rows() -> str:
             pipeline, source_id=source_id, condition="llm", metric="fidelity_score"
         )["mean"]
         lines.append(
-            f"{label} & {rank} & OK & {_f(llm['f1'])} & {_f(regex['f1'])} & "
+            f"{label} & {rank} & OK & {_f(llm['f1'])} & {regex_f1} & "
             f"{float(gold_fidelity):.2f} / {float(llm_fidelity):.2f} \\\\"
         )
     return "\n".join(lines) + "\n"

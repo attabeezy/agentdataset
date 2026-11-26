@@ -34,9 +34,9 @@ human, and evaluated separately from the sampler that consumes it. AgentDataset 
 idea as a CLI pipeline: it discovers documents, extracts marginals and pairwise correlations with
 a language model, reviews claims, reconciles incompatible sources, synthesizes through a Gaussian
 copula, and validates with diagnostics that distinguish sampler consistency from source fidelity.
-An extraction-only evaluation on three papers reaches .304 micro-F1 on prespecified statistics;
-a 30-seed study on four datasets shows preserved ranking signal but lost minority-class and
-nonlinear utility. A corruption probe shows internal fidelity is blind to upstream parameter
+A caller-schema-guided evaluation on three papers reaches .708 micro-F1 on prespecified
+statistics; a 30-seed study on four datasets shows preserved ranking signal but lost
+minority-class and nonlinear utility. A corruption probe shows internal fidelity is blind to upstream parameter
 error, and a dedicated review study finds the gate rejects all unsupported claims yet accepts
 only 3 of 20 verified ones. These results support an assisted, auditable workflow, not unattended
 scientific curation or a privacy mechanism.
@@ -210,13 +210,15 @@ over seeds unless noted.
 
 Discovery found all three prespecified sources, and extraction is the bottleneck in the pipeline.
 The CALERIE trial first appears at rank 13, so this is target recovery rather than recall@5. On
-the prespecified fields, LLM extraction reaches precision .222, recall .480, and .304 micro-F1,
-while the regex baseline extracts none of them; the three-paper extraction replicate costs
-\$0.0343 and takes 13.9 seconds. These are extraction-only measurements: the runs call
-\texttt{extract\_parameters()} directly, and Section~\ref{sec:q7} evaluates the review gate
-separately. Figure~\ref{fig:walkthrough} shows one end-to-end example.
+the prespecified fields, caller-schema-guided extraction reaches precision .575, recall .920,
+and .708 micro-F1, while the earlier unguided extractor reached .304. The three-paper extraction
+replicate costs \$0.122 and 44.4 seconds over 21 calls (schema derivation plus chunked
+extraction). These are extraction-only measurements: the runs do not pass through the review
+gate, which Section~\ref{sec:q7} evaluates separately. Figure~\ref{fig:walkthrough} shows one
+end-to-end example.
 
-Synthesis from LLM extractions approaches synthesis from hand-curated gold statistics on the trial
+In the frozen pipeline study, synthesis from LLM extractions approached synthesis from
+hand-curated gold statistics on the trial
 (97.41 vs 98.61 fidelity) and the survey (96.81 vs 98.45), but the coarse categorical NHANES
 specification remains hard even with gold inputs (61.63 vs 63.35; Table~\ref{tab:realpapers}).
 The fidelity score measures reproduction of the declared specification, not correctness of that
@@ -352,9 +354,9 @@ All tables below are generated from committed result files by
 \toprule
 Source & Rank & Parse & LLM F1 & Regex F1 & Gold/LLM fidelity \\
 \midrule
-CDC/NHANES & 1 & OK & .222 & .000 & 63.35 / 61.63 \\
-CALERIE RCT & 13 & OK & .000 & .000 & 98.61 / 97.41 \\
-Student health & 1 & OK & .645 & .000 & 98.45 / 96.81 \\
+CDC/NHANES & 1 & OK & .571 & --- & 63.35 / 61.63 \\
+CALERIE RCT & 13 & OK & .875 & --- & 98.61 / 97.41 \\
+Student health & 1 & OK & .686 & --- & 98.45 / 96.81 \\
 \bottomrule
 \end{tabular}
 \caption{Real-paper discovery, extraction, and synthesis (Q1).}

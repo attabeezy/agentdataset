@@ -741,7 +741,7 @@ Numbers quoted in the paper are transcribed from `results/`, which stays here.
   - Lead with the problem, system, evaluation setting, and one defensible quantitative result.
   - Avoid privacy guarantees and autonomous-performance claims stronger than the new evidence.
   - **Done when:** the abstract fits the venue limit and every claim is supported elsewhere in the paper.
-  - **Result:** the 184-word abstract leads with the assisted workflow and reports the final deployed extractor's `.304` micro-F1 while explicitly rejecting unattended-curation and privacy-mechanism interpretations.
+  - **Result:** the abstract leads with the assisted workflow and reports the canonical caller-schema-guided extractor's `.708` micro-F1 while explicitly rejecting unattended-curation and privacy-mechanism interpretations.
 
 - [x] **Improve Figure 1 with a concrete walkthrough.**
   - Add a compact example showing query → discovered source → extracted statistic → generated rows/fidelity result.

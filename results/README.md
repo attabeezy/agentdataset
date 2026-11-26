@@ -49,19 +49,19 @@ Cost was measured both per extraction call and over the complete discovery-to-va
 
 **<u>Schema-guided extraction</u>**
 
-`analysis/schema_guided_extraction_study.py` evaluates a caller-informed setting: the caller
-supplies the target variable schema (canonical names, aliases, source labels, and the paper's
-declared target scope), and the extractor is required to return only those variables. On the same
-three papers and gold standard, it reaches **micro-F1 .898** (`schema_guided_extraction_totals.csv`;
-22 TP, 2 FP, 3 FN; precision .917, recall .880). This is not a replacement for the unguided
-extraction result (.304, `analysis/real_paper_extraction_summary.csv`): it measures a different
-task in which the requested variables are known in advance. It is reported separately so the two
-settings are not conflated.
+The canonical extraction now uses a caller-derived schema. `analysis/canonical_schema_extraction.py`
+infers the target variables from each paper's `discovery_query` and `target_scope` in
+`analysis/real_paper_manifest.csv` — no gold labels or aliases are used to build the schema — and
+constrains extraction to those variables. The canonical file `analysis/real_paper_extraction_summary.csv`
+reports **micro-F1 .708** (23 TP, 17 FP, 2 FN; precision .575, recall .920). This replaces the earlier
+unguided result of .304; provenance for the 21 calls ($0.122, 44.4 s) is in
+`results/real_paper_extraction_schema_manifest.json`.
 
-An intermediate evidence-span experiment (`grounded_extraction_study_*`, produced by
-`analysis/grounded_extraction_study.py`) showed that requiring a verbatim evidence span alone was
-insufficient on freshly fetched text (micro-F1 .083): most surviving claims were real but
-out-of-scope subgroup values. That motivated the schema-guided study below.
+An earlier upper-bound study (`schema_guided_extraction_study.py`) supplied the gold canonical
+names directly and reached micro-F1 .898 (`schema_guided_extraction_totals.csv`). It is retained as
+an upper bound, not as the reported result. An evidence-span experiment
+(`grounded_extraction_study_*`) showed that verbatim grounding alone reached only micro-F1 .083 on
+freshly fetched text, because most surviving claims were real but out-of-scope subgroup values.
 
 **<u>Agentic review and reconciliation (new pipeline)</u>**
 

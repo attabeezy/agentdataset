@@ -46,7 +46,7 @@ def test_abstract_is_compact_and_claim_scoped():
     plain = re.sub(r"[{}$~\\]", " ", plain)
     words = re.findall(r"\b[\w.-]+\b", plain)
     assert len(words) <= 200
-    assert ".304" in abstract
+    assert ".708" in abstract
     assert "privacy mechanism" in abstract
     assert "unattended" in abstract
 
@@ -56,9 +56,9 @@ def test_q1_uses_final_deployed_prompt_replication():
     q1 = text.split(r"\subsection{Q1: Real papers}", 1)[1].split(
         r"\subsection{Q2: Downstream utility}", 1
     )[0]
-    for token in [".222", ".480", ".304", r"\$0.0343", "13.9"]:
+    for token in [".575", ".920", ".708", ".304", r"\$0.122", "44.4"]:
         assert token in q1, token
-    assert ".247" not in q1
+    assert r"\$0.0343" not in q1
 
 
 def test_figure_walkthrough_is_source_backed_and_candid():

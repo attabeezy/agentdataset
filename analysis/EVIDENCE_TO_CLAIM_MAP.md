@@ -11,10 +11,10 @@ not treated as empirical evidence.
 | Claim | Paper location | Evidence | Re-derive or bound |
 |---|---|---|---|
 | Discovery finds all three prespecified target papers. | Abstract; §4.1 (Q1) | `analysis/real_paper_discovery_summary.csv` | Verify `target_found=True` for all three sources. CALERIE first appears at rank 13, so this is target recovery, not recall@5. |
-| The deployed extractor reaches .304 micro-F1 on prespecified fields. | Abstract; §4.1 (Q1); `tab:realpapers` | `analysis/real_paper_extraction_summary.csv` | Read the `llm` row: precision .2222, recall .48, F1 .3038. |
+| Caller-schema-guided extraction reaches .708 micro-F1 on prespecified fields. | Abstract; §4.1 (Q1); `tab:realpapers` | `analysis/real_paper_extraction_summary.csv`; `results/real_paper_extraction_schema_manifest.json` | Read the `llm` row: precision .575, recall .920, F1 .7077. The caller schema comes from `discovery_query` and `target_scope`, not gold labels; the earlier unguided F1 was .304. |
 | Regex extracts none of the prespecified real-paper fields. | §4.1 (Q1); `tab:realpapers` | Same file | Read the `regex` row: precision, recall, and F1 are zero. |
 | Source scope and extracted claims require agentic/human review. | Abstract; §2.2; §4.1; §5 | `analysis/real_paper_errors.csv`; `analysis/real_paper_extraction_summary.csv` | This is an operating bound supported by incomplete extraction and recorded error categories, not a performance claim about human review. |
-| The three-paper extraction replicate cost $0.0343 and took 13.9 seconds. | §4.1 (Q1) | `results/real_paper_run_manifest.json` | Sum the retained extraction-call costs and latencies recorded by the real-paper study. Do not substitute the broader §9.8 workflow totals. |
+| The three-paper caller-schema extraction replicate cost $0.122 and took 44.4 seconds over 21 calls. | §4.1 (Q1) | `results/real_paper_extraction_schema_manifest.json` | Sum `cost_usd` and `latency_seconds` in `call_history`. This replaces the earlier extraction-only replicate cost of $0.0343 / 13.9 s. |
 
 ## Agentic review and reconciliation (new-pipeline evidence)
 
