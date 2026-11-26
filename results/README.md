@@ -47,6 +47,22 @@ Cost was measured both per extraction call and over the complete discovery-to-va
 - **Stage breakdown.** Mean wall time is 7.80 s in LLM APIs, 33.06 s in search and fetch network activity, and under 1 s in local synthesis and validation. Human source-review time is excluded.
 - **Current versus frozen cost files.** `extraction_cost_latency.csv` is the current per-call measurement; `cost_latency.csv` and `caveman_token_savings.csv` are frozen historical baselines and are not overwritten. Older end-to-end artifacts also predate the 2026-11-23 refresh.
 
+**<u>Schema-guided extraction</u>**
+
+`analysis/schema_guided_extraction_study.py` evaluates a caller-informed setting: the caller
+supplies the target variable schema (canonical names, aliases, source labels, and the paper's
+declared target scope), and the extractor is required to return only those variables. On the same
+three papers and gold standard, it reaches **micro-F1 .898** (`schema_guided_extraction_totals.csv`;
+22 TP, 2 FP, 3 FN; precision .917, recall .880). This is not a replacement for the unguided
+extraction result (.304, `analysis/real_paper_extraction_summary.csv`): it measures a different
+task in which the requested variables are known in advance. It is reported separately so the two
+settings are not conflated.
+
+An intermediate evidence-span experiment (`grounded_extraction_study_*`, produced by
+`analysis/grounded_extraction_study.py`) showed that requiring a verbatim evidence span alone was
+insufficient on freshly fetched text (micro-F1 .083): most surviving claims were real but
+out-of-scope subgroup values. That motivated the schema-guided study below.
+
 **<u>Agentic review and reconciliation (new pipeline)</u>**
 
 The frozen benchmark artifacts call `Extractor.extract_parameters()` directly and do not

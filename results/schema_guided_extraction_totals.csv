@@ -1,0 +1,2 @@
+arm,true_positives,false_positives,false_negatives,precision,recall,f1
+schema_guided,22,2,3,0.9166666666666666,0.88,0.8979591836734694

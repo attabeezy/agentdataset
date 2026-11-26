@@ -1,0 +1,12 @@
+source_id,arm,name,mean,std,distribution
+cdc_nhanes_rural_urban,schema_guided,activity_2020_bouts,38.425,3.675,normal
+cdc_nhanes_rural_urban,schema_guided,activity_any_2020,147.45,7.375,normal
+cdc_nhanes_rural_urban,schema_guided,age,14.466666666666667,0.7999999999999999,uniform
+calerie_rct,schema_guided,age,38.0,7.2,normal
+calerie_rct,schema_guided,race,0.0,1.0,categorical
+calerie_rct,schema_guided,sex,0.0,1.0,categorical
+student_mental_health,schema_guided,smartphone_addiction,26.78,6.915000000000001,normal
+student_mental_health,schema_guided,internet_addiction,9.83,3.865,normal
+student_mental_health,schema_guided,social_support,15.415,4.015000000000001,normal
+student_mental_health,schema_guided,loneliness,2.445,1.33,normal
+student_mental_health,schema_guided,depression,3.195,3.485,normal

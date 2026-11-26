@@ -1,0 +1,386 @@
+source_id,arm,name,mean,std,distribution
+cdc_nhanes_rural_urban,baseline,high_intensity_long_bout_rural,42.5,6.2,normal
+cdc_nhanes_rural_urban,baseline,high_intensity_long_bout_urban,55.9,2.8,normal
+cdc_nhanes_rural_urban,baseline,total_physical_activity_rural,438.3,35.3,normal
+cdc_nhanes_rural_urban,baseline,total_physical_activity_urban,371.2,12.5,normal
+cdc_nhanes_rural_urban,baseline,rural_residents_percentage,27.0,4.7,normal
+cdc_nhanes_rural_urban,baseline,nonmicropolitan_rural_residents_percentage,13.2,4.0,normal
+cdc_nhanes_rural_urban,baseline,micropolitan_rural_residents_percentage,13.8,3.6,normal
+cdc_nhanes_rural_urban,baseline,urban_residents_percentage,73.0,4.7,normal
+cdc_nhanes_rural_urban,baseline,rural_residents_high_intensity_activity,42.5,6.2,normal
+cdc_nhanes_rural_urban,baseline,urban_residents_high_intensity_activity,55.9,2.8,normal
+cdc_nhanes_rural_urban,baseline,micropolitan_rural_residents_high_intensity_activity,32.9,4.6,normal
+cdc_nhanes_rural_urban,baseline,nonmicropolitan_rural_residents_high_intensity_activity,52.6,8.0,normal
+cdc_nhanes_rural_urban,baseline,rural_residents_total_physical_activity,438.3,35.3,normal
+cdc_nhanes_rural_urban,baseline,urban_residents_total_physical_activity,371.2,12.5,normal
+cdc_nhanes_rural_urban,baseline,rural_residents_household_activity,201.6,26.3,normal
+cdc_nhanes_rural_urban,baseline,urban_residents_household_activity,124.4,8.8,normal
+cdc_nhanes_rural_urban,baseline,nonmicropolitan_rural_residents_total_physical_activity,495.9,49.6,normal
+cdc_nhanes_rural_urban,baseline,micropolitan_rural_residents_total_physical_activity,383.2,23.3,normal
+cdc_nhanes_rural_urban,baseline,nonmicropolitan_rural_residents_household_activity,80.0,24.9,normal
+cdc_nhanes_rural_urban,baseline,nonmicropolitan_rural_residents_total_activity,107.2,42.1,normal
+cdc_nhanes_rural_urban,baseline,micropolitan_residents_long_bout_physical_activity_difference,-14.0,6.3,normal
+cdc_nhanes_rural_urban,baseline,micropolitan_residents_any_bout_length_activity_difference,-25.6,9.9,normal
+cdc_nhanes_rural_urban,baseline,household_activity_rural,80.0,24.9,normal
+cdc_nhanes_rural_urban,baseline,total_activity_rural,107.2,42.1,normal
+cdc_nhanes_rural_urban,baseline,high_intensity_long_bout_micropolitan,-14.0,6.3,normal
+cdc_nhanes_rural_urban,baseline,high_intensity_any_bout_micropolitan,-25.6,9.9,normal
+cdc_nhanes_rural_urban,baseline,transportation_activity_micropolitan,-15.5,8.2,normal
+cdc_nhanes_rural_urban,baseline,"Physical activity in ≥10 min bouts ≥2,020 CPM (Urban)",55.9,2.8,normal
+cdc_nhanes_rural_urban,baseline,"Physical activity in ≥10 min bouts ≥2,020 CPM (All Rural)",42.5,6.2,normal
+cdc_nhanes_rural_urban,baseline,"Physical activity in ≥10 min bouts ≥2,020 CPM (Nonmicropolitan Rural)",52.6,8.0,normal
+cdc_nhanes_rural_urban,baseline,"Physical activity in ≥10 min bouts ≥2,020 CPM (Micropolitan Rural)",32.9,4.6,normal
+cdc_nhanes_rural_urban,baseline,"Physical activity in any bout length ≥2,020 CPM (Urban)",188.3,4.3,normal
+cdc_nhanes_rural_urban,baseline,"Physical activity in any bout length ≥2,020 CPM (All Rural)",162.4,11.5,normal
+cdc_nhanes_rural_urban,baseline,"Physical activity in any bout length ≥2,020 CPM (Nonmicropolitan Rural)",179.9,18.9,normal
+cdc_nhanes_rural_urban,baseline,"Physical activity in any bout length ≥2,020 CPM (Micropolitan Rural)",145.7,12.0,normal
+cdc_nhanes_rural_urban,baseline,Physical activity in ≥10 min bouts ≥760 CPM (Urban),314.4,8.2,normal
+cdc_nhanes_rural_urban,baseline,Physical activity in ≥10 min bouts ≥760 CPM (All Rural),324.8,26.7,normal
+cdc_nhanes_rural_urban,baseline,Physical activity in ≥10 min bouts ≥760 CPM (Nonmicropolitan Rural),365.8,47.1,normal
+cdc_nhanes_rural_urban,baseline,Physical activity in ≥10 min bouts ≥760 CPM (Micropolitan Rural),285.6,25.0,normal
+cdc_nhanes_rural_urban,baseline,Physical activity in any bout length ≥760 CPM (Urban),873.3,13.3,normal
+cdc_nhanes_rural_urban,baseline,Physical activity in any bout length ≥760 CPM (All Rural),895.4,40.5,normal
+cdc_nhanes_rural_urban,baseline,Physical activity in any bout length ≥760 CPM (Nonmicropolitan Rural),951.0,75.8,normal
+cdc_nhanes_rural_urban,baseline,Physical activity in any bout length ≥760 CPM (Micropolitan Rural),842.2,43.1,normal
+cdc_nhanes_rural_urban,baseline,Total physical activity (All Rural),438.3,35.3,normal
+cdc_nhanes_rural_urban,baseline,Total physical activity (Nonmicropolitan Rural),495.9,49.6,normal
+cdc_nhanes_rural_urban,baseline,Total physical activity (Micropolitan Rural),383.2,23.3,normal
+cdc_nhanes_rural_urban,baseline,Leisure physical activity (Urban),206.3,6.3,normal
+cdc_nhanes_rural_urban,baseline,Leisure physical activity (All Rural),206.9,13.5,normal
+cdc_nhanes_rural_urban,baseline,Leisure physical activity (Nonmicropolitan Rural),224.3,25.7,normal
+cdc_nhanes_rural_urban,baseline,Leisure physical activity (Micropolitan Rural),190.3,9.7,normal
+cdc_nhanes_rural_urban,baseline,Household physical activity (Urban),124.4,8.8,normal
+cdc_nhanes_rural_urban,baseline,Household physical activity (All Rural),201.6,26.3,normal
+cdc_nhanes_rural_urban,baseline,Household physical activity (Nonmicropolitan Rural),236.5,32.5,normal
+cdc_nhanes_rural_urban,baseline,Household physical activity (Micropolitan Rural),168.2,22.0,normal
+cdc_nhanes_rural_urban,baseline,Transportation physical activity (Urban),40.5,4.6,normal
+cdc_nhanes_rural_urban,baseline,Transportation physical activity (All Rural),29.8,4.9,normal
+cdc_nhanes_rural_urban,baseline,Transportation physical activity (Nonmicropolitan Rural),35.2,9.2,normal
+cdc_nhanes_rural_urban,baseline,Transportation physical activity (Micropolitan Rural),24.7,4.7,normal
+cdc_nhanes_rural_urban,baseline,Age (Urban),43.4,0.4,normal
+cdc_nhanes_rural_urban,baseline,Age (All Rural),46.4,0.8,normal
+cdc_nhanes_rural_urban,baseline,Age (Nonmicropolitan Rural),46.6,0.8,normal
+cdc_nhanes_rural_urban,baseline,Age (Micropolitan Rural),46.2,1.1,normal
+cdc_nhanes_rural_urban,baseline,Male (Urban),49.7,0.9,normal
+cdc_nhanes_rural_urban,baseline,Male (All Rural),48.8,1.3,normal
+cdc_nhanes_rural_urban,baseline,Male (Nonmicropolitan Rural),50.8,2.0,normal
+cdc_nhanes_rural_urban,baseline,Male (Micropolitan Rural),47.0,1.3,normal
+cdc_nhanes_rural_urban,baseline,Non-Hispanic white (Urban),66.6,2.5,normal
+cdc_nhanes_rural_urban,baseline,Non-Hispanic white (All Rural),84.3,4.1,normal
+cdc_nhanes_rural_urban,baseline,Non-Hispanic white (Nonmicropolitan Rural),86.8,7.2,normal
+cdc_nhanes_rural_urban,baseline,Non-Hispanic white (Micropolitan Rural),81.9,2.2,normal
+cdc_nhanes_rural_urban,baseline,Non-Hispanic black (Urban),13.4,1.7,normal
+cdc_nhanes_rural_urban,baseline,Non-Hispanic black (All Rural),6.0,2.0,normal
+cdc_nhanes_rural_urban,baseline,Non-Hispanic black (Nonmicropolitan Rural),2.3,1.2,normal
+cdc_nhanes_rural_urban,baseline,Non-Hispanic black (Micropolitan Rural),9.6,3.5,normal
+cdc_nhanes_rural_urban,baseline,Hispanics (Urban),13.8,1.3,normal
+cdc_nhanes_rural_urban,baseline,Hispanics (All Rural),6.2,3.2,normal
+cdc_nhanes_rural_urban,baseline,Hispanics (Nonmicropolitan Rural),8.2,6.0,normal
+cdc_nhanes_rural_urban,baseline,Hispanics (Micropolitan Rural),4.2,2.3,normal
+cdc_nhanes_rural_urban,baseline,Other races (Urban),6.1,0.8,normal
+cdc_nhanes_rural_urban,baseline,Other races (All Rural),3.5,1.0,normal
+cdc_nhanes_rural_urban,baseline,Other races (Nonmicropolitan Rural),2.7,1.1,normal
+cdc_nhanes_rural_urban,baseline,Other races (Micropolitan Rural),4.3,1.3,normal
+cdc_nhanes_rural_urban,baseline,US-born (Urban),81.1,1.7,normal
+cdc_nhanes_rural_urban,baseline,US-born (All Rural),93.7,2.1,normal
+cdc_nhanes_rural_urban,baseline,US-born (Nonmicropolitan Rural),93.5,2.5,normal
+cdc_nhanes_rural_urban,baseline,US-born (Micropolitan Rural),94.0,3.0,normal
+cdc_nhanes_rural_urban,baseline,Less than high school (Urban),13.3,1.0,normal
+cdc_nhanes_rural_urban,baseline,Less than high school (All Rural),15.7,1.9,normal
+cdc_nhanes_rural_urban,baseline,Less than high school (Nonmicropolitan Rural),18.1,1.3,normal
+cdc_nhanes_rural_urban,baseline,Less than high school (Micropolitan Rural),13.5,3.5,normal
+cdc_nhanes_rural_urban,baseline,High school graduate/some college (Urban),55.0,1.9,normal
+cdc_nhanes_rural_urban,baseline,High school graduate/some college (All Rural),68.0,2.2,normal
+cdc_nhanes_rural_urban,baseline,High school graduate/some college (Nonmicropolitan Rural),65.4,2.5,normal
+cdc_nhanes_rural_urban,baseline,High school graduate/some college (Micropolitan Rural),70.5,4.1,normal
+cdc_nhanes_rural_urban,baseline,College education or more (Urban),31.6,2.0,normal
+cdc_nhanes_rural_urban,baseline,College education or more (All Rural),16.3,1.1,normal
+cdc_nhanes_rural_urban,baseline,College education or more (Nonmicropolitan Rural),16.5,1.6,normal
+cdc_nhanes_rural_urban,baseline,College education or more (Micropolitan Rural),16.0,1.6,normal
+cdc_nhanes_rural_urban,baseline,Income-to-poverty ratio (Urban),3.3,0.1,normal
+cdc_nhanes_rural_urban,baseline,Income-to-poverty ratio (All Rural),2.9,0.1,normal
+cdc_nhanes_rural_urban,baseline,Income-to-poverty ratio (Nonmicropolitan Rural),2.9,0.1,normal
+cdc_nhanes_rural_urban,baseline,Income-to-poverty ratio (Micropolitan Rural),2.8,0.1,normal
+cdc_nhanes_rural_urban,baseline,Employed full-time (Urban),58.2,1.3,normal
+cdc_nhanes_rural_urban,baseline,Employed full-time (All Rural),56.1,1.9,normal
+cdc_nhanes_rural_urban,baseline,Employed full-time (Nonmicropolitan Rural),55.1,3.7,normal
+cdc_nhanes_rural_urban,baseline,Employed full-time (Micropolitan Rural),57.0,2.8,normal
+cdc_nhanes_rural_urban,baseline,Homeowner (Urban),68.8,2.1,normal
+cdc_nhanes_rural_urban,baseline,Homeowner (All Rural),78.2,3.3,normal
+cdc_nhanes_rural_urban,baseline,Homeowner (Nonmicropolitan Rural),81.3,5.2,normal
+cdc_nhanes_rural_urban,baseline,Homeowner (Micropolitan Rural),75.2,2.0,normal
+cdc_nhanes_rural_urban,baseline,Married/cohabitating (Urban),66.6,1.5,normal
+cdc_nhanes_rural_urban,baseline,Married/cohabitating (All Rural),72.8,2.0,normal
+cdc_nhanes_rural_urban,baseline,Married/cohabitating (Nonmicropolitan Rural),75.6,3.0,normal
+cdc_nhanes_rural_urban,baseline,Married/cohabitating (Micropolitan Rural),70.1,2.3,normal
+cdc_nhanes_rural_urban,baseline,Poor health (Urban),19.3,0.8,normal
+cdc_nhanes_rural_urban,baseline,Poor health (All Rural),17.0,1.5,normal
+cdc_nhanes_rural_urban,baseline,Poor health (Nonmicropolitan Rural),18.7,0.7,normal
+cdc_nhanes_rural_urban,baseline,Poor health (Micropolitan Rural),15.8,1.7,normal
+cdc_nhanes_rural_urban,baseline,Data collected April–October (Urban),55.9,5.4,normal
+cdc_nhanes_rural_urban,baseline,Data collected April–October (All Rural),70.9,9.2,normal
+cdc_nhanes_rural_urban,baseline,Data collected April–October (Nonmicropolitan Rural),70.2,13.0,normal
+cdc_nhanes_rural_urban,baseline,Data collected April–October (Micropolitan Rural),71.6,14.5,normal
+cdc_nhanes_rural_urban,baseline,US-born,75.4,30.3,normal
+cdc_nhanes_rural_urban,baseline,Less than high school,-74.9,23.7,normal
+cdc_nhanes_rural_urban,baseline,College-educated,14.0,19.0,normal
+cdc_nhanes_rural_urban,baseline,Income-to-poverty ratio,5.8,8.5,normal
+cdc_nhanes_rural_urban,baseline,Employed full time,-92.6,23.1,normal
+cdc_nhanes_rural_urban,baseline,Homeowner,53.7,27.4,normal
+cdc_nhanes_rural_urban,baseline,Married/cohabitating,-17.8,20.9,normal
+cdc_nhanes_rural_urban,baseline,Poor health,-80.6,19.7,normal
+cdc_nhanes_rural_urban,baseline,Data collected April – October,86.8,17.6,normal
+cdc_nhanes_rural_urban,baseline,Intercept,295.2,41.1,normal
+cdc_nhanes_rural_urban,grounded,high_intensity_long_bout_rural,42.5,6.2,normal
+cdc_nhanes_rural_urban,grounded,high_intensity_long_bout_urban,55.9,2.8,normal
+cdc_nhanes_rural_urban,grounded,total_physical_activity_rural,438.3,35.3,normal
+cdc_nhanes_rural_urban,grounded,total_physical_activity_urban,371.2,12.5,normal
+cdc_nhanes_rural_urban,grounded,rural_residents_percentage,27.0,4.7,normal
+cdc_nhanes_rural_urban,grounded,nonmicropolitan_rural_residents_percentage,13.2,4.0,normal
+cdc_nhanes_rural_urban,grounded,micropolitan_rural_residents_percentage,13.8,3.6,normal
+cdc_nhanes_rural_urban,grounded,urban_residents_percentage,73.0,4.7,normal
+cdc_nhanes_rural_urban,grounded,high_intensity_physical_activity_rural,42.5,6.2,normal
+cdc_nhanes_rural_urban,grounded,high_intensity_physical_activity_urban,55.9,2.8,normal
+cdc_nhanes_rural_urban,grounded,high_intensity_physical_activity_micropolitan,32.9,4.6,normal
+cdc_nhanes_rural_urban,grounded,high_intensity_physical_activity_nonmicropolitan,52.6,8.0,normal
+cdc_nhanes_rural_urban,grounded,household_physical_activity_rural,201.6,26.3,normal
+cdc_nhanes_rural_urban,grounded,household_physical_activity_urban,124.4,8.8,normal
+cdc_nhanes_rural_urban,grounded,total_physical_activity_nonmicropolitan,495.9,49.6,normal
+cdc_nhanes_rural_urban,grounded,total_physical_activity_micropolitan,383.2,23.3,normal
+cdc_nhanes_rural_urban,grounded,household_activity_nonmicropolitan,80.0,24.9,normal
+cdc_nhanes_rural_urban,grounded,total_activity_nonmicropolitan,107.2,42.1,normal
+cdc_nhanes_rural_urban,grounded,household_activity_rural,80.0,24.9,normal
+cdc_nhanes_rural_urban,grounded,total_activity_rural,107.2,42.1,normal
+cdc_nhanes_rural_urban,grounded,"Physical activity in ≥10 min bouts ≥2,020 CPM (Urban)",55.9,2.8,normal
+cdc_nhanes_rural_urban,grounded,"Physical activity in ≥10 min bouts ≥2,020 CPM (All Rural)",42.5,6.2,normal
+cdc_nhanes_rural_urban,grounded,"Physical activity in ≥10 min bouts ≥2,020 CPM (Nonmicropolitan Rural)",52.6,8.0,normal
+cdc_nhanes_rural_urban,grounded,"Physical activity in ≥10 min bouts ≥2,020 CPM (Micropolitan Rural)",32.9,4.6,normal
+cdc_nhanes_rural_urban,grounded,"Physical activity in any bout length ≥2,020 CPM (Urban)",188.3,4.3,normal
+cdc_nhanes_rural_urban,grounded,"Physical activity in any bout length ≥2,020 CPM (All Rural)",162.4,11.5,normal
+cdc_nhanes_rural_urban,grounded,"Physical activity in any bout length ≥2,020 CPM (Nonmicropolitan Rural)",179.9,18.9,normal
+cdc_nhanes_rural_urban,grounded,"Physical activity in any bout length ≥2,020 CPM (Micropolitan Rural)",145.7,12.0,normal
+cdc_nhanes_rural_urban,grounded,Physical activity in ≥10 min bouts ≥760 CPM (Urban),314.4,8.2,normal
+cdc_nhanes_rural_urban,grounded,Physical activity in ≥10 min bouts ≥760 CPM (All Rural),324.8,26.7,normal
+cdc_nhanes_rural_urban,grounded,Physical activity in ≥10 min bouts ≥760 CPM (Nonmicropolitan Rural),365.8,47.1,normal
+cdc_nhanes_rural_urban,grounded,Physical activity in ≥10 min bouts ≥760 CPM (Micropolitan Rural),285.6,25.0,normal
+cdc_nhanes_rural_urban,grounded,Physical activity in any bout length ≥760 CPM (Urban),873.3,13.3,normal
+cdc_nhanes_rural_urban,grounded,Physical activity in any bout length ≥760 CPM (All Rural),895.4,40.5,normal
+cdc_nhanes_rural_urban,grounded,Physical activity in any bout length ≥760 CPM (Nonmicropolitan Rural),951.0,75.8,normal
+cdc_nhanes_rural_urban,grounded,Physical activity in any bout length ≥760 CPM (Micropolitan Rural),842.2,43.1,normal
+cdc_nhanes_rural_urban,grounded,Total physical activity (All Rural),438.3,35.3,normal
+cdc_nhanes_rural_urban,grounded,Total physical activity (Nonmicropolitan Rural),495.9,49.6,normal
+cdc_nhanes_rural_urban,grounded,Total physical activity (Micropolitan Rural),383.2,23.3,normal
+cdc_nhanes_rural_urban,grounded,Leisure physical activity (Urban),206.3,6.3,normal
+cdc_nhanes_rural_urban,grounded,Leisure physical activity (All Rural),206.9,13.5,normal
+cdc_nhanes_rural_urban,grounded,Leisure physical activity (Nonmicropolitan Rural),224.3,25.7,normal
+cdc_nhanes_rural_urban,grounded,Leisure physical activity (Micropolitan Rural),190.3,9.7,normal
+cdc_nhanes_rural_urban,grounded,Household physical activity (All Rural),201.6,26.3,normal
+cdc_nhanes_rural_urban,grounded,Household physical activity (Nonmicropolitan Rural),236.5,32.5,normal
+cdc_nhanes_rural_urban,grounded,Household physical activity (Micropolitan Rural),168.2,22.0,normal
+cdc_nhanes_rural_urban,grounded,Transportation physical activity (Urban),40.5,4.6,normal
+cdc_nhanes_rural_urban,grounded,Transportation physical activity (All Rural),29.8,4.9,normal
+cdc_nhanes_rural_urban,grounded,Transportation physical activity (Nonmicropolitan Rural),35.2,9.2,normal
+cdc_nhanes_rural_urban,grounded,Transportation physical activity (Micropolitan Rural),24.7,4.7,normal
+cdc_nhanes_rural_urban,grounded,Age (All Rural),46.4,0.8,normal
+cdc_nhanes_rural_urban,grounded,Age (Nonmicropolitan Rural),46.6,0.8,normal
+cdc_nhanes_rural_urban,grounded,Male (Urban),49.7,0.9,normal
+cdc_nhanes_rural_urban,grounded,Male (All Rural),48.8,1.3,normal
+cdc_nhanes_rural_urban,grounded,Male (Nonmicropolitan Rural),50.8,2.0,normal
+cdc_nhanes_rural_urban,grounded,Male (Micropolitan Rural),47.0,1.3,normal
+cdc_nhanes_rural_urban,grounded,Non-Hispanic white (Urban),66.6,2.5,normal
+cdc_nhanes_rural_urban,grounded,Non-Hispanic white (All Rural),84.3,4.1,normal
+cdc_nhanes_rural_urban,grounded,Non-Hispanic white (Nonmicropolitan Rural),86.8,7.2,normal
+cdc_nhanes_rural_urban,grounded,Non-Hispanic white (Micropolitan Rural),81.9,2.2,normal
+cdc_nhanes_rural_urban,grounded,Non-Hispanic black (Urban),13.4,1.7,normal
+cdc_nhanes_rural_urban,grounded,Non-Hispanic black (All Rural),6.0,2.0,normal
+cdc_nhanes_rural_urban,grounded,Non-Hispanic black (Nonmicropolitan Rural),2.3,1.2,normal
+cdc_nhanes_rural_urban,grounded,Non-Hispanic black (Micropolitan Rural),9.6,3.5,normal
+cdc_nhanes_rural_urban,grounded,Hispanics (Urban),13.8,1.3,normal
+cdc_nhanes_rural_urban,grounded,Hispanics (All Rural),6.2,3.2,normal
+cdc_nhanes_rural_urban,grounded,Hispanics (Nonmicropolitan Rural),8.2,6.0,normal
+cdc_nhanes_rural_urban,grounded,Hispanics (Micropolitan Rural),4.2,2.3,normal
+cdc_nhanes_rural_urban,grounded,Other races (Urban),6.1,0.8,normal
+cdc_nhanes_rural_urban,grounded,Other races (All Rural),3.5,1.0,normal
+cdc_nhanes_rural_urban,grounded,Other races (Nonmicropolitan Rural),2.7,1.1,normal
+cdc_nhanes_rural_urban,grounded,Other races (Micropolitan Rural),4.3,1.3,normal
+cdc_nhanes_rural_urban,grounded,US-born (Urban),81.1,1.7,normal
+cdc_nhanes_rural_urban,grounded,US-born (All Rural),93.7,2.1,normal
+cdc_nhanes_rural_urban,grounded,US-born (Nonmicropolitan Rural),93.5,2.5,normal
+cdc_nhanes_rural_urban,grounded,US-born (Micropolitan Rural),94.0,3.0,normal
+cdc_nhanes_rural_urban,grounded,Less than high school (Urban),13.3,1.0,normal
+cdc_nhanes_rural_urban,grounded,Less than high school (All Rural),15.7,1.9,normal
+cdc_nhanes_rural_urban,grounded,Less than high school (Nonmicropolitan Rural),18.1,1.3,normal
+cdc_nhanes_rural_urban,grounded,Less than high school (Micropolitan Rural),13.5,3.5,normal
+cdc_nhanes_rural_urban,grounded,High school graduate/some college (Urban),55.0,1.9,normal
+cdc_nhanes_rural_urban,grounded,High school graduate/some college (All Rural),68.0,2.2,normal
+cdc_nhanes_rural_urban,grounded,High school graduate/some college (Nonmicropolitan Rural),65.4,2.5,normal
+cdc_nhanes_rural_urban,grounded,High school graduate/some college (Micropolitan Rural),70.5,4.1,normal
+cdc_nhanes_rural_urban,grounded,College education or more (Urban),31.6,2.0,normal
+cdc_nhanes_rural_urban,grounded,College education or more (All Rural),16.3,1.1,normal
+cdc_nhanes_rural_urban,grounded,College education or more (Nonmicropolitan Rural),16.5,1.6,normal
+cdc_nhanes_rural_urban,grounded,College education or more (Micropolitan Rural),16.0,1.6,normal
+cdc_nhanes_rural_urban,grounded,Income-to-poverty ratio (Urban),3.3,0.1,normal
+cdc_nhanes_rural_urban,grounded,Income-to-poverty ratio (All Rural),2.9,0.1,normal
+cdc_nhanes_rural_urban,grounded,Income-to-poverty ratio (Nonmicropolitan Rural),2.9,0.1,normal
+cdc_nhanes_rural_urban,grounded,Income-to-poverty ratio (Micropolitan Rural),2.8,0.1,normal
+cdc_nhanes_rural_urban,grounded,Employed full-time (Urban),58.2,1.3,normal
+cdc_nhanes_rural_urban,grounded,Employed full-time (All Rural),56.1,1.9,normal
+cdc_nhanes_rural_urban,grounded,Employed full-time (Nonmicropolitan Rural),55.1,3.7,normal
+cdc_nhanes_rural_urban,grounded,Employed full-time (Micropolitan Rural),57.0,2.8,normal
+cdc_nhanes_rural_urban,grounded,Homeowner (Urban),68.8,2.1,normal
+cdc_nhanes_rural_urban,grounded,Homeowner (All Rural),78.2,3.3,normal
+cdc_nhanes_rural_urban,grounded,Homeowner (Nonmicropolitan Rural),81.3,5.2,normal
+cdc_nhanes_rural_urban,grounded,Homeowner (Micropolitan Rural),75.2,2.0,normal
+cdc_nhanes_rural_urban,grounded,Married/cohabitating (Urban),66.6,1.5,normal
+cdc_nhanes_rural_urban,grounded,Married/cohabitating (All Rural),72.8,2.0,normal
+cdc_nhanes_rural_urban,grounded,Married/cohabitating (Nonmicropolitan Rural),75.6,3.0,normal
+cdc_nhanes_rural_urban,grounded,Married/cohabitating (Micropolitan Rural),70.1,2.3,normal
+cdc_nhanes_rural_urban,grounded,Poor health (Urban),19.3,0.8,normal
+cdc_nhanes_rural_urban,grounded,Poor health (All Rural),17.0,1.5,normal
+cdc_nhanes_rural_urban,grounded,Poor health (Nonmicropolitan Rural),18.7,0.7,normal
+cdc_nhanes_rural_urban,grounded,Poor health (Micropolitan Rural),15.8,1.7,normal
+cdc_nhanes_rural_urban,grounded,Data collected April–October (Urban),55.9,5.4,normal
+cdc_nhanes_rural_urban,grounded,Data collected April–October (All Rural),70.9,9.2,normal
+cdc_nhanes_rural_urban,grounded,Data collected April–October (Nonmicropolitan Rural),70.2,13.0,normal
+cdc_nhanes_rural_urban,grounded,Data collected April–October (Micropolitan Rural),71.6,14.5,normal
+cdc_nhanes_rural_urban,grounded,US-born,75.4,30.3,normal
+cdc_nhanes_rural_urban,grounded,College-educated,14.0,19.0,normal
+cdc_nhanes_rural_urban,grounded,Income-to-poverty ratio,5.8,8.5,normal
+cdc_nhanes_rural_urban,grounded,Homeowner,53.7,27.4,normal
+cdc_nhanes_rural_urban,grounded,Data collected April – October,86.8,17.6,normal
+cdc_nhanes_rural_urban,grounded,Intercept,295.2,41.1,normal
+calerie_rct,baseline,Age_CR,38.0,7.2,normal
+calerie_rct,baseline,Age_AL,37.9,6.9,normal
+calerie_rct,baseline,Height_CR,168.9,8.6,normal
+calerie_rct,baseline,Height_AL,168.4,8.3,normal
+calerie_rct,baseline,Baseline_Weight_CR,71.8,9.2,normal
+calerie_rct,baseline,Baseline_Weight_AL,71.3,8.6,normal
+calerie_rct,baseline,Baseline_BMI_CR,25.1,1.7,normal
+calerie_rct,baseline,Baseline_BMI_AL,25.1,1.6,normal
+calerie_rct,baseline,BodyFat_CR,33.6,6.6,normal
+calerie_rct,baseline,BodyFat_AL,32.9,6.1,normal
+calerie_rct,baseline,SBP_CR,112.0,9.9,normal
+calerie_rct,baseline,SBP_AL,111.0,9.9,normal
+calerie_rct,baseline,DBP_CR,72.1,7.5,normal
+calerie_rct,baseline,DBP_AL,71.2,7.1,normal
+calerie_rct,baseline,Glucose_CR,81.9,5.6,normal
+calerie_rct,baseline,Glucose_AL,83.6,6.1,normal
+calerie_rct,baseline,Insulin_CR,5.4,0.2,normal
+calerie_rct,baseline,Insulin_AL,5.8,0.3,normal
+calerie_rct,baseline,HDL-C_CR,49.1,13.3,normal
+calerie_rct,baseline,HDL-C_AL,49.2,11.7,normal
+calerie_rct,baseline,LDL-C_CR,98.0,26.5,normal
+calerie_rct,baseline,LDL-C_AL,105.6,28.6,normal
+calerie_rct,baseline,Tg_CR,103.5,50.5,normal
+calerie_rct,baseline,Tg_AL,106.8,59.7,normal
+calerie_rct,baseline,BaselineBMI,25.1,1.7,normal
+calerie_rct,baseline,BodyFat,33.6,6.6,normal
+calerie_rct,baseline,SBP,112.0,9.9,normal
+calerie_rct,baseline,DBP,72.1,7.5,normal
+calerie_rct,baseline,Glucose,81.9,5.6,normal
+calerie_rct,baseline,Insulin,5.4,0.2,normal
+calerie_rct,baseline,HDL-C,49.1,13.3,normal
+calerie_rct,baseline,LDL-C,98.0,26.5,normal
+calerie_rct,baseline,Tg,103.5,50.5,normal
+calerie_rct,baseline,WBC,5.9,1.0,normal
+calerie_rct,baseline,Lymphocytes,1.8,1.0,normal
+calerie_rct,baseline,CRP,1.1,1.0,normal
+calerie_rct,baseline,TNF-α,3.1,1.0,normal
+calerie_rct,baseline,ICAM-1,165.4,1.0,normal
+calerie_rct,baseline,Leptin,17.7,1.0,normal
+calerie_rct,baseline,Trichophyton_AL_Baseline,0.9,0.3,normal
+calerie_rct,baseline,Trichophyton_AL_Month12,2.2,0.6,normal
+calerie_rct,baseline,Trichophyton_AL_Month24,3.1,0.8,normal
+calerie_rct,baseline,Trichophyton_CR_Baseline,1.5,0.4,normal
+calerie_rct,baseline,Trichophyton_CR_Month12,1.1,0.5,normal
+calerie_rct,baseline,Trichophyton_CR_Month24,1.8,0.7,normal
+calerie_rct,baseline,Tetanus_AL_Baseline,12.1,1.1,normal
+calerie_rct,baseline,Tetanus_AL_Month12,10.5,1.3,normal
+calerie_rct,baseline,Tetanus_AL_Month24,9.7,1.1,normal
+calerie_rct,baseline,Tetanus_CR_Baseline,13.5,1.0,normal
+calerie_rct,baseline,Tetanus_CR_Month12,10.5,1.0,normal
+calerie_rct,baseline,Tetanus_CR_Month24,8.0,0.9,normal
+calerie_rct,baseline,Candida_AL_Baseline,7.5,0.9,normal
+calerie_rct,baseline,Candida_AL_Month12,9.2,1.3,normal
+calerie_rct,baseline,Candida_AL_Month24,9.4,1.2,normal
+calerie_rct,baseline,Candida_CR_Baseline,9.5,0.8,normal
+calerie_rct,baseline,Candida_CR_Month12,10.0,1.0,normal
+calerie_rct,baseline,Candida_CR_Month24,8.7,0.9,normal
+calerie_rct,baseline,TotalDiameter_AL_Baseline,20.5,1.7,normal
+calerie_rct,baseline,TotalDiameter_AL_Month12,20.6,2.2,normal
+calerie_rct,baseline,TotalDiameter_AL_Month24,21.5,1.9,normal
+calerie_rct,baseline,TotalDiameter_CR_Baseline,24.4,1.4,normal
+calerie_rct,baseline,TotalDiameter_CR_Month12,21.2,1.6,normal
+calerie_rct,baseline,TotalDiameter_CR_Month24,18.2,1.6,normal
+calerie_rct,baseline,PositiveResponses_AL_Baseline,1.48,0.09,normal
+calerie_rct,baseline,PositiveResponses_AL_Month12,1.64,0.11,normal
+calerie_rct,baseline,PositiveResponses_AL_Month24,1.72,0.13,normal
+calerie_rct,baseline,PositiveResponses_CR_Baseline,1.59,0.07,normal
+calerie_rct,baseline,PositiveResponses_CR_Month12,1.69,0.08,normal
+calerie_rct,baseline,PositiveResponses_CR_Month24,1.59,0.07,normal
+calerie_rct,grounded,height_CR,168.9,8.6,normal
+calerie_rct,grounded,height_AL,168.4,8.3,normal
+calerie_rct,grounded,baseline_weight_CR,71.8,9.2,normal
+calerie_rct,grounded,baseline_weight_AL,71.3,8.6,normal
+calerie_rct,grounded,baseline_BMI_CR,25.1,1.7,normal
+calerie_rct,grounded,baseline_BMI_AL,25.1,1.6,normal
+calerie_rct,grounded,body_fat_CR,33.6,6.6,normal
+calerie_rct,grounded,body_fat_AL,32.9,6.1,normal
+calerie_rct,grounded,glucose_CR,82.75,5.85,normal
+calerie_rct,grounded,glucose_AL,82.75,5.85,normal
+calerie_rct,grounded,insulin_CR,5.6,0.25,normal
+calerie_rct,grounded,insulin_AL,5.6,0.25,normal
+calerie_rct,grounded,BodyFat_AL,33.6,6.6,normal
+calerie_rct,grounded,BodyFat_CR,32.9,6.1,normal
+calerie_rct,grounded,Trichophyton_AL_baseline,0.9,0.3,normal
+calerie_rct,grounded,Trichophyton_CR_baseline,1.5,0.4,normal
+calerie_rct,grounded,Tetanus_AL_baseline,12.1,1.1,normal
+calerie_rct,grounded,Tetanus_CR_baseline,13.5,1.0,normal
+calerie_rct,grounded,Trichophyton_AL_Month_12,2.2,0.6,normal
+calerie_rct,grounded,Trichophyton_AL_Month_24,3.1,0.8,normal
+calerie_rct,grounded,Trichophyton_CR_Month_12,1.1,0.5,normal
+calerie_rct,grounded,Trichophyton_CR_Month_24,1.8,0.7,normal
+calerie_rct,grounded,Tetanus_AL_Month_12,10.5,1.3,normal
+calerie_rct,grounded,Tetanus_AL_Month_24,9.7,1.1,normal
+calerie_rct,grounded,Tetanus_CR_Month_12,10.5,1.0,normal
+calerie_rct,grounded,Tetanus_CR_Month_24,8.0,0.9,normal
+calerie_rct,grounded,Candida_AL_Baseline,7.5,0.9,normal
+calerie_rct,grounded,Candida_AL_Month_12,9.2,1.3,normal
+calerie_rct,grounded,Candida_AL_Month_24,9.4,1.2,normal
+calerie_rct,grounded,Candida_CR_Baseline,9.5,0.8,normal
+calerie_rct,grounded,Candida_CR_Month_12,10.0,1.0,normal
+calerie_rct,grounded,Candida_CR_Month_24,8.7,0.9,normal
+calerie_rct,grounded,Total_Diameter_AL_Baseline,20.5,1.7,normal
+calerie_rct,grounded,Total_Diameter_AL_Month_12,20.6,2.2,normal
+calerie_rct,grounded,Total_Diameter_AL_Month_24,21.5,1.9,normal
+calerie_rct,grounded,Total_Diameter_CR_Baseline,24.4,1.4,normal
+calerie_rct,grounded,Total_Diameter_CR_Month_12,21.2,1.6,normal
+calerie_rct,grounded,Total_Diameter_CR_Month_24,18.2,1.6,normal
+calerie_rct,grounded,Number_Positive_AL_Baseline,1.48,0.09,normal
+calerie_rct,grounded,Number_Positive_AL_Month_12,1.64,0.11,normal
+calerie_rct,grounded,Number_Positive_AL_Month_24,1.72,0.13,normal
+calerie_rct,grounded,Number_Positive_CR_Baseline,1.59,0.07,normal
+calerie_rct,grounded,Number_Positive_CR_Month_12,1.69,0.08,normal
+calerie_rct,grounded,Number_Positive_CR_Month_24,1.59,0.07,normal
+student_mental_health,baseline,smartphone addiction,35.705,8.89,normal
+student_mental_health,baseline,internet addiction,13.105,4.8149999999999995,normal
+student_mental_health,baseline,age,21.01,1.72,normal
+student_mental_health,baseline,grade_point_average,7.03,0.96,normal
+student_mental_health,baseline,ehealth_literacy,28.6,4.73,normal
+student_mental_health,baseline,social_support,30.83,7.03,normal
+student_mental_health,baseline,loneliness,4.89,1.66,normal
+student_mental_health,baseline,depression,6.39,5.97,normal
+student_mental_health,baseline,sleep_quality,2.81,2.83,normal
+student_mental_health,baseline,smartphone_addiction_score,35.71,8.88,normal
+student_mental_health,baseline,internet_addiction_score,13.11,4.83,normal
+student_mental_health,grounded,smartphone addiction,35.705,8.89,normal
+student_mental_health,grounded,internet addiction,13.105,4.8149999999999995,normal
+student_mental_health,grounded,female_gpa,7.14,0.93,normal
+student_mental_health,grounded,male_gpa,6.83,0.99,normal
+student_mental_health,grounded,ehealth_literacy,28.6,4.73,normal
+student_mental_health,grounded,social_support,30.83,7.03,normal
+student_mental_health,grounded,loneliness,4.89,1.66,normal
+student_mental_health,grounded,depression,6.39,5.97,normal
+student_mental_health,grounded,sleep_quality,2.81,2.83,normal
+student_mental_health,grounded,smartphone_addiction_score,35.71,8.88,normal
+student_mental_health,grounded,internet_addiction_score,13.11,4.83,normal
